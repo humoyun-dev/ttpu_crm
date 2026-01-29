@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "bot1-service"
+version = "0.1.0"
+description = "Telegram bot for TTPU admissions (bot1) that talks to the CRM backend."
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [{include = "bot1_service", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+aiogram = "^3.12.0"
+httpx = "^0.27.0"
+python-dotenv = "^1.0.1"
+ujson = "^5.10.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

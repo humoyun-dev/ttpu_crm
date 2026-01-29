@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-crm_server}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-crm_server}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ./server
+    command: /app/entrypoint.sh
+    restart: unless-stopped
+    env_file:
+      - ./server/.env
+    volumes:
+      - ./server:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  bot1:
+    build:
+      context: ./bot1_service
+    command: python -m bot1_service.main
+    restart: unless-stopped
+    env_file:
+      - ./bot1_service/.env
+    volumes:
+      - ./bot1_service/src:/app/src
+      - ./bot1_service/data:/app/data
+    depends_on:
+      - server
+
+  bot2:
+    build:
+      context: ./bot2_service
+    command: python -m bot2_service.main
+    restart: unless-stopped
+    env_file:
+      - ./bot2_service/.env
+    volumes:
+      - ./bot2_service/src:/app/src
+    depends_on:
+      - server
+
+  dashboard:
+    build:
+      context: ./dashboard
+    command: npm run start
+    restart: unless-stopped
+    env_file:
+      - ./dashboard/.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
