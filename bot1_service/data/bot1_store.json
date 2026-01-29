@@ -1,0 +1,940 @@
+{
+  "8495935656": {
+    "user_id": 8495935656,
+    "chat_id": 8495935656,
+    "language": "uz",
+    "phone": "998990297311",
+    "first_name": "Humoyunbek",
+    "last_name": "Tursunniyazov",
+    "username": "hcore_uz",
+    "email": "name@example.com",
+    "region_id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+    "region_label": "Tashkent city",
+    "gender": "male",
+    "birth_date": "2007-07-25",
+    "extra_phone": null,
+    "meta": {},
+    "applications": [
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "track_id": "9af5feab-932a-4470-8443-1243f7a30722",
+          "direction_id": "c99744f5-b2e6-44b9-9b14-5bc33a8250af",
+          "region_id": "74b6d69f-26c9-4f78-91b8-24030664de9a",
+          "extra_phone": "test"
+        },
+        "response": null,
+        "meta": {}
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "track_id": "9af5feab-932a-4470-8443-1243f7a30722",
+          "direction_id": "b2599f5e-6a6c-4e37-992d-ce0b7ee1b348",
+          "region_id": "74b6d69f-26c9-4f78-91b8-24030664de9a",
+          "extra_phone": "test"
+        },
+        "response": null,
+        "meta": {}
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "track_id": "9af5feab-932a-4470-8443-1243f7a30722",
+          "direction_id": "b2599f5e-6a6c-4e37-992d-ce0b7ee1b348",
+          "region_id": "ffce9484-bb44-4df5-9118-a538f1ed4b5e",
+          "extra_phone": "re"
+        },
+        "response": null,
+        "meta": {}
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "track_id": "9af5feab-932a-4470-8443-1243f7a30722",
+          "direction_id": "b2599f5e-6a6c-4e37-992d-ce0b7ee1b348",
+          "region_id": "74b6d69f-26c9-4f78-91b8-24030664de9a",
+          "extra_phone": "test"
+        },
+        "response": {
+          "id": "c0afadd6-f1d2-4e08-90ad-38add596e836",
+          "created_at": "2026-01-18T21:38:25.287002Z",
+          "updated_at": "2026-01-18T21:38:25.289191Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T21:38:25.286882Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "direction": "b2599f5e-6a6c-4e37-992d-ce0b7ee1b348",
+          "track": "9af5feab-932a-4470-8443-1243f7a30722"
+        },
+        "meta": {}
+      },
+      {
+        "kind": "polito",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "subject_id": "10235f7d-f408-404b-863e-a907870dff17",
+          "score": 12
+        },
+        "response": {
+          "id": "b41f6b03-3a91-41f9-98bd-d852c5fcf300",
+          "created_at": "2026-01-18T21:39:59.445011Z",
+          "updated_at": "2026-01-18T21:39:59.447342Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T21:39:59.444804Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "subject": "10235f7d-f408-404b-863e-a907870dff17"
+        },
+        "meta": {}
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "track_id": "9af5feab-932a-4470-8443-1243f7a30722",
+          "direction_id": "c99744f5-b2e6-44b9-9b14-5bc33a8250af",
+          "region_id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+          "extra_phone": ""
+        },
+        "response": {
+          "id": "c0afadd6-f1d2-4e08-90ad-38add596e836",
+          "created_at": "2026-01-18T21:38:25.287002Z",
+          "updated_at": "2026-01-18T21:52:06.831660Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T21:38:25.286882Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "direction": "c99744f5-b2e6-44b9-9b14-5bc33a8250af",
+          "track": "9af5feab-932a-4470-8443-1243f7a30722"
+        },
+        "meta": {
+          "track_label": "Uzbek Track",
+          "direction_label": "Production Engineering \ud83c\uddfa\ud83c\uddff",
+          "region_label": "Tashkent city",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "track_id": "6b21b34c-4078-4805-a3ec-3625451aca06",
+          "direction_id": "96562a44-1b41-4741-af4c-6d3c3fde26a1",
+          "region_id": "6b89b97c-0548-4203-85a0-4085b572453c",
+          "extra_phone": "ysk"
+        },
+        "response": {
+          "id": "c0afadd6-f1d2-4e08-90ad-38add596e836",
+          "created_at": "2026-01-18T21:38:25.287002Z",
+          "updated_at": "2026-01-18T21:53:53.178548Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T21:38:25.286882Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "direction": "96562a44-1b41-4741-af4c-6d3c3fde26a1",
+          "track": "6b21b34c-4078-4805-a3ec-3625451aca06"
+        },
+        "meta": {
+          "track_label": "Italian Track",
+          "direction_label": "Computer Engineering \ud83c\uddee\ud83c\uddf9",
+          "region_label": "Bukhara",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "polito",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "subject_id": "d643e459-57e7-4abd-8a44-3cd66f57e474",
+          "gender": "male",
+          "region_id": "6b89b97c-0548-4203-85a0-4085b572453c"
+        },
+        "response": null,
+        "meta": {
+          "subject_label": "Biology",
+          "status": null
+        }
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "track_id": "9af5feab-932a-4470-8443-1243f7a30722",
+          "direction_id": "c99744f5-b2e6-44b9-9b14-5bc33a8250af",
+          "region_id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+          "extra_phone": "test"
+        },
+        "response": null,
+        "meta": {
+          "track_label": "Uzbek Track",
+          "direction_label": "Production Engineering \ud83c\uddfa\ud83c\uddff",
+          "region_label": "Tashkent city",
+          "status": null
+        }
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "track_id": "6b21b34c-4078-4805-a3ec-3625451aca06",
+          "direction_id": "e8a124b9-cc5c-4f86-a5e6-cd27cc73d5af",
+          "region_id": "6d016a77-3860-4c54-a137-24b3ccfe7397",
+          "extra_phone": ""
+        },
+        "response": {
+          "id": "ec4e6bf6-db54-4e33-ab4a-6443cc04c0c5",
+          "created_at": "2026-01-18T22:30:27.635138Z",
+          "updated_at": "2026-01-18T22:30:27.635144Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T22:30:27.635069Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "direction": "e8a124b9-cc5c-4f86-a5e6-cd27cc73d5af",
+          "track": "6b21b34c-4078-4805-a3ec-3625451aca06"
+        },
+        "meta": {
+          "track_label": "Italian Track",
+          "direction_label": "Mechanical Engineering \ud83c\uddee\ud83c\uddf9",
+          "region_label": "Tashkent region",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "polito",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "subject_id": "d643e459-57e7-4abd-8a44-3cd66f57e474",
+          "gender": "male",
+          "region_id": "e852f0cc-18ab-419e-9a9e-19c5eca3e2c4"
+        },
+        "response": {
+          "id": "0ff9ba77-bacc-4b7e-bc1d-3bf60e7a8993",
+          "created_at": "2026-01-18T22:30:50.642319Z",
+          "updated_at": "2026-01-18T22:30:50.642325Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T22:30:50.642195Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "subject": "d643e459-57e7-4abd-8a44-3cd66f57e474"
+        },
+        "meta": {
+          "subject_label": "Biology",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "campus",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "organization": "test",
+          "position": "test",
+          "extra_phone": "test",
+          "visitor_count": 12,
+          "preferred_date": "2026-01-27",
+          "time_slot": "17:00",
+          "gender": "male",
+          "region_id": "7e867643-5c62-4d2e-b703-7333d831bf9c"
+        },
+        "response": {
+          "id": "dc6d9c5f-3d41-403d-9501-ad6d4270a2d9",
+          "created_at": "2026-01-18T22:32:08.253452Z",
+          "updated_at": "2026-01-18T22:32:08.253462Z",
+          "preferred_date": "2026-01-27",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T22:32:08.253271Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c"
+        },
+        "meta": {
+          "organization": "test",
+          "preferred_date": "2026-01-27",
+          "time_slot": "17:00",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "campus",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "organization": "test",
+          "position": "test",
+          "extra_phone": "test",
+          "visitor_count": 6,
+          "preferred_date": "2026-01-27",
+          "time_slot": "15:30",
+          "gender": "male",
+          "region_id": "af37f896-7445-4f7d-a8ca-e462c9820dbc"
+        },
+        "response": {
+          "id": "b5238b96-2973-4967-b854-6822ed558f9c",
+          "created_at": "2026-01-18T22:32:44.312792Z",
+          "updated_at": "2026-01-18T22:32:44.312799Z",
+          "preferred_date": "2026-01-27",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T22:32:44.312620Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c"
+        },
+        "meta": {
+          "organization": "test",
+          "preferred_date": "2026-01-27",
+          "time_slot": "15:30",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "polito",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "subject_id": "2e85f743-5760-45d8-a037-f9092e018930",
+          "gender": "female",
+          "region_id": "8725211b-f41a-4556-b33e-7c813670aaf3"
+        },
+        "response": {
+          "id": "aac1936c-7ce5-49f8-ad73-1468b312093d",
+          "created_at": "2026-01-18T22:32:55.858367Z",
+          "updated_at": "2026-01-18T22:32:55.858374Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T22:32:55.858199Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "subject": "2e85f743-5760-45d8-a037-f9092e018930"
+        },
+        "meta": {
+          "subject_label": "English Language",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "foundation",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "extra_phone": "test",
+          "gender": "male",
+          "region_id": "74b6d69f-26c9-4f78-91b8-24030664de9a"
+        },
+        "response": {
+          "id": "6d82cad4-41bc-4214-94fb-7b93eb04971b",
+          "created_at": "2026-01-18T22:33:15.848124Z",
+          "updated_at": "2026-01-18T22:33:15.848130Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T22:33:15.848009Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c"
+        },
+        "meta": {
+          "extra_phone": "test",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "foundation",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "extra_phone": "fgh",
+          "gender": "male",
+          "region_id": "8725211b-f41a-4556-b33e-7c813670aaf3"
+        },
+        "response": {
+          "id": "f8d24bd3-83be-4980-afbe-ab5434676f31",
+          "created_at": "2026-01-18T22:33:30.980577Z",
+          "updated_at": "2026-01-18T22:33:30.980584Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T22:33:30.980459Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c"
+        },
+        "meta": {
+          "extra_phone": "fgh",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "campus",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "organization": "test",
+          "position": "test",
+          "extra_phone": "",
+          "visitor_count": 10,
+          "preferred_date": "2026-02-20",
+          "time_slot": "16:00",
+          "gender": "male",
+          "region_id": "7e867643-5c62-4d2e-b703-7333d831bf9c"
+        },
+        "response": {
+          "id": "0e4d0112-f533-4449-aabf-3ba049286ac5",
+          "created_at": "2026-01-18T22:43:14.228214Z",
+          "updated_at": "2026-01-18T22:43:14.228221Z",
+          "preferred_date": "2026-02-20",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T22:43:14.228097Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c"
+        },
+        "meta": {
+          "organization": "test",
+          "preferred_date": "2026-02-20",
+          "time_slot": "16:00",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "track_id": "6b21b34c-4078-4805-a3ec-3625451aca06",
+          "direction_id": "175b61cf-e499-4fb6-b560-96dcda9c747d",
+          "region_id": "74b6d69f-26c9-4f78-91b8-24030664de9a",
+          "extra_phone": ""
+        },
+        "response": {
+          "id": "552729db-d608-4090-8b4b-ee2aa035a0ca",
+          "created_at": "2026-01-18T22:43:39.207127Z",
+          "updated_at": "2026-01-18T22:43:39.207134Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T22:43:39.207017Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "direction": "175b61cf-e499-4fb6-b560-96dcda9c747d",
+          "track": "6b21b34c-4078-4805-a3ec-3625451aca06"
+        },
+        "meta": {
+          "track_label": "Italian Track",
+          "direction_label": "Civil Engineering \ud83c\uddee\ud83c\uddf9",
+          "region_label": "Andijan",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "campus",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "organization": "maktan",
+          "position": "test",
+          "extra_phone": "+998900112507",
+          "visitor_count": 12,
+          "preferred_date": "2026-01-30",
+          "time_slot": "15:30",
+          "gender": "male",
+          "region_id": "7e867643-5c62-4d2e-b703-7333d831bf9c"
+        },
+        "response": {
+          "id": "75d09d69-3b64-44a9-8e9b-630ae551a410",
+          "created_at": "2026-01-18T23:09:15.767317Z",
+          "updated_at": "2026-01-18T23:09:15.767322Z",
+          "preferred_date": "2026-01-30",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T23:09:15.767245Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c"
+        },
+        "meta": {
+          "organization": "maktan",
+          "preferred_date": "2026-01-30",
+          "time_slot": "15:30",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "polito",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "subject_id": "96e910d1-692c-4327-8b1c-c329f116574d",
+          "gender": "male",
+          "region_id": "e852f0cc-18ab-419e-9a9e-19c5eca3e2c4"
+        },
+        "response": {
+          "id": "bcb2ebd5-7f11-4c7e-917a-a5b58d21e56f",
+          "created_at": "2026-01-18T23:10:02.029864Z",
+          "updated_at": "2026-01-18T23:10:02.029870Z",
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-18T23:10:02.029771Z",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "subject": "96e910d1-692c-4327-8b1c-c329f116574d"
+        },
+        "meta": {
+          "subject_label": "History",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "track_id": "9af5feab-932a-4470-8443-1243f7a30722",
+          "direction_id": "8ee6130c-e8f6-4ede-be72-8226cba54594",
+          "region_id": "af37f896-7445-4f7d-a8ca-e462c9820dbc",
+          "extra_phone": ""
+        },
+        "response": {
+          "id": "1850ce1d-b621-4ca1-958c-4a71ec17133a",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "applicant_details": {
+            "id": "4650f616-5164-4f08-951d-0101e349826c",
+            "telegram_user_id": 8495935656,
+            "telegram_chat_id": null,
+            "username": "",
+            "first_name": "",
+            "last_name": "",
+            "phone": "",
+            "email": "",
+            "region": "af37f896-7445-4f7d-a8ca-e462c9820dbc",
+            "region_details": {
+              "id": "af37f896-7445-4f7d-a8ca-e462c9820dbc",
+              "code": "REG-FERGANA",
+              "name": "Fergana",
+              "name_uz": "Farg'ona",
+              "name_ru": "\u0424\u0435\u0440\u0433\u0430\u043d\u0430",
+              "name_en": "Fergana",
+              "type": "region"
+            },
+            "created_at": "2026-01-18T20:54:27.077336Z",
+            "updated_at": "2026-01-19T03:28:04.698204Z"
+          },
+          "direction": "8ee6130c-e8f6-4ede-be72-8226cba54594",
+          "direction_details": {
+            "id": "8ee6130c-e8f6-4ede-be72-8226cba54594",
+            "code": "DIR-AVIA-UZ",
+            "name": "Aviation Engineering \ud83c\uddfa\ud83c\uddff",
+            "name_uz": "Aviatsiya muhandisligi \ud83c\uddfa\ud83c\uddff",
+            "name_ru": "\u0410\u0432\u0438\u0430\u0446\u0438\u043e\u043d\u043d\u0430\u044f \u0438\u043d\u0436\u0435\u043d\u0435\u0440\u0438\u044f \ud83c\uddfa\ud83c\uddff",
+            "name_en": "Aviation Engineering \ud83c\uddfa\ud83c\uddff",
+            "type": "direction"
+          },
+          "track": "9af5feab-932a-4470-8443-1243f7a30722",
+          "track_details": {
+            "id": "9af5feab-932a-4470-8443-1243f7a30722",
+            "code": "TRACK-UZBEK",
+            "name": "Uzbek Track",
+            "name_uz": "O'zbek yo'nalishi",
+            "name_ru": "\u0423\u0437\u0431\u0435\u043a\u0441\u043a\u043e\u0435 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435",
+            "name_en": "Uzbek Track",
+            "type": "track"
+          },
+          "status": "submitted",
+          "answers": {},
+          "submitted_at": "2026-01-19T03:28:04.703261Z",
+          "created_at": "2026-01-19T03:28:04.703422Z",
+          "updated_at": "2026-01-19T03:28:04.703429Z"
+        },
+        "meta": {
+          "track_label": "Uzbek Track",
+          "direction_label": "Aviation Engineering \ud83c\uddfa\ud83c\uddff",
+          "region_label": "Fergana",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "telegram_chat_id": 8495935656,
+          "username": "hcore_uz",
+          "first_name": "Humoyunbek",
+          "last_name": "Tursunniyazov",
+          "phone": "998990297311",
+          "email": "",
+          "region_id": "8725211b-f41a-4556-b33e-7c813670aaf3",
+          "track_id": "9af5feab-932a-4470-8443-1243f7a30722",
+          "direction_id": "8ee6130c-e8f6-4ede-be72-8226cba54594",
+          "answers": {
+            "birth_date": "2007-07-25",
+            "region": "Navoiy"
+          }
+        },
+        "response": {
+          "id": "f37209f6-4b4b-4040-a9cc-d2cd4b8eac27",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "applicant_details": {
+            "id": "4650f616-5164-4f08-951d-0101e349826c",
+            "telegram_user_id": 8495935656,
+            "telegram_chat_id": 8495935656,
+            "username": "hcore_uz",
+            "first_name": "Humoyunbek",
+            "last_name": "Tursunniyazov",
+            "phone": "998990297311",
+            "email": "",
+            "region": "8725211b-f41a-4556-b33e-7c813670aaf3",
+            "region_details": {
+              "id": "8725211b-f41a-4556-b33e-7c813670aaf3",
+              "code": "REG-NAVOIY",
+              "name": "Navoiy",
+              "name_uz": "Navoiy",
+              "name_ru": "\u041d\u0430\u0432\u043e\u0438",
+              "name_en": "Navoiy",
+              "type": "region"
+            },
+            "created_at": "2026-01-18T20:54:27.077336Z",
+            "updated_at": "2026-01-19T03:34:45.000933Z"
+          },
+          "direction": "8ee6130c-e8f6-4ede-be72-8226cba54594",
+          "direction_details": {
+            "id": "8ee6130c-e8f6-4ede-be72-8226cba54594",
+            "code": "DIR-AVIA-UZ",
+            "name": "Aviation Engineering \ud83c\uddfa\ud83c\uddff",
+            "name_uz": "Aviatsiya muhandisligi \ud83c\uddfa\ud83c\uddff",
+            "name_ru": "\u0410\u0432\u0438\u0430\u0446\u0438\u043e\u043d\u043d\u0430\u044f \u0438\u043d\u0436\u0435\u043d\u0435\u0440\u0438\u044f \ud83c\uddfa\ud83c\uddff",
+            "name_en": "Aviation Engineering \ud83c\uddfa\ud83c\uddff",
+            "type": "direction"
+          },
+          "track": "9af5feab-932a-4470-8443-1243f7a30722",
+          "track_details": {
+            "id": "9af5feab-932a-4470-8443-1243f7a30722",
+            "code": "TRACK-UZBEK",
+            "name": "Uzbek Track",
+            "name_uz": "O'zbek yo'nalishi",
+            "name_ru": "\u0423\u0437\u0431\u0435\u043a\u0441\u043a\u043e\u0435 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435",
+            "name_en": "Uzbek Track",
+            "type": "track"
+          },
+          "status": "submitted",
+          "answers": {
+            "birth_date": "2007-07-25",
+            "region": "Navoiy"
+          },
+          "submitted_at": "2026-01-19T03:34:45.005514Z",
+          "created_at": "2026-01-19T03:34:45.005645Z",
+          "updated_at": "2026-01-19T03:34:45.005654Z"
+        },
+        "meta": {
+          "track_label": "Uzbek Track",
+          "direction_label": "Aviation Engineering \ud83c\uddfa\ud83c\uddff",
+          "region_label": "Navoiy",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "foundation",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "telegram_chat_id": 8495935656,
+          "username": "hcore_uz",
+          "first_name": "Humoyunbek",
+          "last_name": "Tursunniyazov",
+          "phone": "998990297311",
+          "email": "name@example.com",
+          "region_id": "ffce9484-bb44-4df5-9118-a538f1ed4b5e",
+          "answers": {
+            "gender": "male",
+            "region": "Namangan"
+          }
+        },
+        "response": {
+          "id": "1d7ba529-24bb-4cd6-bfe7-46d87b743292",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "applicant_details": {
+            "id": "4650f616-5164-4f08-951d-0101e349826c",
+            "telegram_user_id": 8495935656,
+            "telegram_chat_id": 8495935656,
+            "username": "hcore_uz",
+            "first_name": "Humoyunbek",
+            "last_name": "Tursunniyazov",
+            "phone": "998990297311",
+            "email": "name@example.com",
+            "region": "ffce9484-bb44-4df5-9118-a538f1ed4b5e",
+            "region_details": {
+              "id": "ffce9484-bb44-4df5-9118-a538f1ed4b5e",
+              "code": "REG-NAMANGAN",
+              "name": "Namangan",
+              "name_uz": "Namangan",
+              "name_ru": "\u041d\u0430\u043c\u0430\u043d\u0433\u0430\u043d",
+              "name_en": "Namangan",
+              "type": "region"
+            },
+            "created_at": "2026-01-18T20:54:27.077336Z",
+            "updated_at": "2026-01-19T03:40:52.958090Z"
+          },
+          "status": "submitted",
+          "answers": {
+            "gender": "male",
+            "region": "Namangan"
+          },
+          "submitted_at": "2026-01-19T03:40:52.959777Z",
+          "created_at": "2026-01-19T03:40:52.959915Z",
+          "updated_at": "2026-01-19T03:40:52.959923Z"
+        },
+        "meta": {
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "admissions",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "telegram_chat_id": 8495935656,
+          "username": "hcore_uz",
+          "first_name": "Humoyunbek",
+          "last_name": "Tursunniyazov",
+          "phone": "998990297311",
+          "email": "name@example.com",
+          "region_id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+          "track_id": "9af5feab-932a-4470-8443-1243f7a30722",
+          "direction_id": "b1f5b162-ac57-4099-ba6d-aa5e1746f2ba",
+          "answers": {
+            "gender": "male",
+            "birth_date": "2007-07-25",
+            "region": "Tashkent city"
+          }
+        },
+        "response": {
+          "id": "4ba80993-766f-48ef-8866-eface365f541",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "applicant_details": {
+            "id": "4650f616-5164-4f08-951d-0101e349826c",
+            "telegram_user_id": 8495935656,
+            "telegram_chat_id": 8495935656,
+            "username": "hcore_uz",
+            "first_name": "Humoyunbek",
+            "last_name": "Tursunniyazov",
+            "phone": "998990297311",
+            "email": "name@example.com",
+            "region": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+            "region_details": {
+              "id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+              "code": "REG-TASHCITY",
+              "name": "Tashkent city",
+              "name_uz": "Toshkent shahri",
+              "name_ru": "\u0433\u043e\u0440\u043e\u0434 \u0422\u0430\u0448\u043a\u0435\u043d\u0442",
+              "name_en": "Tashkent city",
+              "type": "region"
+            },
+            "created_at": "2026-01-18T20:54:27.077336Z",
+            "updated_at": "2026-01-23T12:37:19.158254Z"
+          },
+          "direction": "b1f5b162-ac57-4099-ba6d-aa5e1746f2ba",
+          "direction_details": {
+            "id": "b1f5b162-ac57-4099-ba6d-aa5e1746f2ba",
+            "code": "DIR-SOFT-UZ",
+            "name": "Software Engineering \ud83c\uddfa\ud83c\uddff",
+            "name_uz": "Dasturiy ta'minot muhandisligi \ud83c\uddfa\ud83c\uddff",
+            "name_ru": "\u041f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u043d\u0430\u044f \u0438\u043d\u0436\u0435\u043d\u0435\u0440\u0438\u044f \ud83c\uddfa\ud83c\uddff",
+            "name_en": "Software Engineering \ud83c\uddfa\ud83c\uddff",
+            "type": "direction"
+          },
+          "track": "9af5feab-932a-4470-8443-1243f7a30722",
+          "track_details": {
+            "id": "9af5feab-932a-4470-8443-1243f7a30722",
+            "code": "TRACK-UZBEK",
+            "name": "Uzbek Track",
+            "name_uz": "O'zbek yo'nalishi",
+            "name_ru": "\u0423\u0437\u0431\u0435\u043a\u0441\u043a\u043e\u0435 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435",
+            "name_en": "Uzbek Track",
+            "type": "track"
+          },
+          "status": "submitted",
+          "answers": {
+            "gender": "male",
+            "birth_date": "2007-07-25",
+            "region": "Tashkent city"
+          },
+          "submitted_at": "2026-01-23T12:37:19.161515Z",
+          "created_at": "2026-01-23T12:37:19.161614Z",
+          "updated_at": "2026-01-23T12:37:19.161620Z"
+        },
+        "meta": {
+          "track_label": "Uzbek Track",
+          "direction_label": "Software Engineering \ud83c\uddfa\ud83c\uddff",
+          "region_label": "Tashkent city",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "polito",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "telegram_chat_id": 8495935656,
+          "username": "hcore_uz",
+          "first_name": "Humoyunbek",
+          "last_name": "Tursunniyazov",
+          "phone": "998990297311",
+          "email": "name@example.com",
+          "region_id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+          "subject_id": "10235f7d-f408-404b-863e-a907870dff17",
+          "answers": {
+            "gender": "male",
+            "region": "Tashkent city",
+            "subject": "Mathematics"
+          }
+        },
+        "response": {
+          "id": "e806c5c5-b335-41ab-a4a5-29bb382db1ce",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "applicant_details": {
+            "id": "4650f616-5164-4f08-951d-0101e349826c",
+            "telegram_user_id": 8495935656,
+            "telegram_chat_id": 8495935656,
+            "username": "hcore_uz",
+            "first_name": "Humoyunbek",
+            "last_name": "Tursunniyazov",
+            "phone": "998990297311",
+            "email": "name@example.com",
+            "region": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+            "region_details": {
+              "id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+              "code": "REG-TASHCITY",
+              "name": "Tashkent city",
+              "name_uz": "Toshkent shahri",
+              "name_ru": "\u0433\u043e\u0440\u043e\u0434 \u0422\u0430\u0448\u043a\u0435\u043d\u0442",
+              "name_en": "Tashkent city",
+              "type": "region"
+            },
+            "created_at": "2026-01-18T20:54:27.077336Z",
+            "updated_at": "2026-01-23T12:37:31.194096Z"
+          },
+          "subject": "10235f7d-f408-404b-863e-a907870dff17",
+          "subject_details": {
+            "id": "10235f7d-f408-404b-863e-a907870dff17",
+            "code": "SUBJ-MATH",
+            "name": "Mathematics",
+            "name_uz": "Matematika",
+            "name_ru": "\u041c\u0430\u0442\u0435\u043c\u0430\u0442\u0438\u043a\u0430",
+            "name_en": "Mathematics",
+            "type": "subject"
+          },
+          "status": "submitted",
+          "answers": {
+            "gender": "male",
+            "region": "Tashkent city",
+            "subject": "Mathematics"
+          },
+          "submitted_at": "2026-01-23T12:37:31.196330Z",
+          "created_at": "2026-01-23T12:37:31.196447Z",
+          "updated_at": "2026-01-23T12:37:31.196453Z"
+        },
+        "meta": {
+          "subject_label": "Mathematics",
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "foundation",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "telegram_chat_id": 8495935656,
+          "username": "hcore_uz",
+          "first_name": "Humoyunbek",
+          "last_name": "Tursunniyazov",
+          "phone": "998990297311",
+          "email": "name@example.com",
+          "region_id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+          "answers": {
+            "gender": "male",
+            "region": "Tashkent city"
+          }
+        },
+        "response": {
+          "id": "2a4254e3-c865-4edc-b28f-7a3dd022e5db",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "applicant_details": {
+            "id": "4650f616-5164-4f08-951d-0101e349826c",
+            "telegram_user_id": 8495935656,
+            "telegram_chat_id": 8495935656,
+            "username": "hcore_uz",
+            "first_name": "Humoyunbek",
+            "last_name": "Tursunniyazov",
+            "phone": "998990297311",
+            "email": "name@example.com",
+            "region": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+            "region_details": {
+              "id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+              "code": "REG-TASHCITY",
+              "name": "Tashkent city",
+              "name_uz": "Toshkent shahri",
+              "name_ru": "\u0433\u043e\u0440\u043e\u0434 \u0422\u0430\u0448\u043a\u0435\u043d\u0442",
+              "name_en": "Tashkent city",
+              "type": "region"
+            },
+            "created_at": "2026-01-18T20:54:27.077336Z",
+            "updated_at": "2026-01-23T12:37:40.769387Z"
+          },
+          "status": "submitted",
+          "answers": {
+            "gender": "male",
+            "region": "Tashkent city"
+          },
+          "submitted_at": "2026-01-23T12:37:40.770947Z",
+          "created_at": "2026-01-23T12:37:40.771102Z",
+          "updated_at": "2026-01-23T12:37:40.771110Z"
+        },
+        "meta": {
+          "status": "submitted"
+        }
+      },
+      {
+        "kind": "campus",
+        "payload": {
+          "telegram_user_id": 8495935656,
+          "telegram_chat_id": 8495935656,
+          "username": "hcore_uz",
+          "first_name": "Humoyunbek",
+          "last_name": "Tursunniyazov",
+          "phone": "998990297311",
+          "email": "name@example.com",
+          "region_id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+          "answers": {
+            "organization": "29 maktan",
+            "position": "O\u2019quvchi",
+            "visitor_count": 15,
+            "preferred_date": "2026-01-30",
+            "time_slot": "15:30",
+            "gender": "male",
+            "region": "Tashkent city"
+          }
+        },
+        "response": {
+          "id": "dac60e0f-4779-4241-80fe-6232d45cb711",
+          "applicant": "4650f616-5164-4f08-951d-0101e349826c",
+          "applicant_details": {
+            "id": "4650f616-5164-4f08-951d-0101e349826c",
+            "telegram_user_id": 8495935656,
+            "telegram_chat_id": 8495935656,
+            "username": "hcore_uz",
+            "first_name": "Humoyunbek",
+            "last_name": "Tursunniyazov",
+            "phone": "998990297311",
+            "email": "name@example.com",
+            "region": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+            "region_details": {
+              "id": "7e867643-5c62-4d2e-b703-7333d831bf9c",
+              "code": "REG-TASHCITY",
+              "name": "Tashkent city",
+              "name_uz": "Toshkent shahri",
+              "name_ru": "\u0433\u043e\u0440\u043e\u0434 \u0422\u0430\u0448\u043a\u0435\u043d\u0442",
+              "name_en": "Tashkent city",
+              "type": "region"
+            },
+            "created_at": "2026-01-18T20:54:27.077336Z",
+            "updated_at": "2026-01-23T12:38:20.427851Z"
+          },
+          "preferred_date": null,
+          "status": "submitted",
+          "answers": {
+            "organization": "29 maktan",
+            "position": "O\u2019quvchi",
+            "visitor_count": 15,
+            "preferred_date": "2026-01-30",
+            "time_slot": "15:30",
+            "gender": "male",
+            "region": "Tashkent city"
+          },
+          "submitted_at": "2026-01-23T12:38:20.429309Z",
+          "created_at": "2026-01-23T12:38:20.429438Z",
+          "updated_at": "2026-01-23T12:38:20.429446Z"
+        },
+        "meta": {
+          "organization": "29 maktan",
+          "preferred_date": "2026-01-30",
+          "time_slot": "15:30",
+          "status": "submitted"
+        }
+      }
+    ]
+  }
+}
