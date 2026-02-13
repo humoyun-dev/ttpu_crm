@@ -48,6 +48,14 @@ export default function DashboardPage() {
             bot2Api.listSurveys(),
           ]);
 
+        console.log("Fetched stats:", {
+          admissions,
+          campus,
+          polito,
+          foundation,
+          surveys,
+        });
+
         setStats({
           admissions:
             admissions.data?.count || admissions.data?.results?.length || 0,

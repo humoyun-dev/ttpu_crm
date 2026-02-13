@@ -48,6 +48,9 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const result = await login(username, password);
+
+      console.log("Login result:", result);
+
       if (result.success) {
         // Token saved, redirect to dashboard
         toast.success("Muvaffaqiyatli kirildi! 👋", {
