@@ -349,3 +349,12 @@ Bir xil `student_id + survey_campaign` bilan qayta yuborilganda yozuv **yangilan
 - Loglarni markaziy monitoringga yuboring.
 
 `requirements.txt` Docker'siz (`.venv` + `pip`) ishga tushirish uchun qo'shilgan.
+**Problem**: Catalog bo'sh
+**Yechim**: Admin panelda DIRECTION va REGION itemlar mavjudligini tekshiring
+
+
+## Production
+- `SERVER_BASE_URL` ni to'g'ri API domeniga qo'ying (masalan `https://api.example.com/api/v1`).
+- `SERVICE_TOKEN` faqat environment orqali boshqarilsin (repo ichiga yozmang).
+- Bot service uchun process manager ishlating (systemd/supervisor) va autorestart yoqing.
+- Observability uchun container/stdout loglarni markaziy monitoringga yuboring.
