@@ -64,6 +64,7 @@ python manage.py create_admin --email admin@example.com --password 'StrongPass!1
 ```bash
 cd /opt/ttpu_crm/server
 source .venv/bin/activate
+gunicorn crm_server.wsgi:application -c gunicorn.conf.py
 gunicorn crm_server.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60
 ```
 
@@ -136,6 +137,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/opt/ttpu_crm/server
 Environment=PATH=/opt/ttpu_crm/server/.venv/bin
+ExecStart=/opt/ttpu_crm/server/.venv/bin/gunicorn crm_server.wsgi:application -c gunicorn.conf.py
 ExecStart=/opt/ttpu_crm/server/.venv/bin/gunicorn crm_server.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60
 Restart=always
 RestartSec=5
@@ -288,3 +290,11 @@ curl -I https://api.example.uz/api/docs/
 # dashboard
 curl -I https://crm.example.uz/login
 ```
+
+
+## 9) Gunicorn `WORKER TIMEOUT (no URI read)` haqida
+Bu xatolik odatda server portiga HTTP bo'lmagan ulanish (scanner/probe) kelganda yuz beradi.
+Amaliy yechimlar:
+1. Gunicornni public IPga emas, `127.0.0.1`ga bind qiling va tashqi trafikni faqat Nginx orqali kiriting.
+2. Nginx health-check yoki monitoring uchun `GET /api/v1/healthz` ishlating.
+3. Gunicorn konfiguratsiyasini `server/gunicorn.conf.py` orqali yuriting (`timeout=120`, `gthread` worker).
