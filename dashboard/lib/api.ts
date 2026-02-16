@@ -1,6 +1,8 @@
 // API client for TTPU CRM Dashboard
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const AUTH_MARKER_COOKIE = "dashboard_auth";
+const AUTH_MARKER_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export interface ApiResponse<T> {
   data?: T;
@@ -216,16 +218,81 @@ function getToken(): string | null {
   return localStorage.getItem("access_token");
 }
 
+function setAuthMarkerCookie(enabled: boolean) {
+  if (typeof document === "undefined") return;
+  if (enabled) {
+    document.cookie = `${AUTH_MARKER_COOKIE}=1; path=/; max-age=${AUTH_MARKER_MAX_AGE_SECONDS}; samesite=lax`;
+    return;
+  }
+  document.cookie = `${AUTH_MARKER_COOKIE}=; path=/; max-age=0; samesite=lax`;
+}
+
+function persistTokens(accessToken: string, refreshToken: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("access_token", accessToken);
+  localStorage.setItem("refresh_token", refreshToken);
+  setAuthMarkerCookie(true);
+}
+
 function clearStoredTokens() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("access_token");
   localStorage.removeItem("refresh_token");
+  setAuthMarkerCookie(false);
+}
+
+let refreshRequest: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (refreshRequest) return refreshRequest;
+
+  refreshRequest = (async () => {
+    const refreshToken =
+      typeof window !== "undefined"
+        ? localStorage.getItem("refresh_token")
+        : null;
+    if (!refreshToken) return false;
+
+    const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      clearStoredTokens();
+      return false;
+    }
+
+    const body = await res.json().catch(() => ({} as { access?: string }));
+    const currentRefreshToken =
+      typeof window !== "undefined"
+        ? localStorage.getItem("refresh_token")
+        : null;
+
+    if (!body.access || !currentRefreshToken) {
+      clearStoredTokens();
+      return false;
+    }
+
+    persistTokens(body.access, currentRefreshToken);
+    return true;
+  })();
+
+  try {
+    return await refreshRequest;
+  } finally {
+    refreshRequest = null;
+  }
 }
 
 // Generic fetch wrapper
 async function apiFetch<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryOnAuthFailure = true
 ): Promise<ApiResponse<T>> {
   const token = getToken();
   const headers: HeadersInit = {
@@ -242,10 +309,13 @@ async function apiFetch<T>(
     });
 
     if (res.status === 401) {
-      // Clear tokens and redirect
+      if (retryOnAuthFailure && (await refreshAccessToken())) {
+        return apiFetch<T>(endpoint, options, false);
+      }
+
       if (typeof window !== "undefined") {
         clearStoredTokens();
-        window.location.href = "/";
+        window.location.href = "/login";
       }
       return { error: { code: "UNAUTHORIZED", message: "Session expired" } };
     }
@@ -280,8 +350,7 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     });
     if (res.data) {
-      localStorage.setItem("access_token", res.data.access);
-      localStorage.setItem("refresh_token", res.data.refresh);
+      persistTokens(res.data.access, res.data.refresh);
     }
     return res;
   },

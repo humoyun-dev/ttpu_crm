@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework import routers
@@ -36,6 +37,11 @@ from analytics.views import (
     enrollments_overview,
 )
 
+
+
+def healthz(request):
+    return JsonResponse({"ok": True})
+
 router = routers.DefaultRouter()
 router.register(r"catalog/items", CatalogItemViewSet, basename="catalog-item")
 router.register(r"catalog/relations", CatalogRelationViewSet, basename="catalog-relation")
@@ -57,6 +63,7 @@ urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/v1/", include([
+        path("healthz", healthz, name="healthz"),
         path("", include(router.urls)),
         path("auth/login", LoginView.as_view(), name="auth-login"),
         path("auth/refresh", RefreshView.as_view(), name="auth-refresh"),
