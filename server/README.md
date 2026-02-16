@@ -32,6 +32,29 @@ Django 5 + DRF asosidagi backend, PostgreSQL (yoki lokalda SQLite), SimpleJWT va
 - **OpenAPI**: `/api/schema/` (JSON), `/api/docs/` (Swagger UI).
 - **Service tokens**: Botlar xom tokenni `X-SERVICE-TOKEN` headerida yuboradi; `.env` dagi sha256 hash bilan tekshiriladi.
 
+## Ishga tushirish (.venv + requirements, Docker'siz)
+1. `cd server`
+2. Virtual environment yarating va yoqing:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+3. Paketlar o'rnating:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Konfiguratsiya:
+   ```bash
+   cp .env.example .env
+   ```
+   Lokal HTTP rejimda cookie ishlashi uchun `.env` ichida `JWT_COOKIE_SECURE=false` bo'lishi shart.
+5. SQLite bilan ishga tushirish (Docker'siz):
+   ```bash
+   export USE_SQLITE=1
+   python manage.py migrate
+   python manage.py runserver 0.0.0.0:8000
+   ```
+
 ## Ishga tushirish (Poetry)
 1. Python 3.12+ va [Poetry](https://python-poetry.org/) o'rnating.
 2. `cp .env.example .env` qilib DB va JWT sozlamalarini to'ldiring. Bot token hashlarini yaratish uchun:
@@ -41,12 +64,26 @@ Django 5 + DRF asosidagi backend, PostgreSQL (yoki lokalda SQLite), SimpleJWT va
    print(hashlib.sha256(b'secret-token').hexdigest())
    PY
    ```
-   `SERVICE_TOKEN_BOT1_HASH`, `SERVICE_TOKEN_BOT2_HASH` ga qo'ying. Lokal uchun `USE_SQLITE=1` qo'yib Postgres o'rniga `db.sqlite3` dan foydalanishingiz mumkin.
+   `SERVICE_TOKEN_BOT1_HASH`, `SERVICE_TOKEN_BOT2_HASH` ga qo'ying. Lokalda default `USE_SQLITE=1` bilan `db.sqlite3` ishlaydi; kerak bo'lsa Postgres uchun `USE_SQLITE=0` qiling.
 3. Bog'liqliklar: `poetry install`
 4. Migratsiyalar: `poetry run python manage.py migrate`
 5. Admin yaratish: `poetry run python manage.py create_admin --email admin@example.com --password pass1234`
 6. Demo ma'lumotlar (ixtiyoriy): `poetry run python manage.py create_mock_data` yoki katta hajm uchun `seed_ttpumock --scale medium --seed 1`
 7. Server: `poetry run python manage.py runserver 0.0.0.0:8000`
+
+
+## Production sozlamalari
+- `DJANGO_DEBUG=false` qoldiring.
+- `DJANGO_ALLOWED_HOSTS` va `CSRF_TRUSTED_ORIGINS` ni production domen(lar)ga moslang.
+- HTTPS reverse proxy ortida quyidagilarni yoqing:
+  - `USE_X_FORWARDED_HOST=true`
+  - `SECURE_PROXY_SSL_HEADER_ENABLED=true`
+  - `SECURE_SSL_REDIRECT=true`
+  - `SESSION_COOKIE_SECURE=true`
+  - `CSRF_COOKIE_SECURE=true`
+  - `SECURE_HSTS_SECONDS=31536000` (+ `SECURE_HSTS_INCLUDE_SUBDOMAINS=true`, `SECURE_HSTS_PRELOAD=true`)
+- JWT cookie uchun productionda `JWT_COOKIE_SECURE=true` bo'lishi shart.
+- Gunicornni bir nechta worker bilan ishga tushiring (masalan CPU*2+1).
 
 ## Docker
 1. `.env` faylini to'ldiring.
@@ -63,3 +100,18 @@ Django 5 + DRF asosidagi backend, PostgreSQL (yoki lokalda SQLite), SimpleJWT va
 
 ## Testlar
 `poetry run pytest` – pytest-django bilan asosiy oqimlar va management buyruqlari tekshiruvlari.
+
+
+## Deploy (domain -> IP, Nginx, systemd)
+To'liq production yo'riqnoma (domaindan kelgan so'rovni IP/local portga yo'naltirish bilan): `../DEPLOYMENT.md`.
+
+
+## Gunicorn tavsiya etilgan ishga tushirish
+```bash
+cd server
+source .venv/bin/activate
+gunicorn crm_server.wsgi:application -c gunicorn.conf.py
+```
+
+Agar `WORKER TIMEOUT` va `no URI read` ko'rsangiz, bu ko'pincha xom TCP probe/scanner yoki noto'g'ri health-check sababli bo'ladi.
+Nginx/monitoring health-check uchun `GET /api/v1/healthz` endpointdan foydalaning.
