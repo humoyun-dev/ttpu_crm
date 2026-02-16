@@ -241,6 +241,13 @@ function clearStoredTokens() {
   setAuthMarkerCookie(false);
 }
 
+function redirectToLoginIfNeeded() {
+  if (typeof window === "undefined") return;
+  const { pathname } = window.location;
+  if (pathname === "/login") return;
+  window.location.replace("/login");
+}
+
 let refreshRequest: Promise<boolean> | null = null;
 
 async function refreshAccessToken(): Promise<boolean> {
@@ -315,6 +322,7 @@ async function apiFetch<T>(
 
       if (typeof window !== "undefined") {
         clearStoredTokens();
+        redirectToLoginIfNeeded();
         window.location.href = "/login";
       }
       return { error: { code: "UNAUTHORIZED", message: "Session expired" } };
