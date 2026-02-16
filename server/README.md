@@ -104,3 +104,14 @@ Django 5 + DRF asosidagi backend, PostgreSQL (yoki lokalda SQLite), SimpleJWT va
 
 ## Deploy (domain -> IP, Nginx, systemd)
 To'liq production yo'riqnoma (domaindan kelgan so'rovni IP/local portga yo'naltirish bilan): `../DEPLOYMENT.md`.
+
+
+## Gunicorn tavsiya etilgan ishga tushirish
+```bash
+cd server
+source .venv/bin/activate
+gunicorn crm_server.wsgi:application -c gunicorn.conf.py
+```
+
+Agar `WORKER TIMEOUT` va `no URI read` ko'rsangiz, bu ko'pincha xom TCP probe/scanner yoki noto'g'ri health-check sababli bo'ladi.
+Nginx/monitoring health-check uchun `GET /api/v1/healthz` endpointdan foydalaning.
