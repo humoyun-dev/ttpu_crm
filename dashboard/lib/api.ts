@@ -323,6 +323,7 @@ async function apiFetch<T>(
       if (typeof window !== "undefined") {
         clearStoredTokens();
         redirectToLoginIfNeeded();
+        window.location.href = "/login";
       }
       return { error: { code: "UNAUTHORIZED", message: "Session expired" } };
     }
