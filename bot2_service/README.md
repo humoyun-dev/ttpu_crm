@@ -112,13 +112,13 @@ bot2_service/
 - `answers` (JSON) - Qo'shimcha javoblar
 - `submitted_at` (datetime) - Yuborilgan vaqt
 
-**Muhim**: Har safar yangi yozuv yaratiladi - bir talaba bir necha marta qatnashishi mumkin!
+**Muhim**: Yozuv `(student, survey_campaign)` bo'yicha idempotent yangilanadi.
 
 **Qanday ishlaydi**:
 
-- Talaba so'rovnomani yakunlaganda yangi `Bot2SurveyResponse` yozuvi **har doim** yaratiladi
-- Avvalgi versiyada roster+campaign bo'yicha mavjud yozuvni yangilar edi, lekin optimize qilindi
-- Endi bir talaba bir kampaniyada bir necha marta qatnashishi mumkin - har biri alohida yozuv
+- Talaba bir xil kampaniya (`survey_campaign`) bo'yicha qayta yuborsa, mavjud `Bot2SurveyResponse` yozuvi yangilanadi.
+- Bu duplicate yozuvlarni kamaytiradi va production analytics natijalarini barqaror qiladi.
+- `roster` mavjud bo'lsa, `course_year` rosterdan olinadi (source of truth).
 
 **Misol**:
 
@@ -365,3 +365,10 @@ Bot quyidagi catalog typelardan foydalanadi:
 
 **Problem**: Catalog bo'sh
 **Yechim**: Admin panelda DIRECTION va REGION itemlar mavjudligini tekshiring
+
+
+## Production
+- `SERVER_BASE_URL` ni to'g'ri API domeniga qo'ying (masalan `https://api.example.com/api/v1`).
+- `SERVICE_TOKEN` faqat environment orqali boshqarilsin (repo ichiga yozmang).
+- Bot service uchun process manager ishlating (systemd/supervisor) va autorestart yoqing.
+- Observability uchun container/stdout loglarni markaziy monitoringga yuboring.

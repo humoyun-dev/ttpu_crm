@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -25,109 +25,133 @@ class CrmApiClient:
         self.service_token = settings.service_token
         self.email = settings.dashboard_email
         self.password = settings.dashboard_password
-        # Disable redirect following to avoid hitting Django admin login, and set base headers.
-        self.client = httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers={"Host": "server"})
+        self.client = httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=httpx.Timeout(15.0),
+            follow_redirects=True,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
         self._logged_in = False
         self._auth_token: str | None = None
 
     async def close(self):
         await self.client.aclose()
 
+    def _auth_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._auth_token}"} if self._auth_token else {}
+
     async def login_dashboard(self) -> bool:
         if not (self.email and self.password):
+            logger.warning("Dashboard credentials are missing for bot1 service")
             return False
+
         if self._logged_in and self._auth_token:
             return True
+
         try:
             resp = await self.client.post(
-                f"{self.base_url}/auth/login",
+                "/auth/login",
                 json={"email": self.email, "password": self.password},
             )
-            if resp.status_code == 200:
-                try:
-                    token = resp.json().get("access")
-                    if token:
-                        self._auth_token = token
-                        self._logged_in = True
-                        logger.info("Dashboard login successful, token acquired")
-                        return True
-                    else:
-                        logger.warning("Dashboard login response missing access token")
-                        return False
-                except Exception as e:
-                    logger.warning("Dashboard login response parse error: %s", e)
-                    return False
-            logger.warning("Dashboard login failed: %s %s", resp.status_code, resp.text)
         except Exception as exc:  # pragma: no cover - network guard
             logger.exception("Dashboard login error: %s", exc)
-        return False
+            return False
 
-    async def get_catalog_items(self, item_type: str) -> list[dict]:
-        ok = await self.login_dashboard()
-        if not ok:
-            logger.warning("Cannot fetch catalog - not logged in")
-            return []
+        if resp.status_code != 200:
+            logger.warning("Dashboard login failed: %s %s", resp.status_code, resp.text)
+            return False
+
         try:
-            headers = {"Authorization": f"Bearer {self._auth_token}"}
-            resp = await self.client.get(
-                f"{self.base_url}/catalog/items/",
-                params={"type": item_type, "is_active": "true"},
-                headers=headers,
-            )
+            token = resp.json().get("access")
+        except Exception as exc:  # pragma: no cover - malformed response
+            logger.warning("Dashboard login response parse error: %s", exc)
+            return False
+
+        if not token:
+            logger.warning("Dashboard login response missing access token")
+            return False
+
+        self._auth_token = token
+        self._logged_in = True
+        return True
+
+    async def _get_catalog(self, item_type: str) -> list[dict]:
+        if not await self.login_dashboard():
+            return []
+
+        for attempt in (1, 2):
+            try:
+                resp = await self.client.get(
+                    "/catalog/items/",
+                    params={"type": item_type, "is_active": "true"},
+                    headers=self._auth_headers(),
+                )
+            except Exception as exc:  # pragma: no cover - network guard
+                logger.exception("Catalog fetch error (%s): %s", item_type, exc)
+                return []
+
+            if resp.status_code == 401 and attempt == 1:
+                self._logged_in = False
+                self._auth_token = None
+                if await self.login_dashboard():
+                    continue
+
             if resp.status_code != 200:
                 logger.warning("Catalog GET %s failed: %s %s", item_type, resp.status_code, resp.text)
-                # Reset login state if unauthorized
-                if resp.status_code == 401:
-                    self._logged_in = False
-                    self._auth_token = None
                 return []
-            data = resp.json()
-            # Handle both paginated response and direct list
-            if isinstance(data, dict) and "results" in data:
-                results = data["results"]
-                logger.info("Fetched %d %s items (paginated)", len(results), item_type)
-                return results
-            elif isinstance(data, list):
-                logger.info("Fetched %d %s items (direct list)", len(data), item_type)
+
+            try:
+                data = resp.json()
+            except Exception as exc:
+                logger.warning("Catalog GET %s returned non-JSON payload: %s", item_type, exc)
+                return []
+
+            if isinstance(data, dict):
+                results = data.get("results", [])
+                return results if isinstance(results, list) else []
+            if isinstance(data, list):
                 return data
-            else:
-                logger.warning("Unexpected catalog response format: %s, data type: %s", type(data), data)
-                return []
-        except Exception as exc:  # pragma: no cover - network guard
-            logger.exception("Catalog fetch error: %s", exc)
+
+            logger.warning("Unexpected catalog response format for %s: %s", item_type, type(data).__name__)
             return []
 
-    async def _post_service(self, path: str, payload: Dict[str, Any]) -> ApiResult:
+        return []
+
+    async def get_catalog_items(self, item_type: str) -> list[dict]:
+        return await self._get_catalog(item_type)
+
+    async def _post_service(self, path: str, payload: dict[str, Any]) -> ApiResult:
         headers = {"X-SERVICE-TOKEN": self.service_token}
         try:
-            resp = await self.client.post(f"{self.base_url}{path}", json=payload, headers=headers)
+            resp = await self.client.post(path, json=payload, headers=headers)
         except Exception as exc:  # pragma: no cover - network guard
             logger.exception("POST %s failed: %s", path, exc)
             return ApiResult(ok=False, error=str(exc))
+
         if 200 <= resp.status_code < 300:
-            data = None
             try:
                 data = resp.json()
             except Exception:
                 data = resp.text
             return ApiResult(ok=True, data=data, status=resp.status_code)
+
         try:
             err = resp.json()
         except Exception:
             err = resp.text
         return ApiResult(ok=False, error=str(err), status=resp.status_code)
 
-    async def upsert_applicant(self, payload: Dict[str, Any]) -> ApiResult:
+    async def upsert_applicant(self, payload: dict[str, Any]) -> ApiResult:
         return await self._post_service("/bot1/applicants/upsert", payload)
 
-    async def submit_campus_tour(self, payload: Dict[str, Any]) -> ApiResult:
+    async def submit_campus_tour(self, payload: dict[str, Any]) -> ApiResult:
         return await self._post_service("/bot1/campus-tour/submit", payload)
 
-    async def submit_foundation(self, payload: Dict[str, Any]) -> ApiResult:
+    async def submit_foundation(self, payload: dict[str, Any]) -> ApiResult:
         return await self._post_service("/bot1/foundation/submit", payload)
 
-    async def submit_polito_academy(self, payload: Dict[str, Any]) -> ApiResult:
+    async def submit_polito_academy(self, payload: dict[str, Any]) -> ApiResult:
         return await self._post_service("/bot1/polito-academy/submit", payload)
 
-    async def submit_admissions(self, payload: Dict[str, Any]) -> ApiResult:
+    async def submit_admissions(self, payload: dict[str, Any]) -> ApiResult:
         return await self._post_service("/bot1/admissions-2026/submit", payload)
