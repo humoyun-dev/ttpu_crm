@@ -112,13 +112,13 @@ bot2_service/
 - `answers` (JSON) - Qo'shimcha javoblar
 - `submitted_at` (datetime) - Yuborilgan vaqt
 
-**Muhim**: Har safar yangi yozuv yaratiladi - bir talaba bir necha marta qatnashishi mumkin!
+**Muhim**: Yozuv `(student, survey_campaign)` bo'yicha idempotent yangilanadi.
 
 **Qanday ishlaydi**:
 
-- Talaba so'rovnomani yakunlaganda yangi `Bot2SurveyResponse` yozuvi **har doim** yaratiladi
-- Avvalgi versiyada roster+campaign bo'yicha mavjud yozuvni yangilar edi, lekin optimize qilindi
-- Endi bir talaba bir kampaniyada bir necha marta qatnashishi mumkin - har biri alohida yozuv
+- Talaba bir xil kampaniya (`survey_campaign`) bo'yicha qayta yuborsa, mavjud `Bot2SurveyResponse` yozuvi yangilanadi.
+- Bu duplicate yozuvlarni kamaytiradi va production analytics natijalarini barqaror qiladi.
+- `roster` mavjud bo'lsa, `course_year` rosterdan olinadi (source of truth).
 
 **Misol**:
 
@@ -256,41 +256,33 @@ Kanal → Ma'lumotlarni ko'rish → Tasdiqlash → Submit
 
 ## O'rnatish va Ishga Tushirish
 
-### Environment Variables
+### Environment Variables (`.env`)
+`config.py` quyidagi kalitlarni o'qiydi:
 
 ```env
-BOT2_TOKEN=your_telegram_bot_token
-CRM_SERVER_URL=http://server:8000
-CRM_SERVICE_TOKEN=your_service_token_sha256
-DASHBOARD_EMAIL=admin@example.com
-DASHBOARD_PASSWORD=admin_password
+BOT_TOKEN=123456:telegram-bot-token
+SERVER_BASE_URL=http://localhost:8000/api/v1
+SERVICE_TOKEN=raw-bot2-service-token
+DASHBOARD_EMAIL=
+DASHBOARD_PASSWORD=
 DEFAULT_LANGUAGE=uz
 ```
 
-### Lokal Ishga Tushirish
+### Lokal ishga tushirish (Docker'siz, `.venv` + `pip`)
+```bash
+cd bot2_service
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+python -m bot2_service.main
+```
 
+### Poetry varianti (ixtiyoriy)
 ```bash
 cd bot2_service
 poetry install
 poetry run python src/bot2_service/main.py
-```
-
-### Docker
-
-```yaml
-bot2:
-  build: ./bot2_service
-  environment:
-    - BOT2_TOKEN=${BOT2_TOKEN}
-    - CRM_SERVER_URL=http://server:8000
-    - CRM_SERVICE_TOKEN=${CRM_SERVICE_TOKEN}
-  depends_on:
-    - server
-```
-
-```bash
-docker-compose up -d bot2
-docker-compose logs -f bot2
 ```
 
 ---
@@ -303,23 +295,16 @@ docker-compose logs -f bot2
 - `ru` - Русский
 - `en` - English
 
-**Funksiya**: `get_text(lang: str, key: str) -> str`
-
 ---
 
 ## Catalog Integration
 
 Bot quyidagi catalog typelardan foydalanadi:
 
-### DIRECTION (Program)
+- `direction` (Program)
+- `region` (Hudud)
 
-- Yo'nalishlar ro'yxati (Production Engineering, IT, etc.)
-
-### REGION (Hudud)
-
-- O'zbekiston viloyatlari
-
-**Keshlash**: 900 soniya (15 daqiqa) TTL
+Keshlash: 900 soniya (15 daqiqa) TTL.
 
 ---
 
@@ -328,40 +313,39 @@ Bot quyidagi catalog typelardan foydalanadi:
 1. Botni toping: `@TTPU_Alumni_bot`
 2. `/start` yuboring
 3. Barcha qadamlarni bajaring
-4. Admin panelda yangi yozuv ko'ring
+4. Admin panelda yozuv yangilanganini tekshiring
 
-**Ko'p marta test**:
-
-- Bir student_id bilan bir necha marta to'ldiring
-- Har safar yangi `Bot2SurveyResponse` yaratiladi
+Bir xil `student_id + survey_campaign` bilan qayta yuborilganda yozuv **yangilanadi** (duplicate emas).
 
 ---
 
 ## Xususiyatlar
 
-✅ **Ko'p tillik** - 3 til qo'llab-quvvatlanadi
-✅ **Auto-create Roster** - Avtomatik roster yaratish
-✅ **Multiple Submissions** - Bir necha marta qatnashish
-✅ **Catalog Integration** - Dinamik katalog ma'lumotlari
-✅ **Audit Logging** - To'liq audit trail
-
----
-
-## Yangilanishlar (2026-01-19)
-
-- ✅ Har safar yangi survey response yaratiladi
-- ✅ Roster+campaign uniqueness olib tashlandi
-- ✅ Admin panelda barcha submissionlar ko'rinadi
+✅ Ko'p tillik (3 til)
+✅ Auto-create roster
+✅ Idempotent survey update (`student + survey_campaign`)
+✅ Catalog integration
+✅ Audit logging
 
 ---
 
 ## Muammolarni Hal Qilish
 
-**Problem**: Ko'p marta to'ldirdim, lekin bitta ko'rsatilmoqda
-**Yechim**: Unique constraint olib tashlandi - endi har safar yangi yozuv yaratiladi
+**Problem**: Ko'p marta to'ldirdim, duplicate kerak edi, lekin bitta ko'rsatilmoqda  
+**Yechim**: Hozirgi production logika idempotent (`student + survey_campaign`) yangilashni ishlatadi.
 
-**Problem**: Roster topilmayapti
-**Yechim**: Program ID to'g'ri ekanligini tekshiring - bot avtomatik roster yaratadi
+**Problem**: Roster topilmayapti  
+**Yechim**: `program_id` to'g'ri ekanligini tekshiring, bot avtomatik roster yaratadi.
 
-**Problem**: Catalog bo'sh
-**Yechim**: Admin panelda DIRECTION va REGION itemlar mavjudligini tekshiring
+**Problem**: Catalog bo'sh  
+**Yechim**: Admin panelda `direction` va `region` itemlar borligini tekshiring.
+
+---
+
+## Production
+- `SERVER_BASE_URL` ni production API manziliga sozlang (`https://api.example.com/api/v1`).
+- `SERVICE_TOKEN` ni secret manager/environment orqali bering.
+- Process manager (systemd/supervisor) bilan autorestart yoqing.
+- Loglarni markaziy monitoringga yuboring.
+
+`requirements.txt` Docker'siz (`.venv` + `pip`) ishga tushirish uchun qo'shilgan.
