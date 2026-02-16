@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   ReactNode,
+  useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
 import { authApi, User } from "./api";
@@ -27,47 +28,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem("access_token");
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+  const hydrateUser = useCallback(async () => {
+    setLoading(true);
+    const res = await authApi.me();
 
-      const res = await authApi.me();
-      if (res.data) {
-        setUser(res.data);
-      } else {
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-      }
-      setLoading(false);
-    };
+    if (res.data) {
+      setUser(res.data);
+    } else {
+      setUser(null);
+    }
 
-    checkAuth();
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    hydrateUser();
+  }, [hydrateUser]);
 
   const login = async (email: string, password: string) => {
     try {
       const res = await authApi.login(email, password);
 
-      if (res.data) {
-        // Token saved successfully by authApi.login
-        const userRes = await authApi.me();
-        if (userRes.data) {
-          setUser(userRes.data);
-          return { success: true };
-        }
-        // Got token but failed to fetch user - still success
-        return { success: true };
+      if (!res.data) {
+        const errorMsg = Array.isArray(res.error?.message)
+          ? res.error.message.join(", ")
+          : res.error?.message || "Login yoki parol noto'g'ri";
+        return { success: false, error: errorMsg };
       }
 
-      // Login failed - return error message
-      const errorMsg = Array.isArray(res.error?.message)
-        ? res.error.message.join(", ")
-        : res.error?.message || "Login yoki parol noto'g'ri";
-      return { success: false, error: errorMsg };
+      const userRes = await authApi.me();
+      if (userRes.data) {
+        setUser(userRes.data);
+      }
+      return { success: true };
     } catch (err) {
       console.error("Login error:", err);
       return {
