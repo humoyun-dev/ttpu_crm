@@ -7,3 +7,7 @@
 - Dashboard: set `NEXT_PUBLIC_API_URL` to production API domain and run `npm run build && npm run start`.
 - Bot services: use production `SERVER_BASE_URL` and raw service tokens; store secrets only in environment (no hardcoded tokens).
 - Database: use managed Postgres backups and monitor migration rollout before deploying bot and dashboard changes.
+
+
+## Run/Deploy qo'llanma
+- To'liq Docker'siz ishga tushirish, systemd va Nginx (domain -> IP -> local port) konfiguratsiyasi: `DEPLOYMENT.md`.

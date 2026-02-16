@@ -348,6 +348,7 @@ Bir xil `student_id + survey_campaign` bilan qayta yuborilganda yozuv **yangilan
 - Process manager (systemd/supervisor) bilan autorestart yoqing.
 - Loglarni markaziy monitoringga yuboring.
 
+`requirements.txt` Docker'siz (`.venv` + `pip`) ishga tushirish uchun qo'shilgan.
 **Problem**: Catalog bo'sh
 **Yechim**: Admin panelda DIRECTION va REGION itemlar mavjudligini tekshiring
 
