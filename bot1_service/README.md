@@ -57,3 +57,10 @@ Hoziroq unit test yo'q. `poetry run pytest` bilan kelajakdagi testlar uchun tayy
 - My applications serverdan o'qilmaydi (CRM GET uchun user-auth kerak); bot yuborgan arizalarni lokal keshda saqlaydi.
 - Cookie bilan katalog olish ishlashi uchun `DASHBOARD_EMAIL/PASSWORD` admin/viewer foydalanuvchisi kerak.
 - Sana tanlash inline calendar bilan, vaqt slotlari lokal preset; istasangiz `catalog_cache.py` ga serverdan keladigan slot endpointini qo'shing.
+
+
+## Production
+- `SERVER_BASE_URL` ni production API manziliga sozlang (`https://api.example.com/api/v1`).
+- `SERVICE_TOKEN`, `DASHBOARD_EMAIL`, `DASHBOARD_PASSWORD` ni secret manager yoki environment orqali bering.
+- Bot processini systemd/supervisor orqali ishlating va avtomatik qayta ishga tushirishni yoqing.
+- Katalog olishda auth xatolari bo'lsa, bot relogin + retry qiladi; loggingni monitoring tizimiga ulang.
