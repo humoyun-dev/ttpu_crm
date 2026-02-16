@@ -15,16 +15,26 @@ class CookieJWTAuthentication(JWTAuthentication):
             return raw_token
         return None
 
+    def _authenticate_token(self, raw_token):
+        validated = self.get_validated_token(raw_token)
+        return self.get_user(validated), validated
+
     def authenticate(self, request):
         header = self.get_header(request)
         raw_token = self.get_raw_token(header)
-        if not raw_token:
-            raw_token = request.COOKIES.get(settings.ACCESS_COOKIE_NAME)
-        if not raw_token:
+        if raw_token:
+            try:
+                return self._authenticate_token(raw_token)
+            except InvalidToken:
+                # Frontend may keep an expired Authorization header while cookie is refreshed.
+                # Fall through to cookie-based auth to recover gracefully.
+                pass
+
+        raw_cookie_token = request.COOKIES.get(settings.ACCESS_COOKIE_NAME)
+        if not raw_cookie_token:
             return None
 
-        validated = self.get_validated_token(raw_token)
-        return self.get_user(validated), validated
+        return self._authenticate_token(raw_cookie_token)
 
     def get_validated_token(self, raw_token):
         validated = super().get_validated_token(raw_token)
