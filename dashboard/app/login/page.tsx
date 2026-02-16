@@ -46,29 +46,6 @@ export default function LoginPage() {
         router.replace("/dashboard");
         router.refresh();
         return;
-      const result = await login(email, password);
-
-      console.log("Login result:", result);
-
-      if (result.success) {
-        // Token saved, redirect to dashboard
-        toast.success("Muvaffaqiyatli kirildi! 👋", {
-          duration: 2000,
-        });
-        // Use window.location for hard redirect to ensure fresh state
-        router.replace("/dashboard");
-        router.refresh();
-      } else {
-        // Show error message
-        toast.error(result.error || "Login yoki parol noto'g'ri ❌", {
-          duration: 4000,
-        });
-        // Clear password on error
-        setPassword("");
-        // Re-focus username field
-        setTimeout(() => {
-          document.getElementById("username")?.focus();
-        }, 100);
       }
 
       toast.error(result.error || "Login yoki parol noto'g'ri");
@@ -111,72 +88,6 @@ export default function LoginPage() {
               placeholder="********"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-          <CardTitle className="text-3xl font-bold bg-linear-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
-            TTPU CRM
-          </CardTitle>
-          <CardDescription className="text-base">
-            Tizimga kirish uchun login va parolingizni kiriting
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-sm font-medium">
-                Login
-              </Label>
-              <div className="relative group">
-                <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="Loginingizni kiriting"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
-                  disabled={loading}
-                  autoComplete="username"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium">
-                Parol
-              </Label>
-              <div className="relative group">
-                <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Parolingizni kiriting"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-11 h-11 transition-all focus:ring-2 focus:ring-primary/20"
-                  disabled={loading}
-                  autoComplete="current-password"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleSubmit(e);
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus:text-primary"
-                  tabIndex={-1}
-                  disabled={loading}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-            <Button
-              type="submit"
-              className="w-full h-11 text-base font-medium bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/30 dark:shadow-blue-500/20 transition-all hover:shadow-xl hover:shadow-blue-500/40"
               disabled={loading}
               autoComplete="current-password"
             />
