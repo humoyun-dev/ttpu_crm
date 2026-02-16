@@ -65,7 +65,6 @@ python manage.py create_admin --email admin@example.com --password 'StrongPass!1
 cd /opt/ttpu_crm/server
 source .venv/bin/activate
 gunicorn crm_server.wsgi:application -c gunicorn.conf.py
-gunicorn crm_server.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60
 ```
 
 ---
@@ -138,7 +137,6 @@ Group=www-data
 WorkingDirectory=/opt/ttpu_crm/server
 Environment=PATH=/opt/ttpu_crm/server/.venv/bin
 ExecStart=/opt/ttpu_crm/server/.venv/bin/gunicorn crm_server.wsgi:application -c gunicorn.conf.py
-ExecStart=/opt/ttpu_crm/server/.venv/bin/gunicorn crm_server.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60
 Restart=always
 RestartSec=5
 

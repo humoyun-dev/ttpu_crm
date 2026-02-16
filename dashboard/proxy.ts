@@ -8,12 +8,6 @@ export function proxy(request: NextRequest) {
   const accessToken = request.cookies.get(ACCESS_COOKIE_NAME)?.value;
   const refreshToken = request.cookies.get(REFRESH_COOKIE_NAME)?.value;
   const isAuthenticated = Boolean(accessToken || refreshToken);
-const AUTH_MARKER_COOKIE = "dashboard_auth";
-
-export function proxy(request: NextRequest) {
-  const accessToken = request.cookies.get(ACCESS_COOKIE_NAME)?.value;
-  const authMarker = request.cookies.get(AUTH_MARKER_COOKIE)?.value;
-  const isAuthenticated = Boolean(accessToken || authMarker);
 
   const pathname = request.nextUrl.pathname;
   const isLoginPage = pathname === "/login";
