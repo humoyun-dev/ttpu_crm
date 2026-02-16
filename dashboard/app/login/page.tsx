@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, User, LogIn, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -19,23 +19,15 @@ import { toast } from "sonner";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login, user } = useAuth();
   const router = useRouter();
 
-  // Redirect if already logged in
   useEffect(() => {
     if (user) {
       router.replace("/dashboard");
     }
   }, [user, router]);
-
-  // Auto-focus on username field
-  useEffect(() => {
-    const usernameInput = document.getElementById("username");
-    usernameInput?.focus();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +39,13 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
+      const result = await login(email.trim(), password);
+
+      if (result.success) {
+        toast.success("Muvaffaqiyatli kirildi");
+        router.replace("/dashboard");
+        router.refresh();
+        return;
       const result = await login(email, password);
 
       console.log("Login result:", result);
@@ -71,31 +70,47 @@ export default function LoginPage() {
           document.getElementById("username")?.focus();
         }, 100);
       }
+
+      toast.error(result.error || "Login yoki parol noto'g'ri");
+      setPassword("");
     } catch (err) {
       console.error("Login error:", err);
-      toast.error("Xatolik yuz berdi. Qaytadan urinib ko'ring.", {
-        duration: 4000,
-      });
+      toast.error("Xatolik yuz berdi. Qaytadan urinib ko'ring.");
       setPassword("");
-      setTimeout(() => {
-        document.getElementById("username")?.focus();
-      }, 100);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
-      <div className="absolute inset-0 bg-grid-slate-200 dark:bg-grid-slate-700/25 [mask-image:linear-linear(0deg,white,rgba(255,255,255,0.6))] dark:[mask-image:linear-linear(0deg,rgba(255,255,255,0.1),rgba(255,255,255,0.05))]" />
-
-      <Card className="w-full max-w-md relative shadow-2xl border-0 dark:border dark:border-gray-800 animate-in fade-in-0 zoom-in-95 duration-500">
-        <CardHeader className="space-y-1 text-center pb-4">
-          <div className="flex justify-center mb-6">
-            <div className="h-20 w-20 rounded-2xl bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/50 dark:shadow-blue-500/30 animate-in zoom-in-50 duration-700">
-              <Lock className="h-10 w-10 text-white" />
-            </div>
+    <Card className="w-full max-w-md">
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-2xl">TTPU CRM</CardTitle>
+        <CardDescription>Tizimga kirish uchun login va parolni kiriting</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Login</Label>
+            <Input
+              id="email"
+              type="text"
+              placeholder="admin@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              autoComplete="username"
+            />
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">Parol</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="********"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
           <CardTitle className="text-3xl font-bold bg-linear-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
             TTPU CRM
           </CardTitle>
@@ -163,29 +178,22 @@ export default function LoginPage() {
               type="submit"
               className="w-full h-11 text-base font-medium bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/30 dark:shadow-blue-500/20 transition-all hover:shadow-xl hover:shadow-blue-500/40"
               disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Tekshirilmoqda...
-                </>
-              ) : (
-                <>
-                  <LogIn className="mr-2 h-5 w-5" />
-                  Kirish
-                </>
-              )}
-            </Button>
+              autoComplete="current-password"
+            />
+          </div>
 
-            <div className="text-center text-xs text-muted-foreground pt-2">
-              <kbd className="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg dark:bg-gray-600 dark:text-gray-100 dark:border-gray-500">
-                Enter
-              </kbd>{" "}
-              tugmasini bosish orqali ham kirishingiz mumkin
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Tekshirilmoqda...
+              </>
+            ) : (
+              "Kirish"
+            )}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

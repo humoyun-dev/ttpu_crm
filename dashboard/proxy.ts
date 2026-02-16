@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const ACCESS_COOKIE_NAME = "access_token";
+const REFRESH_COOKIE_NAME = "refresh_token";
+
+export function proxy(request: NextRequest) {
+  const accessToken = request.cookies.get(ACCESS_COOKIE_NAME)?.value;
+  const refreshToken = request.cookies.get(REFRESH_COOKIE_NAME)?.value;
+  const isAuthenticated = Boolean(accessToken || refreshToken);
 const AUTH_MARKER_COOKIE = "dashboard_auth";
 
 export function proxy(request: NextRequest) {
