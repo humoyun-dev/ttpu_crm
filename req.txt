@@ -1,1 +1,3 @@
 -r server/requirements.txt
+-r bot1_service/requirements.txt
+-r bot2_service/requirements.txt

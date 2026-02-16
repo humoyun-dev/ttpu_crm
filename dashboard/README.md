@@ -28,3 +28,7 @@ NEXT_PUBLIC_API_URL=https://api.example.com
   - `JWT_COOKIE_SECURE=true`
   - `JWT_COOKIE_SAMESITE=Lax` (or `None` for cross-site setups with HTTPS)
 - Run behind reverse proxy (Nginx/Traefik) and terminate TLS at proxy.
+
+
+## Deploy (Nginx + systemd)
+Domain -> IP reverse proxy, TLS va doimiy run konfiguratsiyasi uchun `../DEPLOYMENT.md` ni ko'ring.
