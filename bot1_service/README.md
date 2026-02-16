@@ -13,15 +13,34 @@ Telegram bot for abituriyentlar: til tanlash, kontakt va profil ma'lumotlarini y
 - My applications: lokal keshdagi oxirgi yuborilgan arizalar statuslari (serverga GET autentikatsiyasi kerakligi uchun lokalga yozib boriladi).
 - Settings: tilni o'zgartirish, kontakt/ism/familiyani yangilash.
 
-## O'rnatish
+## O'rnatish (Docker'siz, `.venv` + `pip`)
 1. Python 3.11+ o'rnating.
-2. Poetry: `pip install poetry`
-3. Bog'liqliklar: `cd bot1_service && poetry install`
-4. `.env` faylini tayyorlang (`.env.example` nusxasidan).
+2. Virtual environment yarating:
+```bash
+cd bot1_service
+python -m venv .venv
+source .venv/bin/activate
+```
+3. Bog'liqliklarni o'rnating:
+```bash
+pip install -r requirements.txt
+```
+4. `.env` faylini tayyorlang:
+```bash
+cp .env.example .env
+```
 
 ## Ishga tushirish
 ```bash
 cd bot1_service
+source .venv/bin/activate
+python -m bot1_service.main
+```
+
+## Poetry varianti (ixtiyoriy)
+```bash
+cd bot1_service
+poetry install
 poetry run python src/bot1_service/main.py
 ```
 

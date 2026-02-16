@@ -100,3 +100,7 @@ Django 5 + DRF asosidagi backend, PostgreSQL (yoki lokalda SQLite), SimpleJWT va
 
 ## Testlar
 `poetry run pytest` – pytest-django bilan asosiy oqimlar va management buyruqlari tekshiruvlari.
+
+
+## Deploy (domain -> IP, Nginx, systemd)
+To'liq production yo'riqnoma (domaindan kelgan so'rovni IP/local portga yo'naltirish bilan): `../DEPLOYMENT.md`.
