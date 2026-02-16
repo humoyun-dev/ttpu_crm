@@ -17,7 +17,7 @@ import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -40,14 +40,14 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!username.trim() || !password.trim()) {
+    if (!email.trim() || !password.trim()) {
       toast.error("Login va parolni kiriting");
       return;
     }
 
     setLoading(true);
     try {
-      const result = await login(username, password);
+      const result = await login(email, password);
 
       console.log("Login result:", result);
 
@@ -57,7 +57,8 @@ export default function LoginPage() {
           duration: 2000,
         });
         // Use window.location for hard redirect to ensure fresh state
-        window.location.href = "/dashboard";
+        router.replace("/dashboard");
+        router.refresh();
       } else {
         // Show error message
         toast.error(result.error || "Login yoki parol noto'g'ri ❌", {
@@ -114,8 +115,8 @@ export default function LoginPage() {
                   id="username"
                   type="text"
                   placeholder="Loginingizni kiriting"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
                   disabled={loading}
                   autoComplete="username"

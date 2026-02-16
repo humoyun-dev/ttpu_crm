@@ -86,7 +86,7 @@ class RefreshView(APIView):
             raise InvalidToken("Refresh token has been revoked.")
 
         access_token = refresh.access_token
-        response = Response({"access": "ok"})
+        response = Response({"access": str(access_token)})
         _set_cookie(response, settings.ACCESS_COOKIE_NAME, str(access_token), settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"])
         return response
 

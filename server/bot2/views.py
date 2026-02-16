@@ -269,10 +269,8 @@ def submit_survey(request):
             is_active=True,
         )
     else:
-        # Update roster course_year if provided and different (within validators)
-        if roster.course_year != course_year:
-            roster.course_year = course_year
-            roster.save(update_fields=["course_year"])
+        # Existing roster is source of truth for program/course_year.
+        course_year = roster.course_year
     
     campaign = request.data.get("survey_campaign") or "default"
     region_id = request.data.get("region_id")
@@ -319,13 +317,11 @@ def submit_survey(request):
                 },
             )
 
-        # Always create new survey response (no idempotency - allow multiple submissions)
+        # Upsert survey by (student, campaign) to keep submissions idempotent.
         payload = {
-            "student": student,
             "roster": roster,
             "program": roster.program,
             "course_year": course_year,
-            "survey_campaign": campaign,
             "employment_status": request.data.get("employment_status", "") or "",
             "employment_company": request.data.get("employment_company", "") or "",
             "employment_role": request.data.get("employment_role", "") or "",
@@ -334,7 +330,11 @@ def submit_survey(request):
             "answers": request.data.get("answers", {}) or {},
             "submitted_at": timezone.now(),
         }
-        survey = Bot2SurveyResponse.objects.create(**payload)
+        survey, _ = Bot2SurveyResponse.objects.update_or_create(
+            student=student,
+            survey_campaign=campaign,
+            defaults=payload,
+        )
     except ValidationError as exc:
         return build_error_response("VALIDATION_ERROR", exc.messages, status.HTTP_400_BAD_REQUEST)
     except Exception as exc:  # pragma: no cover - unexpected
