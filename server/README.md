@@ -64,7 +64,7 @@ Django 5 + DRF asosidagi backend, PostgreSQL (yoki lokalda SQLite), SimpleJWT va
    print(hashlib.sha256(b'secret-token').hexdigest())
    PY
    ```
-   `SERVICE_TOKEN_BOT1_HASH`, `SERVICE_TOKEN_BOT2_HASH` ga qo'ying. Lokal uchun `USE_SQLITE=1` qo'yib Postgres o'rniga `db.sqlite3` dan foydalanishingiz mumkin.
+   `SERVICE_TOKEN_BOT1_HASH`, `SERVICE_TOKEN_BOT2_HASH` ga qo'ying. Lokalda default `USE_SQLITE=1` bilan `db.sqlite3` ishlaydi; kerak bo'lsa Postgres uchun `USE_SQLITE=0` qiling.
 3. Bog'liqliklar: `poetry install`
 4. Migratsiyalar: `poetry run python manage.py migrate`
 5. Admin yaratish: `poetry run python manage.py create_admin --email admin@example.com --password pass1234`
