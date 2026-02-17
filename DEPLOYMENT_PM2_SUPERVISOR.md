@@ -53,7 +53,9 @@ sudo npm i -g pm2
 
 ## 2) Kodni serverga joylash
 
-Ko‘p hollarda qulay joy: `/opt/ttpu_crm`
+Ko‘p hollarda qulay joy: `/opt/ttpu_crm`.
+
+> Agar loyiha sizda boshqa joyda turgan bo‘lsa (masalan `pwd` → `/home/giga/ttpu_crm`), shu yo‘riqnomadagi barcha `/opt/ttpu_crm` pathlarni **o‘zingizdagi real path**ga almashtiring. Supervisor’dagi `directory=` va `command=` aynan shu path’ga mos bo‘lishi shart.
 
 ```bash
 sudo mkdir -p /opt/ttpu_crm
