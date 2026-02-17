@@ -53,10 +53,11 @@ def programs_keyboard(programs: Sequence[dict], lang: str = "uz") -> InlineKeybo
     return kb.as_markup()
 
 
-def course_year_keyboard() -> InlineKeyboardMarkup:
+def course_year_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for year in range(1, 5):
         kb.button(text=f"{year}-kurs", callback_data=f"course:{year}")
+    kb.button(text=get_text("graduated", lang), callback_data="course:5")
     kb.adjust(2)
     return kb.as_markup()
 
