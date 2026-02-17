@@ -1,19 +1,24 @@
 # TTPU CRM Deployment Guide (Docker'siz)
 
+> PM2 (Next.js) va Supervisor (Django+botlar) orqali deploy varianti uchun: `DEPLOYMENT_PM2_SUPERVISOR.md`.
+
 Ushbu yo'riqnoma loyiha komponentlarini Docker ishlatmasdan, VPS/serverda doimiy ishlatish uchun.
 
 ## 1) Arxitektura (domain -> IP)
 
 Misol:
+
 - Server public IP: `203.0.113.10`
 - API domain: `api.example.uz`
 - Dashboard domain: `crm.example.uz`
 
 DNS:
+
 - `api.example.uz A 203.0.113.10`
 - `crm.example.uz A 203.0.113.10`
 
 Nginx domen so'rovini ichki local portlarga yuboradi:
+
 - `api.example.uz` -> `127.0.0.1:8000` (Django/Gunicorn)
 - `crm.example.uz` -> `127.0.0.1:3000` (Next.js)
 
@@ -24,6 +29,7 @@ Nginx domen so'rovini ichki local portlarga yuboradi:
 ## 2) Server (Django) run
 
 ### 2.1. Install
+
 ```bash
 cd /opt/ttpu_crm/server
 python -m venv .venv
@@ -33,6 +39,7 @@ cp .env.example .env
 ```
 
 ### 2.2. Muhim `.env` production qiymatlar
+
 ```env
 DJANGO_DEBUG=false
 DJANGO_ALLOWED_HOSTS=api.example.uz
@@ -53,6 +60,7 @@ SECURE_HSTS_PRELOAD=true
 ```
 
 ### 2.3. Migrate + admin
+
 ```bash
 cd /opt/ttpu_crm/server
 source .venv/bin/activate
@@ -61,6 +69,7 @@ python manage.py create_admin --email admin@example.com --password 'StrongPass!1
 ```
 
 ### 2.4. Gunicorn (manual test)
+
 ```bash
 cd /opt/ttpu_crm/server
 source .venv/bin/activate
@@ -72,6 +81,7 @@ gunicorn crm_server.wsgi:application -c gunicorn.conf.py
 ## 3) Dashboard (Next.js) run
 
 ### 3.1. Install/build
+
 ```bash
 cd /opt/ttpu_crm/dashboard
 npm ci
@@ -79,11 +89,13 @@ cp .env.example .env
 ```
 
 `.env`:
+
 ```env
 NEXT_PUBLIC_API_URL=https://api.example.uz
 ```
 
 Build + start:
+
 ```bash
 npm run build
 npm run start -- -p 3000 -H 127.0.0.1
@@ -94,6 +106,7 @@ npm run start -- -p 3000 -H 127.0.0.1
 ## 4) Bot1/Bot2 run
 
 ### 4.1. Bot1
+
 ```bash
 cd /opt/ttpu_crm/bot1_service
 python -m venv .venv
@@ -104,6 +117,7 @@ python -m bot1_service.main
 ```
 
 ### 4.2. Bot2
+
 ```bash
 cd /opt/ttpu_crm/bot2_service
 python -m venv .venv
@@ -114,6 +128,7 @@ python -m bot2_service.main
 ```
 
 Bot `.env` uchun muhim:
+
 ```env
 SERVER_BASE_URL=https://api.example.uz/api/v1
 SERVICE_TOKEN=<raw-service-token>
@@ -126,6 +141,7 @@ SERVICE_TOKEN=<raw-service-token>
 Quyidagi service fayllarni `/etc/systemd/system/` ga qo'ying.
 
 ### 5.1 ttpu-server.service
+
 ```ini
 [Unit]
 Description=TTPU CRM Django API (Gunicorn)
@@ -145,6 +161,7 @@ WantedBy=multi-user.target
 ```
 
 ### 5.2 ttpu-dashboard.service
+
 ```ini
 [Unit]
 Description=TTPU CRM Dashboard (Next.js)
@@ -164,6 +181,7 @@ WantedBy=multi-user.target
 ```
 
 ### 5.3 ttpu-bot1.service
+
 ```ini
 [Unit]
 Description=TTPU Bot1 Service
@@ -183,6 +201,7 @@ WantedBy=multi-user.target
 ```
 
 ### 5.4 ttpu-bot2.service
+
 ```ini
 [Unit]
 Description=TTPU Bot2 Service
@@ -202,6 +221,7 @@ WantedBy=multi-user.target
 ```
 
 Enable:
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now ttpu-server ttpu-dashboard ttpu-bot1 ttpu-bot2
@@ -249,6 +269,7 @@ server {
 ```
 
 Enable:
+
 ```bash
 sudo ln -s /etc/nginx/sites-available/ttpu.conf /etc/nginx/sites-enabled/ttpu.conf
 sudo nginx -t
@@ -256,6 +277,7 @@ sudo systemctl reload nginx
 ```
 
 ### SSL (tavsiya)
+
 ```bash
 sudo apt-get install certbot python3-certbot-nginx -y
 sudo certbot --nginx -d api.example.uz -d crm.example.uz
@@ -289,10 +311,11 @@ curl -I https://api.example.uz/api/docs/
 curl -I https://crm.example.uz/login
 ```
 
-
 ## 9) Gunicorn `WORKER TIMEOUT (no URI read)` haqida
+
 Bu xatolik odatda server portiga HTTP bo'lmagan ulanish (scanner/probe) kelganda yuz beradi.
 Amaliy yechimlar:
+
 1. Gunicornni public IPga emas, `127.0.0.1`ga bind qiling va tashqi trafikni faqat Nginx orqali kiriting.
 2. Nginx health-check yoki monitoring uchun `GET /api/v1/healthz` ishlating.
 3. Gunicorn konfiguratsiyasini `server/gunicorn.conf.py` orqali yuriting (`timeout=120`, `gthread` worker).

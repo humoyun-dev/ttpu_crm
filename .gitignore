@@ -1,2 +1,9 @@
 */.venv/
 .env
+
+# Supervisor
+supervisor/logs/*.log
+supervisor/run/*.pid
+supervisor/run/*.sock
+!supervisor/logs/.gitkeep
+!supervisor/run/.gitkeep
