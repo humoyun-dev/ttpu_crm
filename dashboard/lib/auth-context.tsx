@@ -7,6 +7,7 @@ import {
   useState,
   ReactNode,
   useCallback,
+  useRef,
 } from "react";
 import { useRouter } from "next/navigation";
 import { authApi, User } from "./api";
@@ -16,7 +17,7 @@ interface AuthContextType {
   loading: boolean;
   login: (
     email: string,
-    password: string
+    password: string,
   ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<{ success: boolean; error?: string }>;
 }
@@ -27,8 +28,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const hydratedRef = useRef(false);
 
   const hydrateUser = useCallback(async () => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+
     setLoading(true);
     const res = await authApi.me();
 
@@ -36,10 +41,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(res.data);
     } else {
       setUser(null);
+      // Token invalid yoki 401 - login sahifasiga yo'naltirish
+      if (res.error?.code === "UNAUTHORIZED") {
+        router.replace("/login");
+      }
     }
 
     setLoading(false);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     hydrateUser();
