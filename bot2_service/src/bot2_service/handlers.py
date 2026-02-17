@@ -10,6 +10,15 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.exceptions import TelegramConflictError
+try:
+    from aiogram.client.exceptions import TelegramConflictError as ClientTelegramConflictError
+except Exception:  # pragma: no cover - optional import depending on aiogram version
+    ClientTelegramConflictError = None  # type: ignore[assignment]
+from aiogram.methods import GetUpdates
+from aiogram.utils.backoff import Backoff, BackoffConfig
+from contextlib import suppress
+import asyncio
 
 from bot2_service.api import CrmApiClient
 from bot2_service.catalog_cache import CatalogCache
@@ -26,6 +35,7 @@ from bot2_service.keyboards import (
 )
 from bot2_service.states import SurveyState
 from bot2_service.texts import get_text, get_regions
+from bot2_service.single_instance import SingleInstanceLock
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +254,7 @@ async def pick_program(call: CallbackQuery, state: FSMContext):
             program_label=program_name
         )
     await state.set_state(SurveyState.waiting_course_year)
-    await _send_and_save_callback(call, get_text("ask_course_year", lang), state, reply_markup=course_year_keyboard())
+    await _send_and_save_callback(call, get_text("ask_course_year", lang), state, reply_markup=course_year_keyboard(lang))
     await call.answer()
 
 
@@ -358,8 +368,16 @@ async def _final_submit(message: Message, state: FSMContext, show_thanks_only: b
     data = await state.get_data()
     lang = data.get("language", "uz")
     
+    # Validate required fields before submission
+    student_id = data.get("student_id")
+    if not student_id or not str(student_id).strip():
+        logger.error("Survey submission skipped: student_id is empty. data=%s", data)
+        await message.answer(get_text("thanks", lang), reply_markup=NO_KB)
+        await state.clear()
+        return
+    
     payload = {
-        "student_external_id": data.get("student_id"),
+        "student_external_id": str(student_id).strip(),
         "telegram_user_id": data.get("telegram_user_id"),
         "username": data.get("username") or "",
         "phone": data.get("phone") or "",
@@ -386,13 +404,32 @@ async def _final_submit(message: Message, state: FSMContext, show_thanks_only: b
         },
     }
     
+    logger.info("Submitting survey for student_id=%s, telegram_user_id=%s", student_id, data.get("telegram_user_id"))
+    
     res = await api_client.submit_survey(payload)
     
     if res.ok:
+        logger.info("Survey submitted successfully for student_id=%s", student_id)
         await message.answer(get_text("thanks", lang), reply_markup=NO_KB)
     else:
-        logger.error(f"Survey submission failed: {res.error}")
-        await message.answer(get_text("thanks", lang), reply_markup=NO_KB)
+        logger.error(
+            "Survey submission failed for student_id=%s: status=%s error=%s payload=%s",
+            student_id, res.status, res.error, payload,
+        )
+        # Retry once after a short delay
+        import asyncio
+        await asyncio.sleep(1)
+        res2 = await api_client.submit_survey(payload)
+        if res2.ok:
+            logger.info("Survey submitted on retry for student_id=%s", student_id)
+            await message.answer(get_text("thanks", lang), reply_markup=NO_KB)
+        else:
+            logger.error(
+                "Survey submission failed on RETRY for student_id=%s: status=%s error=%s",
+                student_id, res2.status, res2.error,
+            )
+            # Still show thanks but log the error for investigation
+            await message.answer(get_text("thanks", lang), reply_markup=NO_KB)
     
     await state.clear()
 
@@ -400,6 +437,12 @@ async def _final_submit(message: Message, state: FSMContext, show_thanks_only: b
 async def start_bot():
     """Initialize and start the bot."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+    try:
+        lock = SingleInstanceLock.acquire_for_token(settings.bot_token, name="bot2_service")
+    except RuntimeError as e:
+        logger.error(str(e))
+        return
     bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())
     api = CrmApiClient()
@@ -407,6 +450,100 @@ async def start_bot():
     setup_dependencies(api, cache)
     dp.include_router(router)
     try:
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        # Remove any existing webhook so polling doesn't conflict
+        await bot.delete_webhook(drop_pending_updates=True)
+
+        allowed_updates = dp.resolve_used_update_types()
+        await dp.emit_startup(bot=bot)
+        log_polling = logging.getLogger("aiogram.dispatcher")
+        log_polling.info("Start polling")
+        try:
+            await _polling_exit_on_conflict(dp, bot, allowed_updates=allowed_updates)
+        finally:
+            log_polling.info("Polling stopped")
+            await dp.emit_shutdown(bot=bot)
     finally:
         await api.close()
+        with suppress(Exception):
+            await bot.session.close()
+        lock.release()
+
+
+async def _polling_exit_on_conflict(
+    dp: Dispatcher,
+    bot: Bot,
+    *,
+    allowed_updates: list[str],
+    polling_timeout: int = 10,
+    backoff_config: BackoffConfig = BackoffConfig(min_delay=1.0, max_delay=5.0, factor=1.3, jitter=0.1),
+) -> None:
+    """Custom polling loop that exits on TelegramConflictError.
+
+    aiogram's built-in polling retries *all* exceptions forever; for conflicts
+    (another getUpdates poller running somewhere) it's better to stop and make
+    the operator fix the deployment.
+    """
+
+    def _is_conflict_error(err: Exception) -> bool:
+        if isinstance(err, TelegramConflictError):
+            return True
+        if ClientTelegramConflictError is not None and isinstance(err, ClientTelegramConflictError):
+            return True
+        if type(err).__name__ == "TelegramConflictError":
+            return True
+        message = str(err)
+        return "terminated by other getUpdates request" in message
+
+    user = await bot.me()
+    logging.getLogger("aiogram.dispatcher").info(
+        "Run polling for bot @%s id=%d - %r",
+        user.username,
+        bot.id,
+        user.full_name,
+    )
+
+    backoff = Backoff(config=backoff_config)
+    get_updates = GetUpdates(timeout=polling_timeout, allowed_updates=allowed_updates)
+    kwargs: dict[str, object] = {}
+    if bot.session.timeout:
+        kwargs["request_timeout"] = int(bot.session.timeout + polling_timeout)
+
+    failed = False
+    while True:
+        try:
+            updates = await bot(get_updates, **kwargs)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            if _is_conflict_error(e):
+                logger.error(
+                    "Polling stopped: %s. Another instance is already polling this bot token. "
+                    "Stop the other instance (server/container) and restart this one.",
+                    e,
+                )
+                return
+            failed = True
+            logging.getLogger("aiogram.dispatcher").error(
+                "Failed to fetch updates - %s: %s", type(e).__name__, e
+            )
+            logging.getLogger("aiogram.dispatcher").warning(
+                "Sleep for %f seconds and try again... (tryings = %d, bot id = %d)",
+                backoff.next_delay,
+                backoff.counter,
+                bot.id,
+            )
+            await backoff.asleep()
+            continue
+
+        if failed:
+            logging.getLogger("aiogram.dispatcher").info(
+                "Connection established (tryings = %d, bot id = %d)",
+                backoff.counter,
+                bot.id,
+            )
+            backoff.reset()
+            failed = False
+
+        for update in updates:
+            await dp.feed_update(bot, update)
+            get_updates.offset = update.update_id + 1

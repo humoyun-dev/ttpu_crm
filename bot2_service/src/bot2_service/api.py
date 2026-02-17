@@ -111,6 +111,10 @@ class CrmApiClient:
 
         return []
 
+    async def get_catalog_items(self, item_type: str) -> list[dict]:
+        """Generic method – fetch any catalog type (direction, region, subject, track, …)."""
+        return await self._get_catalog(item_type)
+
     async def get_programs(self) -> list[dict]:
         """Fetch directions (bakalavriat yo'nalishlari) as programs."""
         return await self._get_catalog("direction")
@@ -121,22 +125,47 @@ class CrmApiClient:
 
     async def _post_service(self, path: str, payload: dict[str, Any]) -> ApiResult:
         headers = {"X-SERVICE-TOKEN": self.service_token}
-        try:
-            resp = await self.client.post(path, json=payload, headers=headers)
-        except Exception as exc:  # pragma: no cover
-            logger.exception("POST %s failed: %s", path, exc)
-            return ApiResult(ok=False, error=str(exc))
-        if 200 <= resp.status_code < 300:
+        for attempt in (1, 2):
             try:
-                data = resp.json()
+                resp = await self.client.post(path, json=payload, headers=headers)
+            except httpx.TimeoutException as exc:
+                logger.warning("POST %s timeout (attempt %d): %s", path, attempt, exc)
+                if attempt == 1:
+                    continue
+                return ApiResult(ok=False, error=f"Timeout: {exc}")
+            except httpx.ConnectError as exc:
+                logger.warning("POST %s connection error (attempt %d): %s", path, attempt, exc)
+                if attempt == 1:
+                    import asyncio
+                    await asyncio.sleep(1)
+                    continue
+                return ApiResult(ok=False, error=f"Connection error: {exc}")
+            except Exception as exc:  # pragma: no cover
+                logger.exception("POST %s failed (attempt %d): %s", path, attempt, exc)
+                if attempt == 1:
+                    continue
+                return ApiResult(ok=False, error=str(exc))
+
+            if 200 <= resp.status_code < 300:
+                try:
+                    data = resp.json()
+                except Exception:
+                    data = resp.text
+                return ApiResult(ok=True, data=data, status=resp.status_code)
+
+            logger.warning("POST %s returned %s (attempt %d): %s", path, resp.status_code, attempt, resp.text[:500])
+            if attempt == 1 and resp.status_code >= 500:
+                import asyncio
+                await asyncio.sleep(1)
+                continue
+
+            try:
+                err = resp.json()
             except Exception:
-                data = resp.text
-            return ApiResult(ok=True, data=data, status=resp.status_code)
-        try:
-            err = resp.json()
-        except Exception:
-            err = resp.text
-        return ApiResult(ok=False, error=str(err), status=resp.status_code)
+                err = resp.text
+            return ApiResult(ok=False, error=str(err), status=resp.status_code)
+
+        return ApiResult(ok=False, error="Max retries exceeded")
 
     async def submit_survey(self, payload: dict[str, Any]) -> ApiResult:
         return await self._post_service("/bot2/surveys/submit", payload)
