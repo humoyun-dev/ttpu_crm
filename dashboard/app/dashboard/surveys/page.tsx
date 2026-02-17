@@ -37,6 +37,7 @@ import {
   Bot2Student,
   formatDate,
 } from "@/lib/api";
+import { formatCourseYearLabel } from "@/lib/utils";
 
 export default function SurveysPage() {
   const [surveys, setSurveys] = useState<Bot2SurveyResponse[]>([]);
@@ -67,7 +68,7 @@ export default function SurveysPage() {
       setStudents(studentMap);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi"
+        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi",
       );
     } finally {
       setLoading(false);
@@ -222,9 +223,7 @@ export default function SurveysPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {survey.course_year
-                              ? `${survey.course_year}-kurs`
-                              : "-"}
+                            {formatCourseYearLabel(survey.course_year)}
                           </TableCell>
                           <TableCell>
                             <GenderBadge

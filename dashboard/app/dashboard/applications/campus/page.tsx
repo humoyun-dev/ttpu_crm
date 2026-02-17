@@ -30,6 +30,7 @@ import {
   getItemName,
   getApplicantName,
 } from "@/lib/api";
+import { formatUzPhone } from "@/lib/utils";
 
 export default function CampusTourPage() {
   const [requests, setRequests] = useState<CampusTourRequest[]>([]);
@@ -49,7 +50,7 @@ export default function CampusTourPage() {
       setRequests(reqs);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi"
+        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi",
       );
     } finally {
       setLoading(false);
@@ -143,7 +144,9 @@ export default function CampusTourPage() {
                           <TableCell className="font-medium">
                             {getApplicantName(applicant)}
                           </TableCell>
-                          <TableCell>{applicant?.phone || "-"}</TableCell>
+                          <TableCell>
+                            {formatUzPhone(applicant?.phone)}
+                          </TableCell>
                           <TableCell>{applicant?.email || "-"}</TableCell>
                           <TableCell>{getItemName(region)}</TableCell>
                           <TableCell>

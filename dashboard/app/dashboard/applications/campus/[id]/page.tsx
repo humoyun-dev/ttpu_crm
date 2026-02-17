@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { StatusBadge, GenderBadge } from "@/components/status-badge";
 import { PageLoading } from "@/components/loading";
 import { ErrorDisplay } from "@/components/error-display";
+import { formatUzPhone } from "@/lib/utils";
 import { bot1Api, CampusTourRequest, formatDate, getItemName } from "@/lib/api";
 
 const LABEL_TRANSLATIONS: Record<string, string> = {
@@ -141,7 +142,7 @@ export default function CampusTourDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     Asosiy telefon
                   </p>
-                  <p className="font-medium">{applicant?.phone || "-"}</p>
+                   <p className="font-medium">{formatUzPhone(applicant?.phone || "-")}</p>
                 </div>
               </div>
               {answers?.second_phone && (
@@ -151,7 +152,9 @@ export default function CampusTourDetailPage() {
                     <p className="text-sm text-muted-foreground">
                       Qo'shimcha telefon
                     </p>
-                    <p className="font-medium">{answers.second_phone}</p>
+                     <p className="font-medium">
+                       {formatUzPhone(answers.second_phone)}
+                     </p>
                   </div>
                 </div>
               )}
@@ -169,6 +172,16 @@ export default function CampusTourDetailPage() {
               </div>
             </div>
 
+            {applicant?.username && (
+              <>
+                <Separator />
+                <div>
+                  <p className="text-sm text-muted-foreground">Telegram</p>
+                  <p className="font-medium">@{applicant.username}</p>
+                </div>
+              </>
+            )}
+
             {applicant?.telegram_user_id && (
               <>
                 <Separator />
@@ -178,10 +191,6 @@ export default function CampusTourDetailPage() {
                 </div>
               </>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Tashrif ma'lumotlari */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -293,10 +302,10 @@ export default function CampusTourDetailPage() {
                   }
                   return (
                     <div key={key} className="rounded-lg border p-3">
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         {LABEL_TRANSLATIONS[key] || key.replace(/_/g, " ")}
                       </p>
-                      <p className="font-medium">{value || "-"}</p>
+                      <p className="mt-1 text-sm whitespace-pre-wrap">{value || "-"}</p>
                     </div>
                   );
                 })}

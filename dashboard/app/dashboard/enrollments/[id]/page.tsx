@@ -68,7 +68,7 @@ export default function EnrollmentFormPage() {
         (Array.isArray(directionRes.data) ? directionRes.data : []);
 
       const merged = [...programItems, ...directionItems].sort((a, b) =>
-        a.name.localeCompare(b.name)
+        a.name.localeCompare(b.name),
       );
       setPrograms(merged);
     } catch (err) {
@@ -87,7 +87,7 @@ export default function EnrollmentFormPage() {
       alert(
         Array.isArray(res.error.message)
           ? res.error.message.join(", ")
-          : res.error.message
+          : res.error.message,
       );
       router.push("/dashboard/enrollments");
     }
@@ -125,7 +125,7 @@ export default function EnrollmentFormPage() {
       alert(
         Array.isArray(res.error.message)
           ? res.error.message.join(", ")
-          : res.error.message
+          : res.error.message,
       );
       setSaving(false);
       return;
@@ -174,9 +174,7 @@ export default function EnrollmentFormPage() {
           {!isNew && (
             <div className="mb-6 grid gap-4 md:grid-cols-3">
               <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">
-                  Jami talabalar
-                </p>
+                <p className="text-xs text-muted-foreground">Jami talabalar</p>
                 <p className="text-2xl font-semibold">
                   {form.student_count ?? 0}
                 </p>
@@ -192,10 +190,9 @@ export default function EnrollmentFormPage() {
               <div className="rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground">Qamrov</p>
                 <p className="text-2xl font-semibold">
-                  {(
-                    form.coverage_percent === undefined
-                      ? 0
-                      : form.coverage_percent
+                  {(form.coverage_percent === undefined
+                    ? 0
+                    : form.coverage_percent
                   ).toFixed(1)}
                   %
                 </p>
@@ -215,9 +212,7 @@ export default function EnrollmentFormPage() {
                   <SelectTrigger id="program">
                     <SelectValue
                       placeholder={
-                        programsLoading
-                          ? "Yuklanmoqda..."
-                          : "Tanlang"
+                        programsLoading ? "Yuklanmoqda..." : "Tanlang"
                       }
                     />
                   </SelectTrigger>
@@ -233,11 +228,14 @@ export default function EnrollmentFormPage() {
                 {programsError && (
                   <p className="text-sm text-destructive">{programsError}</p>
                 )}
-                {!programsLoading && programs.length === 0 && !programsError && (
-                  <p className="text-sm text-muted-foreground">
-                    Yo&apos;nalishlar mavjud emas. Katalogga qo&apos;shib ko&apos;ring.
-                  </p>
-                )}
+                {!programsLoading &&
+                  programs.length === 0 &&
+                  !programsError && (
+                    <p className="text-sm text-muted-foreground">
+                      Yo&apos;nalishlar mavjud emas. Katalogga qo&apos;shib
+                      ko&apos;ring.
+                    </p>
+                  )}
               </div>
 
               <div className="space-y-2">
@@ -256,6 +254,7 @@ export default function EnrollmentFormPage() {
                     <SelectItem value="2">2-kurs</SelectItem>
                     <SelectItem value="3">3-kurs</SelectItem>
                     <SelectItem value="4">4-kurs</SelectItem>
+                    <SelectItem value="5">Bitirgan</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/status-badge";
 import { TableLoading } from "@/components/loading";
 import { ErrorDisplay } from "@/components/error-display";
+import { formatUzPhone } from "@/lib/utils";
 import {
   bot1Api,
   FoundationRequest,
@@ -49,7 +50,7 @@ export default function FoundationPage() {
       setRequests(reqs);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi"
+        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi",
       );
     } finally {
       setLoading(false);
@@ -143,7 +144,11 @@ export default function FoundationPage() {
                           <TableCell className="font-medium">
                             {getApplicantName(applicant)}
                           </TableCell>
-                          <TableCell>{applicant?.phone || "-"}</TableCell>
+                          <TableCell>
+                            {applicant?.phone
+                              ? formatUzPhone(applicant.phone)
+                              : "-"}
+                          </TableCell>
                           <TableCell>{applicant?.email || "-"}</TableCell>
                           <TableCell>{getItemName(region)}</TableCell>
                           <TableCell>

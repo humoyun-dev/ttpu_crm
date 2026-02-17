@@ -235,14 +235,14 @@ def submit_survey(request):
     if not student_external_id:
         return build_error_response("VALIDATION_ERROR", "student_external_id is required.", status.HTTP_400_BAD_REQUEST)
 
-    # course_year: optional, defaults to 1, must be 1..4
+    # course_year: optional, defaults to 1, must be 1..5
     course_year = request.data.get("course_year") or 1
     try:
         course_year = int(course_year)
     except Exception:
-        return build_error_response("INVALID_COURSE_YEAR", "course_year must be an integer between 1 and 4.", status.HTTP_400_BAD_REQUEST)
-    if course_year < 1 or course_year > 4:
-        return build_error_response("INVALID_COURSE_YEAR", "course_year must be between 1 and 4.", status.HTTP_400_BAD_REQUEST)
+        return build_error_response("INVALID_COURSE_YEAR", "course_year must be an integer between 1 and 5.", status.HTTP_400_BAD_REQUEST)
+    if course_year < 1 or course_year > 5:
+        return build_error_response("INVALID_COURSE_YEAR", "course_year must be between 1 and 5.", status.HTTP_400_BAD_REQUEST)
 
     roster = StudentRoster.objects.filter(student_external_id=student_external_id).first()
     if not roster:

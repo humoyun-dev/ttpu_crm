@@ -219,6 +219,7 @@ export default function StudentFormPage() {
                     <SelectItem value="2">2-kurs</SelectItem>
                     <SelectItem value="3">3-kurs</SelectItem>
                     <SelectItem value="4">4-kurs</SelectItem>
+                    <SelectItem value="5">Bitirgan</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

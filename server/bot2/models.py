@@ -16,7 +16,8 @@ class StudentRoster(BaseModel):
         related_name="roster_programs",
     )
     course_year = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(4)]
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="1-4 for active students, 5 for graduated"
     )
     is_active = models.BooleanField(default=True)
     metadata = models.JSONField(default=dict, blank=True)
@@ -98,7 +99,8 @@ class Bot2SurveyResponse(BaseModel):
         related_name="bot2_program_surveys",
     )
     course_year = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(4)]
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="1-4 for active students, 5 for graduated"
     )
     survey_campaign = models.CharField(max_length=64, default="default")
     employment_status = models.CharField(max_length=100, blank=True)
@@ -113,8 +115,8 @@ class Bot2SurveyResponse(BaseModel):
         ordering = ("-submitted_at", "-created_at")
         constraints = [
             models.CheckConstraint(
-                check=Q(course_year__gte=1) & Q(course_year__lte=4),
-                name="survey_course_year_between_1_and_4",
+                check=Q(course_year__gte=1) & Q(course_year__lte=5),
+                name="survey_course_year_between_1_and_5",
             ),
         ]
         indexes = [
@@ -148,8 +150,8 @@ class ProgramEnrollment(BaseModel):
         related_name="enrollments",
     )
     course_year = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(4)],
-        help_text="1, 2, 3, or 4"
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="1-4 for active students, 5 for graduated"
     )
     student_count = models.PositiveIntegerField(
         default=0,

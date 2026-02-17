@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { formatCourseYearLabel } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { bot2Api, ProgramEnrollment } from "@/lib/api";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
@@ -73,7 +74,7 @@ export default function EnrollmentsPage() {
       alert(
         Array.isArray(res.error.message)
           ? res.error.message.join(", ")
-          : res.error.message
+          : res.error.message,
       );
       return;
     }
@@ -90,11 +91,11 @@ export default function EnrollmentsPage() {
 
   const totalStudents = items.reduce(
     (sum, it) => sum + (it.student_count || 0),
-    0
+    0,
   );
   const totalResponded = items.reduce(
     (sum, it) => sum + (it.responded_count || 0),
-    0
+    0,
   );
 
   const overallCoverage =
@@ -167,7 +168,9 @@ export default function EnrollmentsPage() {
                         {it.program_details?.name ?? it.program}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline">{it.course_year}-kurs</Badge>
+                        <Badge variant="outline">
+                          {formatCourseYearLabel(it.course_year)}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="secondary">{it.student_count}</Badge>
