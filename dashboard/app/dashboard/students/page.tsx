@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { formatCourseYearLabel } from "@/lib/utils";
 import { bot2Api, StudentRoster } from "@/lib/api";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -123,7 +124,7 @@ export default function StudentsPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline">
-                          {roster.course_year}-kurs
+                          {formatCourseYearLabel(roster.course_year)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">

@@ -30,10 +30,11 @@ import {
   getItemName,
   getApplicantName,
 } from "@/lib/api";
+import { formatUzPhone } from "@/lib/utils";
 
 export default function AdmissionsPage() {
   const [applications, setApplications] = useState<Admissions2026Application[]>(
-    []
+    [],
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export default function AdmissionsPage() {
       setApplications(apps);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi"
+        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi",
       );
     } finally {
       setLoading(false);
@@ -150,7 +151,9 @@ export default function AdmissionsPage() {
                           <TableCell className="font-medium">
                             {getApplicantName(applicant)}
                           </TableCell>
-                          <TableCell>{applicant?.phone || "-"}</TableCell>
+                          <TableCell>
+                            {formatUzPhone(applicant?.phone)}
+                          </TableCell>
                           <TableCell>{applicant?.email || "-"}</TableCell>
                           <TableCell>{getItemName(direction)}</TableCell>
                           <TableCell>{getItemName(region)}</TableCell>

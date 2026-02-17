@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/status-badge";
 import { TableLoading } from "@/components/loading";
 import { ErrorDisplay } from "@/components/error-display";
+import { formatUzPhone } from "@/lib/utils";
 import {
   bot1Api,
   PolitoAcademyRequest,
@@ -50,7 +51,7 @@ export default function PolitoAcademyPage() {
       setRequests(reqs);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi"
+        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi",
       );
     } finally {
       setLoading(false);
@@ -161,7 +162,9 @@ export default function PolitoAcademyPage() {
                               "-"
                             )}
                           </TableCell>
-                          <TableCell>{applicant?.phone || "-"}</TableCell>
+                          <TableCell>
+                            {formatUzPhone(applicant?.phone) || "-"}
+                          </TableCell>
                           <TableCell>{applicant?.email || "-"}</TableCell>
                           <TableCell>{getItemName(region)}</TableCell>
                           <TableCell>

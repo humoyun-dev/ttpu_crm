@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { formatCourseYearLabel } from "@/lib/utils";
 import { BarChart3, TrendingUp } from "lucide-react";
 
 interface Overview {
@@ -103,7 +104,9 @@ export default function EnrollmentAnalyticsPage() {
       })
       .catch((err) => {
         console.error(err);
-        setError("Ma'lumotni yuklab bo'lmadi, mock ma'lumotlar ko'rsatilmoqda.");
+        setError(
+          "Ma'lumotni yuklab bo'lmadi, mock ma'lumotlar ko'rsatilmoqda.",
+        );
         setData(fallbackOverview);
       })
       .finally(() => setLoading(false));
@@ -159,7 +162,9 @@ export default function EnrollmentAnalyticsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Ishtirok etganlar</CardTitle>
-            <CardDescription>So&apos;rovnomani to&apos;ldirganlar</CardDescription>
+            <CardDescription>
+              So&apos;rovnomani to&apos;ldirganlar
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex items-center gap-2">
             <div className="text-3xl font-semibold text-primary">
@@ -186,21 +191,80 @@ export default function EnrollmentAnalyticsPage() {
           <CardDescription>Har bir kurs uchun qamrov</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Kurs</TableHead>
-                  <TableHead className="text-center">Jami</TableHead>
-                  <TableHead className="text-center">Ishtirok etdi</TableHead>
-                  <TableHead className="text-center">Qamrov</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Kurs</TableHead>
+                <TableHead className="text-center">Jami</TableHead>
+                <TableHead className="text-center">Ishtirok etdi</TableHead>
+                <TableHead className="text-center">Qamrov</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {overview.by_year.map((row) => (
+                <TableRow key={row.course_year}>
+                  <TableCell className="font-medium">
+                    {formatCourseYearLabel(row.course_year)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="secondary">
+                      {row.total.toLocaleString()}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline">
+                      {row.responded.toLocaleString()}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge
+                      variant={
+                        row.coverage_percent >= 50 ? "default" : "outline"
+                      }
+                    >
+                      {row.coverage_percent.toFixed(1)}%
+                    </Badge>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {overview.by_year.map((row) => (
-                  <TableRow key={row.course_year}>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Yo&apos;nalish va kurslar kesimida</CardTitle>
+          <CardDescription>Program/course bo&apos;yicha qamrov</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Yo&apos;nalish</TableHead>
+                <TableHead className="text-center">Kurs</TableHead>
+                <TableHead className="text-center">Jami</TableHead>
+                <TableHead className="text-center">Ishtirok etdi</TableHead>
+                <TableHead className="text-center">Qamrov</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {overview.by_program.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8">
+                    Ma&apos;lumot topilmadi
+                  </TableCell>
+                </TableRow>
+              ) : (
+                overview.by_program.map((row) => (
+                  <TableRow key={`${row.program_id}-${row.course_year}`}>
                     <TableCell className="font-medium">
-                      {row.course_year}-kurs
+                      {row.program_name}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline">
+                        {formatCourseYearLabel(row.course_year)}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant="secondary">
@@ -214,77 +278,18 @@ export default function EnrollmentAnalyticsPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge
-                        variant={row.coverage_percent >= 50 ? "default" : "outline"}
+                        variant={
+                          row.coverage_percent >= 50 ? "default" : "outline"
+                        }
                       >
                         {row.coverage_percent.toFixed(1)}%
                       </Badge>
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Yo&apos;nalish va kurslar kesimida</CardTitle>
-          <CardDescription>Program/course bo&apos;yicha qamrov</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Yo&apos;nalish</TableHead>
-                  <TableHead className="text-center">Kurs</TableHead>
-                  <TableHead className="text-center">Jami</TableHead>
-                  <TableHead className="text-center">Ishtirok etdi</TableHead>
-                  <TableHead className="text-center">Qamrov</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {overview.by_program.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8">
-                      Ma&apos;lumot topilmadi
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  overview.by_program.map((row) => (
-                    <TableRow key={`${row.program_id}-${row.course_year}`}>
-                      <TableCell className="font-medium">
-                        {row.program_name}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline">{row.course_year}-kurs</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary">
-                          {row.total.toLocaleString()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline">
-                          {row.responded.toLocaleString()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant={
-                            row.coverage_percent >= 50 ? "default" : "outline"
-                          }
-                        >
-                          {row.coverage_percent.toFixed(1)}%
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>

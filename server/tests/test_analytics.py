@@ -43,7 +43,7 @@ def test_course_year_coverage_includes_all_years(api_client, admin_user, program
     resp = api_client.get(reverse("analytics-bot2-course"), {"from": start, "to": end})
     assert resp.status_code == status.HTTP_200_OK
     data = resp.data
-    assert len(data) == 4
+    assert len(data) == 5
     year_map = {row["course_year"]: row for row in data}
     assert year_map[1]["responded"] == 1
-    assert all(year in year_map for year in [1, 2, 3, 4])
+    assert all(year in year_map for year in [1, 2, 3, 4, 5])

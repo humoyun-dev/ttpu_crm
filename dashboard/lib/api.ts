@@ -147,7 +147,7 @@ export interface Bot2SurveyResponse {
   student_details?: Bot2Student;
   roster: string;
   program: string;
-  program_details?: CatalogItem;
+  program_details?: CatalogItemNested;
   course_year: number;
   survey_campaign: string;
   employment_status: string;
@@ -174,7 +174,7 @@ export interface Bot2Student {
   gender: "male" | "female" | "other" | "unspecified";
   phone: string;
   region: string | null;
-  region_details?: CatalogItem;
+  region_details?: CatalogItemNested;
   created_at: string;
   updated_at: string;
 }
@@ -184,7 +184,7 @@ export interface StudentRoster {
   student_external_id: string;
   roster_campaign: string;
   program: string;
-  program_details?: CatalogItem;
+  program_details?: CatalogItemNested;
   course_year: number;
   is_active: boolean;
   metadata: Record<string, unknown>;

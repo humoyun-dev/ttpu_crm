@@ -55,7 +55,7 @@ interface ApplicationItem {
 }
 
 type Fetcher<T> = (
-  params: Record<string, string>
+  params: Record<string, string>,
 ) => Promise<ApiResponse<PaginatedResponse<T>>>;
 
 type ExtraFilter = {
@@ -90,7 +90,7 @@ export function ApplicationAnalytics<T extends ApplicationItem>({
     return d.toISOString().slice(0, 10);
   });
   const [to, setTo] = useState<string>(() =>
-    new Date().toISOString().slice(0, 10)
+    new Date().toISOString().slice(0, 10),
   );
   const [status, setStatus] = useState<string>("all");
   const [extra, setExtra] = useState<Record<string, string>>({});
@@ -148,10 +148,10 @@ export function ApplicationAnalytics<T extends ApplicationItem>({
       [...items]
         .sort(
           (a, b) =>
-            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
         )
         .slice(0, 6),
-    [items]
+    [items],
   );
 
   if (loading) {
@@ -216,7 +216,11 @@ export function ApplicationAnalytics<T extends ApplicationItem>({
           </div>
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">Tugash</p>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <Input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+            />
           </div>
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">Status</p>
@@ -267,48 +271,48 @@ export function ApplicationAnalytics<T extends ApplicationItem>({
             <CardDescription>Yangi tahrirlangan/topshirganlar</CardDescription>
           </div>
           <Button asChild size="sm" variant="outline">
-            <Link href={manageHref}>To&apos;liq ro&apos;yxatga o&apos;tish</Link>
+            <Link href={manageHref}>
+              To&apos;liq ro&apos;yxatga o&apos;tish
+            </Link>
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Talaba</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Yangilangan</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {latest.length === 0 ? (
                 <TableRow>
-                  <TableHead>Talaba</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Yangilangan</TableHead>
+                  <TableCell colSpan={3} className="text-center py-6">
+                    Ma&apos;lumot topilmadi
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {latest.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center py-6">
-                      Ma&apos;lumot topilmadi
+              ) : (
+                latest.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">
+                      {getApplicantName(item.applicant_details) ||
+                        item.applicant ||
+                        "Noma'lum"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {getStatusLabel(item.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {formatDate(item.updated_at, true)}
                     </TableCell>
                   </TableRow>
-                ) : (
-                  latest.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">
-                        {getApplicantName(item.applicant_details) ||
-                          item.applicant ||
-                          "Noma'lum"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {getStatusLabel(item.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {formatDate(item.updated_at, true)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>

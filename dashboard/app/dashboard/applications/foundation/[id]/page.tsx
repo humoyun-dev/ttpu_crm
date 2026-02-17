@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { StatusBadge, GenderBadge } from "@/components/status-badge";
 import { PageLoading } from "@/components/loading";
 import { ErrorDisplay } from "@/components/error-display";
+import { formatUzPhone } from "@/lib/utils";
 import { bot1Api, FoundationRequest, formatDate, getItemName } from "@/lib/api";
 
 const LABEL_TRANSLATIONS: Record<string, string> = {
@@ -62,7 +63,7 @@ export default function FoundationDetailPage() {
       setRequest(reqRes.data);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ma'lumotni yuklab bo'lmadi"
+        err instanceof Error ? err.message : "Ma'lumotni yuklab bo'lmadi",
       );
     } finally {
       setLoading(false);
@@ -143,7 +144,9 @@ export default function FoundationDetailPage() {
                 <Phone className="h-4 w-4 text-muted-foreground" />
                 <div>
                   <p className="text-sm text-muted-foreground">Telefon</p>
-                  <p className="font-medium">{applicant?.phone || "-"}</p>
+                  <p className="font-medium">
+                    {formatUzPhone(applicant?.phone) || "-"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -159,6 +162,16 @@ export default function FoundationDetailPage() {
                 </p>
               </div>
             </div>
+
+            {applicant?.username && (
+              <>
+                <Separator />
+                <div>
+                  <p className="text-sm text-muted-foreground">Telegram</p>
+                  <p className="font-medium">@{applicant.username}</p>
+                </div>
+              </>
+            )}
 
             {applicant?.telegram_user_id && (
               <>
@@ -269,7 +282,9 @@ export default function FoundationDetailPage() {
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <p className="text-sm text-muted-foreground">Telefon</p>
-                        <p className="font-medium">{answers.parent_phone}</p>
+                        <p className="font-medium">
+                          {formatUzPhone(answers.parent_phone) || "-"}
+                        </p>
                       </div>
                     </div>
                   )}
@@ -368,10 +383,10 @@ export default function FoundationDetailPage() {
 
                 return (
                   <div key={key} className="rounded-lg border p-3">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       {LABEL_TRANSLATIONS[key] || key.replace(/_/g, " ")}
                     </p>
-                    <p className="font-medium whitespace-pre-wrap">{value}</p>
+                    <p className="mt-1 text-sm whitespace-pre-wrap">{value}</p>
                   </div>
                 );
               })}

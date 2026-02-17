@@ -27,6 +27,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatCourseYearLabel } from "@/lib/utils";
 
 interface CourseYearData {
   course_year: number;
@@ -113,13 +114,13 @@ export default function AnalyticsPage() {
               "relative overflow-hidden cursor-pointer transition-all duration-300",
               selectedYear === yearData.course_year
                 ? "shadow-xl border-2 border-primary ring-2 ring-primary/20"
-                : "hover:shadow-lg"
+                : "hover:shadow-lg",
             )}
             onClick={() => handleYearClick(yearData.course_year)}
           >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                {yearData.course_year}-kurs talabalari
+                {formatCourseYearLabel(yearData.course_year)} talabalari
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -244,7 +245,8 @@ export default function AnalyticsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <div className="h-3 w-3 rounded-full bg-primary" />
-                {selectedYear}-kurs yo&apos;nalishlari bo&apos;yicha statistika
+                {formatCourseYearLabel(selectedYear)} yo&apos;nalishlari
+                bo&apos;yicha statistika
               </CardTitle>
               <CardDescription>
                 Har bir yo&apos;nalish bo&apos;yicha talabalar soni va ish bilan
@@ -257,76 +259,70 @@ export default function AnalyticsPage() {
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                 </div>
               ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Yo&apos;nalish</TableHead>
+                      <TableHead className="text-center">Jami</TableHead>
+                      <TableHead className="text-center">Qatnashgan</TableHead>
+                      <TableHead className="text-center">Qamrov</TableHead>
+                      <TableHead className="text-center">Ishlaydi</TableHead>
+                      <TableHead className="text-center">Ishlamaydi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {programDetails.length === 0 ? (
                       <TableRow>
-                        <TableHead>Yo&apos;nalish</TableHead>
-                        <TableHead className="text-center">Jami</TableHead>
-                        <TableHead className="text-center">
-                          Qatnashgan
-                        </TableHead>
-                        <TableHead className="text-center">Qamrov</TableHead>
-                        <TableHead className="text-center">Ishlaydi</TableHead>
-                        <TableHead className="text-center">
-                          Ishlamaydi
-                        </TableHead>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          Ma&apos;lumot topilmadi
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {programDetails.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8">
-                            Ma&apos;lumot topilmadi
+                    ) : (
+                      programDetails.map((program) => (
+                        <TableRow key={program.program_id}>
+                          <TableCell className="font-medium">
+                            {program.program_name}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline">{program.total}</Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="secondary">
+                              {program.responded}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge
+                              variant={
+                                program.coverage_percent >= 50
+                                  ? "default"
+                                  : "destructive"
+                              }
+                            >
+                              {program.coverage_percent.toFixed(1)}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Briefcase className="h-3 w-3 text-green-600" />
+                              <span className="text-green-600 font-semibold">
+                                {program.employed}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <UserX className="h-3 w-3 text-orange-600" />
+                              <span className="text-orange-600">
+                                {program.unemployed}
+                              </span>
+                            </div>
                           </TableCell>
                         </TableRow>
-                      ) : (
-                        programDetails.map((program) => (
-                          <TableRow key={program.program_id}>
-                            <TableCell className="font-medium">
-                              {program.program_name}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="outline">{program.total}</Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="secondary">
-                                {program.responded}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge
-                                variant={
-                                  program.coverage_percent >= 50
-                                    ? "default"
-                                    : "destructive"
-                                }
-                              >
-                                {program.coverage_percent.toFixed(1)}%
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <Briefcase className="h-3 w-3 text-green-600" />
-                                <span className="text-green-600 font-semibold">
-                                  {program.employed}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <UserX className="h-3 w-3 text-orange-600" />
-                                <span className="text-orange-600">
-                                  {program.unemployed}
-                                </span>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>

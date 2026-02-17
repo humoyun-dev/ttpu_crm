@@ -1,15 +1,39 @@
 from rest_framework import serializers
 
 from bot2.models import Bot2Student, Bot2SurveyResponse, StudentRoster, ProgramEnrollment
+from catalog.models import CatalogItem
+
+
+class CatalogItemNestedSerializer(serializers.ModelSerializer):
+    name_uz = serializers.SerializerMethodField()
+    name_ru = serializers.SerializerMethodField()
+    name_en = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CatalogItem
+        fields = ["id", "code", "name", "name_uz", "name_ru", "name_en", "type"]
+
+    def get_name_uz(self, obj):
+        return (obj.metadata or {}).get("name_uz") or obj.name
+
+    def get_name_ru(self, obj):
+        return (obj.metadata or {}).get("name_ru") or obj.name
+
+    def get_name_en(self, obj):
+        return (obj.metadata or {}).get("name_en") or obj.name
 
 
 class StudentRosterSerializer(serializers.ModelSerializer):
+    program_details = CatalogItemNestedSerializer(source="program", read_only=True)
+
     class Meta:
         model = StudentRoster
         fields = "__all__"
 
 
 class Bot2StudentSerializer(serializers.ModelSerializer):
+    region_details = CatalogItemNestedSerializer(source="region", read_only=True)
+
     class Meta:
         model = Bot2Student
         fields = "__all__"
@@ -17,9 +41,17 @@ class Bot2StudentSerializer(serializers.ModelSerializer):
 
 
 class Bot2SurveyResponseSerializer(serializers.ModelSerializer):
+    student_details = serializers.SerializerMethodField()
+    program_details = CatalogItemNestedSerializer(source="program", read_only=True)
+
     class Meta:
         model = Bot2SurveyResponse
         fields = "__all__"
+
+    def get_student_details(self, obj):
+        if obj.student:
+            return Bot2StudentSerializer(obj.student).data
+        return None
 
 
 class ProgramEnrollmentSerializer(serializers.ModelSerializer):

@@ -29,6 +29,39 @@ import {
   formatDate,
   getItemName,
 } from "@/lib/api";
+import { formatUzPhone } from "@/lib/utils";
+
+const LABEL_TRANSLATIONS: Record<string, string> = {
+  gender: "Jins",
+  region: "Hudud",
+  birth_date: "Tug'ilgan sana",
+  second_phone: "Qo'shimcha telefon",
+  education_level: "Ta'lim darajasi",
+  school_name: "Maktab nomi",
+  grade: "Sinf",
+  graduation_year: "Bitirgan yili",
+  english_level: "Ingliz tili darajasi",
+  math_level: "Matematika darajasi",
+  motivation: "Motivatsiya",
+  about_yourself: "O'zingiz haqingizda",
+  comment: "Izoh",
+  parent_phone: "Ota-ona telefoni",
+  achievements: "Yutuqlar",
+  programming_experience: "Dasturlash tajribasi",
+  additional_info: "Qo'shimcha ma'lumot",
+  first_name: "Ism",
+  last_name: "Familiya",
+};
+
+/* Fields already shown in structured cards – skip in extras */
+const DISPLAYED_FIELDS = new Set([
+  "gender",
+  "region",
+  "birth_date",
+  "second_phone",
+  "first_name",
+  "last_name",
+]);
 
 export default function AdmissionDetailPage() {
   const params = useParams();
@@ -53,7 +86,7 @@ export default function AdmissionDetailPage() {
       setApplication(appRes.data);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi"
+        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi",
       );
     } finally {
       setLoading(false);
@@ -129,7 +162,7 @@ export default function AdmissionDetailPage() {
               <Phone className="h-4 w-4 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">Asosiy telefon</p>
-                <p className="font-medium">{applicant?.phone || "-"}</p>
+                <p className="font-medium">{formatUzPhone(applicant?.phone)}</p>
               </div>
             </div>
 
@@ -140,7 +173,9 @@ export default function AdmissionDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     Qo'shimcha telefon
                   </p>
-                  <p className="font-medium">{answers.second_phone}</p>
+                  <p className="font-medium">
+                    {formatUzPhone(answers.second_phone)}
+                  </p>
                 </div>
               </div>
             )}
@@ -227,7 +262,7 @@ export default function AdmissionDetailPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
-                Qo'shimcha ma'lumotlar
+                Qo&apos;shimcha ma&apos;lumotlar
               </CardTitle>
               <CardDescription>
                 Foydalanuvchi tomonidan kiritilgan javoblar
@@ -235,14 +270,24 @@ export default function AdmissionDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {Object.entries(answers).map(([key, value]) => (
-                  <div key={key} className="rounded-lg border bg-muted/50 p-3">
-                    <p className="text-xs font-medium uppercase text-muted-foreground">
-                      {key}
-                    </p>
-                    <p className="mt-1 text-sm">{String(value) || "-"}</p>
-                  </div>
-                ))}
+                {Object.entries(answers).map(([key, value]) => {
+                  if (DISPLAYED_FIELDS.has(key)) return null;
+                  if (!value) return null;
+
+                  return (
+                    <div
+                      key={key}
+                      className="rounded-lg border bg-muted/50 p-3"
+                    >
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {LABEL_TRANSLATIONS[key] || key.replace(/_/g, " ")}
+                      </p>
+                      <p className="mt-1 text-sm whitespace-pre-wrap">
+                        {String(value)}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
