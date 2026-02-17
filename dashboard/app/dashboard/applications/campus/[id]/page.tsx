@@ -191,6 +191,10 @@ export default function CampusTourDetailPage() {
                 </div>
               </>
             )}
+
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
