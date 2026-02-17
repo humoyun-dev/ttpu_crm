@@ -241,13 +241,6 @@ function clearStoredTokens() {
   setAuthMarkerCookie(false);
 }
 
-function redirectToLoginIfNeeded() {
-  if (typeof window === "undefined") return;
-  const { pathname } = window.location;
-  if (pathname === "/login") return;
-  window.location.replace("/login");
-}
-
 let refreshRequest: Promise<boolean> | null = null;
 
 async function refreshAccessToken(): Promise<boolean> {
@@ -273,7 +266,7 @@ async function refreshAccessToken(): Promise<boolean> {
       return false;
     }
 
-    const body = await res.json().catch(() => ({} as { access?: string }));
+    const body = await res.json().catch(() => ({}) as { access?: string });
     const currentRefreshToken =
       typeof window !== "undefined"
         ? localStorage.getItem("refresh_token")
@@ -299,7 +292,7 @@ async function refreshAccessToken(): Promise<boolean> {
 async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {},
-  retryOnAuthFailure = true
+  retryOnAuthFailure = true,
 ): Promise<ApiResponse<T>> {
   const token = getToken();
   const headers: HeadersInit = {
@@ -320,10 +313,13 @@ async function apiFetch<T>(
         return apiFetch<T>(endpoint, options, false);
       }
 
+      // Token invalid yoki refresh ishlamadi - tozalash va yo'naltirish
       if (typeof window !== "undefined") {
         clearStoredTokens();
-        redirectToLoginIfNeeded();
-        window.location.href = "/login";
+        const pathname = window.location.pathname;
+        if (pathname !== "/login") {
+          window.location.replace("/login");
+        }
       }
       return { error: { code: "UNAUTHORIZED", message: "Session expired" } };
     }
@@ -416,7 +412,7 @@ export const catalogApi = {
     const query = searchParams.toString();
     const suffix = query ? `?${query}` : "";
     return apiFetch<PaginatedResponse<CatalogItem>>(
-      `/api/v1/catalog/items/${suffix}`
+      `/api/v1/catalog/items/${suffix}`,
     );
   },
 
@@ -425,7 +421,11 @@ export const catalogApi = {
 
   create: (
     type: CatalogType,
-    data: { name: string; description?: string; meta?: Record<string, unknown> }
+    data: {
+      name: string;
+      description?: string;
+      meta?: Record<string, unknown>;
+    },
   ) =>
     apiFetch<CatalogItem>("/api/v1/catalog/items/", {
       method: "POST",
@@ -439,7 +439,7 @@ export const catalogApi = {
       name?: string;
       description?: string;
       meta?: Record<string, unknown>;
-    }
+    },
   ) =>
     apiFetch<CatalogItem>(`/api/v1/catalog/items/${id}/`, {
       method: "PATCH",
@@ -458,19 +458,19 @@ export const bot1Api = {
   listAdmissions: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<Admissions2026Application>>(
-      `/api/v1/bot1/applications/admissions-2026/${query}`
+      `/api/v1/bot1/applications/admissions-2026/${query}`,
     );
   },
   getAdmission: (id: string) =>
     apiFetch<Admissions2026Application>(
-      `/api/v1/bot1/applications/admissions-2026/${id}/`
+      `/api/v1/bot1/applications/admissions-2026/${id}/`,
     ),
 
   // Campus Tour
   listCampusTours: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<CampusTourRequest>>(
-      `/api/v1/bot1/applications/campus-tour/${query}`
+      `/api/v1/bot1/applications/campus-tour/${query}`,
     );
   },
   getCampusTour: (id: string) =>
@@ -480,7 +480,7 @@ export const bot1Api = {
   listFoundation: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<FoundationRequest>>(
-      `/api/v1/bot1/applications/foundation/${query}`
+      `/api/v1/bot1/applications/foundation/${query}`,
     );
   },
   getFoundation: (id: string) =>
@@ -490,19 +490,19 @@ export const bot1Api = {
   listPolito: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<PolitoAcademyRequest>>(
-      `/api/v1/bot1/applications/polito-academy/${query}`
+      `/api/v1/bot1/applications/polito-academy/${query}`,
     );
   },
   getPolito: (id: string) =>
     apiFetch<PolitoAcademyRequest>(
-      `/api/v1/bot1/applications/polito-academy/${id}/`
+      `/api/v1/bot1/applications/polito-academy/${id}/`,
     ),
 
   // Applicants
   listApplicants: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<Bot1Applicant>>(
-      `/api/v1/bot1/applicants/${query}`
+      `/api/v1/bot1/applicants/${query}`,
     );
   },
   getApplicant: (id: string) =>
@@ -514,7 +514,7 @@ export const bot2Api = {
   listSurveys: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<Bot2SurveyResponse>>(
-      `/api/v1/bot2/surveys/${query}`
+      `/api/v1/bot2/surveys/${query}`,
     );
   },
   getSurvey: (id: string) =>
@@ -523,7 +523,7 @@ export const bot2Api = {
   listStudents: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<Bot2Student>>(
-      `/api/v1/bot2/students/${query}`
+      `/api/v1/bot2/students/${query}`,
     );
   },
   getStudent: (id: string) =>
@@ -533,7 +533,7 @@ export const bot2Api = {
   listRoster: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<StudentRoster>>(
-      `/api/v1/bot2/roster/${query}`
+      `/api/v1/bot2/roster/${query}`,
     );
   },
   getRoster: (id: string) =>
@@ -560,7 +560,7 @@ export const bot2Api = {
   listEnrollments: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<ProgramEnrollment>>(
-      `/api/v1/bot2/enrollments/${query}`
+      `/api/v1/bot2/enrollments/${query}`,
     );
   },
   getEnrollment: (id: string) =>
@@ -627,7 +627,7 @@ export const analyticsApi = {
         unemployed: number;
       }>
     >(
-      `/api/v1/analytics/bot2/program-details-by-year?course_year=${courseYear}&from=${start}&to=${end}`
+      `/api/v1/analytics/bot2/program-details-by-year?course_year=${courseYear}&from=${start}&to=${end}`,
     );
   },
 
@@ -660,7 +660,7 @@ export const analyticsApi = {
 // Helper functions
 export function getItemName(
   item: CatalogItem | CatalogItemNested | undefined,
-  lang = "uz"
+  lang = "uz",
 ): string {
   if (!item) return "-";
   // Check for nested serializer format (name_uz, name_ru, name_en)
