@@ -55,7 +55,7 @@ export default function CampusTourDetailPage() {
       setRequest(reqRes.data);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ma'lumotni yuklab bo'lmadi"
+        err instanceof Error ? err.message : "Ma'lumotni yuklab bo'lmadi",
       );
     } finally {
       setLoading(false);
@@ -142,7 +142,9 @@ export default function CampusTourDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     Asosiy telefon
                   </p>
-                   <p className="font-medium">{formatUzPhone(applicant?.phone || "-")}</p>
+                  <p className="font-medium">
+                    {formatUzPhone(applicant?.phone || "-")}
+                  </p>
                 </div>
               </div>
               {answers?.second_phone && (
@@ -152,9 +154,9 @@ export default function CampusTourDetailPage() {
                     <p className="text-sm text-muted-foreground">
                       Qo'shimcha telefon
                     </p>
-                     <p className="font-medium">
-                       {formatUzPhone(answers.second_phone)}
-                     </p>
+                    <p className="font-medium">
+                      {formatUzPhone(answers.second_phone)}
+                    </p>
                   </div>
                 </div>
               )}
@@ -191,7 +193,6 @@ export default function CampusTourDetailPage() {
                 </div>
               </>
             )}
-
           </CardContent>
         </Card>
 
@@ -309,7 +310,9 @@ export default function CampusTourDetailPage() {
                       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         {LABEL_TRANSLATIONS[key] || key.replace(/_/g, " ")}
                       </p>
-                      <p className="mt-1 text-sm whitespace-pre-wrap">{value || "-"}</p>
+                      <p className="mt-1 text-sm whitespace-pre-wrap">
+                        {value || "-"}
+                      </p>
                     </div>
                   );
                 })}
