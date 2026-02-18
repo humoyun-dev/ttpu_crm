@@ -33,11 +33,20 @@ def gender_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
+def _localized_name(item: dict, lang: str) -> str:
+    """Get localized name from catalog item, falling back to default name."""
+    return (
+        item.get(f"name_{lang}")
+        or item.get("metadata", {}).get(f"name_{lang}")
+        or item.get("name")
+        or "-"
+    )
+
+
 def regions_keyboard(regions: Sequence[dict], lang: str = "uz") -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for r in regions:
-        # Get localized name from metadata
-        region_name = r.get("metadata", {}).get(f"name_{lang}", r.get("name"))
+        region_name = _localized_name(r, lang)
         kb.button(text=str(region_name), callback_data=f"region:{r.get('id')}")
     kb.adjust(2)
     return kb.as_markup()
@@ -46,8 +55,7 @@ def regions_keyboard(regions: Sequence[dict], lang: str = "uz") -> InlineKeyboar
 def programs_keyboard(programs: Sequence[dict], lang: str = "uz") -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for p in programs:
-        # Get localized name from metadata
-        program_name = p.get("metadata", {}).get(f"name_{lang}", p.get("name"))
+        program_name = _localized_name(p, lang)
         kb.button(text=str(program_name), callback_data=f"program:{p.get('id')}")
     kb.adjust(1)
     return kb.as_markup()

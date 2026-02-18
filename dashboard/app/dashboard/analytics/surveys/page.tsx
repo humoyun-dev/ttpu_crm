@@ -106,7 +106,7 @@ export default function AnalyticsPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         {data.map((yearData) => (
           <Card
             key={yearData.course_year}
@@ -125,34 +125,37 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-col items-center justify-center space-y-4 py-4">
-                <div className="relative w-40 h-40">
-                  <svg className="w-40 h-40 transform -rotate-90">
+                <div className="relative w-32 h-32">
+                  <svg
+                    className="w-32 h-32 transform -rotate-90"
+                    viewBox="0 0 128 128"
+                  >
                     <circle
-                      cx="80"
-                      cy="80"
-                      r="70"
+                      cx="64"
+                      cy="64"
+                      r="56"
                       stroke="currentColor"
-                      strokeWidth="12"
+                      strokeWidth="10"
                       fill="none"
                       className="text-muted/20"
                     />
                     <circle
-                      cx="80"
-                      cy="80"
-                      r="70"
+                      cx="64"
+                      cy="64"
+                      r="56"
                       stroke="currentColor"
-                      strokeWidth="12"
+                      strokeWidth="10"
                       fill="none"
-                      strokeDasharray={`${2 * Math.PI * 70}`}
+                      strokeDasharray={`${2 * Math.PI * 56}`}
                       strokeDashoffset={`${
-                        2 * Math.PI * 70 * (1 - yearData.coverage_percent / 100)
+                        2 * Math.PI * 56 * (1 - yearData.coverage_percent / 100)
                       }`}
                       className="text-primary transition-all duration-1000"
                       strokeLinecap="round"
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="text-3xl font-bold">
+                    <div className="text-2xl font-bold">
                       {yearData.coverage_percent.toFixed(1)}%
                     </div>
                     <div className="text-xs text-muted-foreground">qamrov</div>

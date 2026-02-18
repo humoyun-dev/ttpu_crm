@@ -56,13 +56,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { TableLoading } from "@/components/loading";
 import { ErrorDisplay } from "@/components/error-display";
-import {
-  catalogApi,
-  CatalogItem,
-  CatalogType,
-  formatDate,
-  getItemName,
-} from "@/lib/api";
+import { catalogApi, CatalogItem, CatalogType, formatDate } from "@/lib/api";
 import { toast } from "sonner";
 
 const CATALOG_TYPES: {
@@ -87,6 +81,9 @@ const CATALOG_TYPES: {
 
 interface CatalogFormData {
   name: string;
+  name_uz: string;
+  name_ru: string;
+  name_en: string;
   description: string;
   meta: string;
 }
@@ -105,6 +102,9 @@ export default function CatalogPage() {
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
   const [formData, setFormData] = useState<CatalogFormData>({
     name: "",
+    name_uz: "",
+    name_ru: "",
+    name_en: "",
     description: "",
     meta: "{}",
   });
@@ -120,7 +120,7 @@ export default function CatalogPage() {
       setItems(res.data?.results || []);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi"
+        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi",
       );
     } finally {
       setLoading(false);
@@ -136,18 +136,28 @@ export default function CatalogPage() {
     const searchLower = search.toLowerCase();
     return (
       item.name?.toLowerCase().includes(searchLower) ||
+      item.name_uz?.toLowerCase().includes(searchLower) ||
+      item.name_ru?.toLowerCase().includes(searchLower) ||
+      item.name_en?.toLowerCase().includes(searchLower) ||
       item.description?.toLowerCase().includes(searchLower)
     );
   });
 
   const resetForm = () => {
-    setFormData({ name: "", description: "", meta: "{}" });
+    setFormData({
+      name: "",
+      name_uz: "",
+      name_ru: "",
+      name_en: "",
+      description: "",
+      meta: "{}",
+    });
     setSelectedItem(null);
   };
 
   const handleCreate = async () => {
-    if (!formData.name.trim()) {
-      toast.error("Nom kiritilishi shart");
+    if (!formData.name_uz.trim()) {
+      toast.error("O'zbekcha nom kiritilishi shart");
       return;
     }
 
@@ -163,7 +173,10 @@ export default function CatalogPage() {
       }
 
       const res = await catalogApi.create(activeTab, {
-        name: formData.name,
+        name: formData.name_uz,
+        name_uz: formData.name_uz,
+        name_ru: formData.name_ru,
+        name_en: formData.name_en,
         description: formData.description,
         meta,
       });
@@ -182,8 +195,8 @@ export default function CatalogPage() {
   };
 
   const handleEdit = async () => {
-    if (!selectedItem || !formData.name.trim()) {
-      toast.error("Nom kiritilishi shart");
+    if (!selectedItem || !formData.name_uz.trim()) {
+      toast.error("O'zbekcha nom kiritilishi shart");
       return;
     }
 
@@ -199,7 +212,10 @@ export default function CatalogPage() {
       }
 
       const res = await catalogApi.update(activeTab, selectedItem.id, {
-        name: formData.name,
+        name: formData.name_uz,
+        name_uz: formData.name_uz,
+        name_ru: formData.name_ru,
+        name_en: formData.name_en,
         description: formData.description,
         meta,
       });
@@ -240,8 +256,11 @@ export default function CatalogPage() {
     setSelectedItem(item);
     setFormData({
       name: item.name || "",
+      name_uz: item.name_uz || item.name || "",
+      name_ru: item.name_ru || "",
+      name_en: item.name_en || "",
       description: item.description || "",
-      meta: JSON.stringify(item.meta || {}, null, 2),
+      meta: JSON.stringify(item.metadata || {}, null, 2),
     });
     setEditDialogOpen(true);
   };
@@ -315,8 +334,9 @@ export default function CatalogPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Nomi</TableHead>
-                        <TableHead>Tavsif</TableHead>
+                        <TableHead>🇺🇿 O&apos;zbekcha</TableHead>
+                        <TableHead>🇷🇺 Ruscha</TableHead>
+                        <TableHead>🇬🇧 Inglizcha</TableHead>
                         <TableHead>Meta</TableHead>
                         <TableHead>Yaratilgan</TableHead>
                         <TableHead className="w-[80px]">Amal</TableHead>
@@ -326,7 +346,7 @@ export default function CatalogPage() {
                       {filteredItems.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={5}
+                            colSpan={6}
                             className="text-center text-muted-foreground"
                           >
                             Ma'lumot topilmadi
@@ -336,16 +356,15 @@ export default function CatalogPage() {
                         filteredItems.map((item) => (
                           <TableRow key={item.id}>
                             <TableCell className="font-medium">
-                              {getItemName(item)}
+                              {item.name_uz || item.name || "-"}
                             </TableCell>
-                            <TableCell className="max-w-xs truncate">
-                              {item.description || "-"}
-                            </TableCell>
+                            <TableCell>{item.name_ru || "-"}</TableCell>
+                            <TableCell>{item.name_en || "-"}</TableCell>
                             <TableCell>
-                              {item.meta &&
-                              Object.keys(item.meta).length > 0 ? (
+                              {item.metadata &&
+                              Object.keys(item.metadata).length > 0 ? (
                                 <Badge variant="outline">
-                                  {Object.keys(item.meta).length} ta maydon
+                                  {Object.keys(item.metadata).length} ta maydon
                                 </Badge>
                               ) : (
                                 "-"
@@ -390,25 +409,47 @@ export default function CatalogPage() {
 
       {/* Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              Yangi {currentTypeInfo?.label.toLowerCase()} qo'shish
+              Yangi {currentTypeInfo?.label.toLowerCase()} qo&apos;shish
             </DialogTitle>
             <DialogDescription>
-              Yangi element ma'lumotlarini kiriting
+              Yangi element ma&apos;lumotlarini 3 tilda kiriting
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Nomi *</Label>
+              <Label htmlFor="name_uz">🇺🇿 O&apos;zbekcha nomi *</Label>
               <Input
-                id="name"
-                value={formData.name}
+                id="name_uz"
+                value={formData.name_uz}
                 onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
+                  setFormData({ ...formData, name_uz: e.target.value })
                 }
-                placeholder="Nomini kiriting"
+                placeholder="O'zbekcha nomini kiriting"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="name_ru">🇷🇺 Ruscha nomi</Label>
+              <Input
+                id="name_ru"
+                value={formData.name_ru}
+                onChange={(e) =>
+                  setFormData({ ...formData, name_ru: e.target.value })
+                }
+                placeholder="Русское название"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="name_en">🇬🇧 Inglizcha nomi</Label>
+              <Input
+                id="name_en"
+                value={formData.name_en}
+                onChange={(e) =>
+                  setFormData({ ...formData, name_en: e.target.value })
+                }
+                placeholder="English name"
               />
             </div>
             <div className="space-y-2">
@@ -420,7 +461,7 @@ export default function CatalogPage() {
                   setFormData({ ...formData, description: e.target.value })
                 }
                 placeholder="Tavsifni kiriting"
-                rows={3}
+                rows={2}
               />
             </div>
             <div className="space-y-2">
@@ -432,7 +473,7 @@ export default function CatalogPage() {
                   setFormData({ ...formData, meta: e.target.value })
                 }
                 placeholder='{"key": "value"}'
-                rows={4}
+                rows={3}
                 className="font-mono text-sm"
               />
             </div>
@@ -453,23 +494,45 @@ export default function CatalogPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Tahrirlash</DialogTitle>
             <DialogDescription>
-              Element ma'lumotlarini o'zgartiring
+              Element ma&apos;lumotlarini o&apos;zgartiring
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Nomi *</Label>
+              <Label htmlFor="edit-name_uz">🇺🇿 O&apos;zbekcha nomi *</Label>
               <Input
-                id="edit-name"
-                value={formData.name}
+                id="edit-name_uz"
+                value={formData.name_uz}
                 onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
+                  setFormData({ ...formData, name_uz: e.target.value })
                 }
-                placeholder="Nomini kiriting"
+                placeholder="O'zbekcha nomini kiriting"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-name_ru">🇷🇺 Ruscha nomi</Label>
+              <Input
+                id="edit-name_ru"
+                value={formData.name_ru}
+                onChange={(e) =>
+                  setFormData({ ...formData, name_ru: e.target.value })
+                }
+                placeholder="Русское название"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-name_en">🇬🇧 Inglizcha nomi</Label>
+              <Input
+                id="edit-name_en"
+                value={formData.name_en}
+                onChange={(e) =>
+                  setFormData({ ...formData, name_en: e.target.value })
+                }
+                placeholder="English name"
               />
             </div>
             <div className="space-y-2">
@@ -481,7 +544,7 @@ export default function CatalogPage() {
                   setFormData({ ...formData, description: e.target.value })
                 }
                 placeholder="Tavsifni kiriting"
-                rows={3}
+                rows={2}
               />
             </div>
             <div className="space-y-2">
@@ -493,7 +556,7 @@ export default function CatalogPage() {
                   setFormData({ ...formData, meta: e.target.value })
                 }
                 placeholder='{"key": "value"}'
-                rows={4}
+                rows={3}
                 className="font-mono text-sm"
               />
             </div>

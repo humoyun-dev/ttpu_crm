@@ -17,6 +17,9 @@ class CatalogItem(BaseModel):
     type = models.CharField(max_length=50, choices=ItemType.choices)
     code = models.CharField(max_length=100, null=True, blank=True)
     name = models.CharField(max_length=255)
+    name_uz = models.CharField(max_length=255, blank=True, default="")
+    name_ru = models.CharField(max_length=255, blank=True, default="")
+    name_en = models.CharField(max_length=255, blank=True, default="")
     parent = models.ForeignKey(
         "self",
         null=True,
