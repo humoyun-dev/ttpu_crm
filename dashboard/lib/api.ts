@@ -603,26 +603,43 @@ export const bot2Api = {
 };
 
 // Analytics API
+function _analyticsParams(opts?: {
+  from?: string;
+  to?: string;
+  academicYear?: string;
+}): string {
+  const end = opts?.to || new Date(Date.now() + 400 * 86400000).toISOString();
+  const start =
+    opts?.from || new Date(Date.now() - 730 * 86400000).toISOString();
+  const params = new URLSearchParams({ from: start, to: end });
+  if (opts?.academicYear) params.set("academic_year", opts.academicYear);
+  return params.toString();
+}
+
 export const analyticsApi = {
-  getCourseYearCoverage: (from?: string, to?: string) => {
-    const end = to || new Date().toISOString();
-    const start =
-      from || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-    return apiFetch<
+  getAcademicYears: () =>
+    apiFetch<string[]>(`/api/v1/analytics/bot2/academic-years`),
+
+  getCourseYearCoverage: (opts?: {
+    from?: string;
+    to?: string;
+    academicYear?: string;
+  }) =>
+    apiFetch<
       Array<{
         course_year: number;
         total: number;
         responded: number;
         coverage_percent: number;
       }>
-    >(`/api/v1/analytics/bot2/course-year-coverage?from=${start}&to=${end}`);
-  },
+    >(`/api/v1/analytics/bot2/course-year-coverage?${_analyticsParams(opts)}`),
 
-  getProgramCoverage: (from?: string, to?: string) => {
-    const end = to || new Date().toISOString();
-    const start =
-      from || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-    return apiFetch<
+  getProgramCoverage: (opts?: {
+    from?: string;
+    to?: string;
+    academicYear?: string;
+  }) =>
+    apiFetch<
       Array<{
         program_id: string;
         program_name: string;
@@ -630,14 +647,13 @@ export const analyticsApi = {
         responded: number;
         coverage_percent: number;
       }>
-    >(`/api/v1/analytics/bot2/program-coverage?from=${start}&to=${end}`);
-  },
+    >(`/api/v1/analytics/bot2/program-coverage?${_analyticsParams(opts)}`),
 
-  getProgramDetailsByYear: (courseYear: number, from?: string, to?: string) => {
-    const end = to || new Date().toISOString();
-    const start =
-      from || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-    return apiFetch<
+  getProgramDetailsByYear: (
+    courseYear: number,
+    opts?: { from?: string; to?: string; academicYear?: string },
+  ) =>
+    apiFetch<
       Array<{
         program_id: string;
         program_name: string;
@@ -648,15 +664,15 @@ export const analyticsApi = {
         unemployed: number;
       }>
     >(
-      `/api/v1/analytics/bot2/program-details-by-year?course_year=${courseYear}&from=${start}&to=${end}`,
-    );
-  },
+      `/api/v1/analytics/bot2/program-details-by-year?course_year=${courseYear}&${_analyticsParams(opts)}`,
+    ),
 
-  getEnrollmentOverview: (from?: string, to?: string) => {
-    const end = to || new Date().toISOString();
-    const start =
-      from || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-    return apiFetch<{
+  getEnrollmentOverview: (opts?: {
+    from?: string;
+    to?: string;
+    academicYear?: string;
+  }) =>
+    apiFetch<{
       total_students: number;
       total_responded: number;
       coverage_percent: number;
@@ -674,8 +690,7 @@ export const analyticsApi = {
         responded: number;
         coverage_percent: number;
       }>;
-    }>(`/api/v1/analytics/bot2/enrollments-overview?from=${start}&to=${end}`);
-  },
+    }>(`/api/v1/analytics/bot2/enrollments-overview?${_analyticsParams(opts)}`),
 };
 
 // Helper functions

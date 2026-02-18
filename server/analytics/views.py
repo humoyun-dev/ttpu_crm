@@ -24,6 +24,19 @@ def _bot2_roster_totals_qs(campaign: str, course_year: int | None = None):
     return qs
 
 
+def _resolve_academic_year(campaign: str, academic_year: str | None) -> str | None:
+    """Return explicit academic_year or auto-detect latest from ProgramEnrollment."""
+    if academic_year:
+        return academic_year
+    latest = (
+        ProgramEnrollment.objects.filter(is_active=True, campaign=campaign)
+        .order_by("-academic_year")
+        .values_list("academic_year", flat=True)
+        .first()
+    )
+    return latest
+
+
 def _require_range(request):
     from_str = request.query_params.get("from")
     to_str = request.query_params.get("to")
@@ -111,7 +124,7 @@ def bot2_course_year_coverage(request):
     if error:
         return error
     campaign = request.query_params.get("campaign", "default")
-    academic_year = request.query_params.get("academic_year")
+    academic_year = _resolve_academic_year(campaign, request.query_params.get("academic_year"))
 
     total_map = {}
 
@@ -153,7 +166,7 @@ def bot2_program_coverage(request):
     if error:
         return error
     campaign = request.query_params.get("campaign", "default")
-    academic_year = request.query_params.get("academic_year")
+    academic_year = _resolve_academic_year(campaign, request.query_params.get("academic_year"))
     course_year = request.query_params.get("course_year")
 
     if academic_year:
@@ -199,7 +212,7 @@ def bot2_program_course_matrix(request):
     if error:
         return error
     campaign = request.query_params.get("campaign", "default")
-    academic_year = request.query_params.get("academic_year")
+    academic_year = _resolve_academic_year(campaign, request.query_params.get("academic_year"))
 
     if academic_year:
         enroll_qs = ProgramEnrollment.objects.filter(is_active=True, campaign=campaign, academic_year=academic_year)
@@ -268,7 +281,7 @@ def bot2_program_details_by_year(request):
     if error:
         return error
     campaign = request.query_params.get("campaign", "default")
-    academic_year = request.query_params.get("academic_year")
+    academic_year = _resolve_academic_year(campaign, request.query_params.get("academic_year"))
     course_year = request.query_params.get("course_year")
     
     if not course_year:
@@ -362,7 +375,7 @@ def enrollments_overview(request):
         return error
 
     campaign = request.query_params.get("campaign", "default")
-    academic_year = request.query_params.get("academic_year")
+    academic_year = _resolve_academic_year(campaign, request.query_params.get("academic_year"))
 
     if academic_year:
         enroll_qs = ProgramEnrollment.objects.filter(is_active=True, campaign=campaign, academic_year=academic_year)
@@ -453,3 +466,17 @@ def enrollments_overview(request):
             "by_program": overview,
         }
     )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsViewerOrAdminReadOnly])
+def bot2_academic_years(request):
+    """List distinct academic_year values from ProgramEnrollment, newest first."""
+    campaign = request.query_params.get("campaign", "default")
+    years = (
+        ProgramEnrollment.objects.filter(is_active=True, campaign=campaign)
+        .values_list("academic_year", flat=True)
+        .distinct()
+        .order_by("-academic_year")
+    )
+    return Response(list(years))
