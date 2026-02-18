@@ -212,8 +212,11 @@ async def pick_region(call: CallbackQuery, state: FSMContext):
     region_key = call.data.split(":")[1]
     selected = next((r for r in regions if str(r.get("id")) == region_key), None)
     if selected:
-        # Extract localized name from metadata
-        region_name = selected.get("metadata", {}).get(f"name_{lang}", selected.get("name"))
+        region_name = (
+            selected.get(f"name_{lang}")
+            or selected.get("metadata", {}).get(f"name_{lang}")
+            or selected.get("name")
+        )
         await state.update_data(
             region_id=str(selected.get("id")),
             region_code=selected.get("code"),
@@ -246,8 +249,11 @@ async def pick_program(call: CallbackQuery, state: FSMContext):
     key = call.data.split(":")[1]
     program = next((p for p in programs if str(p.get("id")) == key), None)
     if program:
-        # Extract localized name from metadata
-        program_name = program.get("metadata", {}).get(f"name_{lang}", program.get("name"))
+        program_name = (
+            program.get(f"name_{lang}")
+            or program.get("metadata", {}).get(f"name_{lang}")
+            or program.get("name")
+        )
         await state.update_data(
             program_id=str(program.get("id")),
             program_code=program.get("code"),

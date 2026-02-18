@@ -51,6 +51,9 @@ export interface CatalogItem {
   type: CatalogType;
   code: string | null;
   name: string;
+  name_uz: string;
+  name_ru: string;
+  name_en: string;
   description?: string;
   parent: string | null;
   is_active: boolean;
@@ -327,10 +330,22 @@ async function apiFetch<T>(
     const body = await res.json().catch(() => ({}));
 
     if (!res.ok) {
+      // DRF returns field errors as {field: ["error"]} or {detail: "error"}
+      let message = body.detail || "";
+      if (!message && typeof body === "object") {
+        const fieldErrors = Object.entries(body)
+          .filter(([key]) => key !== "error")
+          .map(
+            ([key, val]) =>
+              `${key}: ${Array.isArray(val) ? val.join(", ") : val}`,
+          )
+          .join("; ");
+        if (fieldErrors) message = fieldErrors;
+      }
       return {
         error: body.error || {
           code: "API_ERROR",
-          message: body.detail || res.statusText,
+          message: message || res.statusText,
         },
       };
     }
@@ -423,6 +438,9 @@ export const catalogApi = {
     type: CatalogType,
     data: {
       name: string;
+      name_uz?: string;
+      name_ru?: string;
+      name_en?: string;
       description?: string;
       meta?: Record<string, unknown>;
     },
@@ -437,6 +455,9 @@ export const catalogApi = {
     id: string,
     data: {
       name?: string;
+      name_uz?: string;
+      name_ru?: string;
+      name_en?: string;
       description?: string;
       meta?: Record<string, unknown>;
     },
@@ -663,26 +684,21 @@ export function getItemName(
   lang = "uz",
 ): string {
   if (!item) return "-";
-  // Check for nested serializer format (name_uz, name_ru, name_en)
-  if ("name_uz" in item) {
-    return (
-      (item[`name_${lang}` as keyof typeof item] as string) ||
-      item.name_uz ||
-      item.code ||
-      "-"
-    );
-  }
-  // Full CatalogItem with name field
-  if ("name" in item && item.name) return item.name;
-  // Then check metadata
+
+  // Both CatalogItem and CatalogItemNested have name_uz, name_ru, name_en
+  const langName = item[`name_${lang}` as keyof typeof item] as string;
+  if (langName) return langName;
+
+  // Fallback to name field
+  if (item.name) return item.name;
+
+  // Check metadata as last resort (for backward compatibility)
   const meta = (item as CatalogItem).metadata || (item as CatalogItem).meta;
   if (meta) {
-    return (meta[`name_${lang}`] ||
-      meta.name_uz ||
-      meta.name ||
-      item.code ||
-      "-") as string;
+    const metaName = meta[`name_${lang}`] as string;
+    if (metaName) return metaName;
   }
+
   return item.code || "-";
 }
 

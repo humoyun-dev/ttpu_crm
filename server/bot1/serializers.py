@@ -13,22 +13,9 @@ from catalog.models import CatalogItem
 class CatalogItemNestedSerializer(serializers.ModelSerializer):
     """Nested serializer for catalog items."""
 
-    name_uz = serializers.SerializerMethodField()
-    name_ru = serializers.SerializerMethodField()
-    name_en = serializers.SerializerMethodField()
-
     class Meta:
         model = CatalogItem
         fields = ["id", "code", "name", "name_uz", "name_ru", "name_en", "type"]
-
-    def get_name_uz(self, obj):
-        return obj.metadata.get("name_uz") or obj.name
-
-    def get_name_ru(self, obj):
-        return obj.metadata.get("name_ru") or obj.name
-
-    def get_name_en(self, obj):
-        return obj.metadata.get("name_en") or obj.name
 
 
 class Bot1ApplicantSerializer(serializers.ModelSerializer):
