@@ -35,6 +35,7 @@ from analytics.views import (
     bot2_program_course_matrix,
     bot2_program_details_by_year,
     enrollments_overview,
+    bot2_academic_years,
 )
 
 
@@ -87,5 +88,6 @@ urlpatterns = [
         path("analytics/bot2/program-course-matrix", bot2_program_course_matrix, name="analytics-bot2-matrix"),
         path("analytics/bot2/program-details-by-year", bot2_program_details_by_year, name="analytics-bot2-program-year"),
         path("analytics/bot2/enrollments-overview", enrollments_overview, name="analytics-bot2-enrollments-overview"),
+        path("analytics/bot2/academic-years", bot2_academic_years, name="analytics-bot2-academic-years"),
     ])),
 ]
