@@ -65,7 +65,7 @@ export default function AnalyticsPage() {
   const [academicYears, setAcademicYears] = useState<string[]>([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("");
 
-  // Load academic years on mount
+  // Load academic years on mount, then load coverage data
   useEffect(() => {
     analyticsApi
       .getAcademicYears()
@@ -73,19 +73,25 @@ export default function AnalyticsPage() {
         if (response.data && response.data.length > 0) {
           setAcademicYears(response.data);
           setSelectedAcademicYear(response.data[0]); // latest
+        } else {
+          // No academic years found — load without filter
+          loadCoverage();
         }
       })
-      .catch(console.error);
+      .catch(() => {
+        // Endpoint unavailable — load without filter
+        loadCoverage();
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load coverage data when academic year changes
-  const loadData = useCallback(() => {
-    if (!selectedAcademicYear) return;
+  // Load coverage data
+  const loadCoverage = useCallback((academicYear?: string) => {
     setLoading(true);
     setSelectedYear(null);
     setProgramDetails([]);
 
-    const opts = { academicYear: selectedAcademicYear };
+    const opts = academicYear ? { academicYear } : undefined;
     analyticsApi
       .getCourseYearCoverage(opts)
       .then((response) => {
@@ -95,11 +101,14 @@ export default function AnalyticsPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [selectedAcademicYear]);
+  }, []);
 
+  // Reload when academic year changes
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (selectedAcademicYear) {
+      loadCoverage(selectedAcademicYear);
+    }
+  }, [selectedAcademicYear, loadCoverage]);
 
   const handleYearClick = async (year: number) => {
     if (selectedYear === year) {
@@ -111,9 +120,10 @@ export default function AnalyticsPage() {
     setSelectedYear(year);
     setLoadingDetails(true);
     try {
-      const response = await analyticsApi.getProgramDetailsByYear(year, {
-        academicYear: selectedAcademicYear,
-      });
+      const opts = selectedAcademicYear
+        ? { academicYear: selectedAcademicYear }
+        : undefined;
+      const response = await analyticsApi.getProgramDetailsByYear(year, opts);
       if (response.data) {
         setProgramDetails(response.data);
       }
