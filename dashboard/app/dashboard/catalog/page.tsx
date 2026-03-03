@@ -175,16 +175,30 @@ export default function CatalogPage() {
         }
       }
 
-      const res = await catalogApi.create(formData.type, {
+      const payload: Record<string, unknown> = {
         type: formData.type,
         name: formData.name_uz,
         name_uz: formData.name_uz,
         name_ru: formData.name_ru,
         name_en: formData.name_en,
-        meta: metadata,
-      } as any);
+      };
+      // Only send metadata if non-empty
+      if (Object.keys(metadata).length > 0) {
+        payload.meta = metadata;
+      }
 
-      if (res.error) throw new Error(res.error.message as string);
+      const res = await catalogApi.create(formData.type, payload as any);
+
+      if (res.error) {
+        const details = (res.error as any).details;
+        if (details && typeof details === "object") {
+          const msgs = Object.entries(details)
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+            .join("; ");
+          throw new Error(msgs || res.error.message);
+        }
+        throw new Error((res.error.message || "Xatolik yuz berdi") as string);
+      }
 
       toast.success("✓ Muvaffaqiyatli yaratildi");
       setCreateDialogOpen(false);
@@ -219,15 +233,33 @@ export default function CatalogPage() {
         }
       }
 
-      const res = await catalogApi.update(formData.type, selectedItem.id, {
+      const updatePayload: Record<string, unknown> = {
         name: formData.name_uz,
         name_uz: formData.name_uz,
         name_ru: formData.name_ru,
         name_en: formData.name_en,
-        meta: metadata,
-      });
+      };
+      // Only send metadata if non-empty
+      if (Object.keys(metadata).length > 0) {
+        updatePayload.meta = metadata;
+      }
 
-      if (res.error) throw new Error(res.error.message as string);
+      const res = await catalogApi.update(
+        formData.type,
+        selectedItem.id,
+        updatePayload as any,
+      );
+
+      if (res.error) {
+        const details = (res.error as any).details;
+        if (details && typeof details === "object") {
+          const msgs = Object.entries(details)
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+            .join("; ");
+          throw new Error(msgs || res.error.message);
+        }
+        throw new Error((res.error.message || "Xatolik yuz berdi") as string);
+      }
 
       toast.success("✓ Muvaffaqiyatli yangilandi");
       setEditDialogOpen(false);

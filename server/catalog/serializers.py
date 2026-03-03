@@ -1,3 +1,5 @@
+import uuid
+
 from rest_framework import serializers
 
 from catalog.models import CatalogItem, CatalogRelation
@@ -30,20 +32,48 @@ def _validate_program_metadata(metadata: dict):
         raise serializers.ValidationError("Program metadata 'language' must be a non-empty string.")
 
 
+def _auto_generate_code(item_type: str) -> str:
+    """Auto-generate a unique code like PROGRAM-001, DIRECTION-002, etc."""
+    prefix = (item_type or "item").upper()
+    existing = CatalogItem.objects.filter(
+        type=item_type, code__startswith=f"{prefix}-"
+    ).order_by("-code")
+    max_num = 0
+    for item in existing:
+        try:
+            num = int(item.code.split("-")[-1])
+            if num > max_num:
+                max_num = num
+        except (ValueError, IndexError):
+            continue
+    return f"{prefix}-{max_num + 1:03d}"
+
+
 class CatalogItemSerializer(serializers.ModelSerializer):
+    code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    metadata = serializers.JSONField(required=False, default=dict)
+
     class Meta:
         model = CatalogItem
         fields = "__all__"
+        # Disable auto-generated UniqueTogetherValidator from the model constraint;
+        # uniqueness is handled manually in validate().
+        validators = []
 
     def validate(self, attrs):
         item_type = attrs.get("type") or getattr(self.instance, "type", None)
         metadata = attrs.get("metadata") or getattr(self.instance, "metadata", {}) or {}
-        if item_type == CatalogItem.ItemType.PROGRAM:
+
+        # Only validate program metadata when it's non-empty
+        if item_type == CatalogItem.ItemType.PROGRAM and metadata:
             _validate_program_metadata(metadata)
 
-        # Validate uniqueness of (type, code) when code is provided
+        # Auto-generate code if not provided (only on create)
         code = attrs.get("code")
-        if code:  # non-null and non-empty
+        if not self.instance and (not code or not code.strip()):
+            attrs["code"] = _auto_generate_code(item_type)
+        elif code and code.strip():
+            # Validate uniqueness of (type, code) when code is provided
             qs = CatalogItem.objects.filter(type=item_type, code=code)
             if self.instance:
                 qs = qs.exclude(pk=self.instance.pk)
