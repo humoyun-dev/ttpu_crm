@@ -27,10 +27,19 @@ def service_token_bot1(db):
     )
 
 
-def test_catalog_null_code_duplicate_not_allowed(db):
-    CatalogItem.objects.create(type=CatalogItem.ItemType.PROGRAM, name="Program A")
+def test_catalog_null_code_duplicate_allowed(db):
+    """Multiple items of the same type with code=None are allowed."""
+    a = CatalogItem.objects.create(type=CatalogItem.ItemType.PROGRAM, name="Program A")
+    b = CatalogItem.objects.create(type=CatalogItem.ItemType.PROGRAM, name="Program B")
+    assert a.pk != b.pk
+    assert a.code is None and b.code is None
+
+
+def test_catalog_non_null_code_duplicate_not_allowed(db):
+    """Two items of the same type with the same non-null code are rejected."""
+    CatalogItem.objects.create(type=CatalogItem.ItemType.PROGRAM, name="Program A", code="DUP")
     with pytest.raises(IntegrityError):
-        CatalogItem.objects.create(type=CatalogItem.ItemType.PROGRAM, name="Program B")
+        CatalogItem.objects.create(type=CatalogItem.ItemType.PROGRAM, name="Program B", code="DUP")
 
 
 def test_student_roster_rejects_non_program(db):

@@ -1,5 +1,7 @@
+from django.db import IntegrityError
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, viewsets
+from rest_framework import filters, status, viewsets
+from rest_framework.response import Response
 
 from audit.utils import log_audit
 from catalog.models import CatalogItem, CatalogRelation
@@ -24,6 +26,17 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
         if is_active in ("true", "false"):
             qs = qs.filter(is_active=is_active == "true")
         return qs
+
+    def create(self, request, *args, **kwargs):
+        """Override create to handle IntegrityError gracefully."""
+        try:
+            return super().create(request, *args, **kwargs)
+        except IntegrityError as e:
+            return Response(
+                {"detail": "Bu turdagi element uchun bunday kod allaqachon mavjud.",
+                 "code": ["Unique constraint violated."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     def perform_create(self, serializer):
         instance = serializer.save()

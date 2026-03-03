@@ -495,14 +495,17 @@ export const catalogApi = {
       name_uz?: string;
       name_ru?: string;
       name_en?: string;
+      code?: string;
       description?: string;
       meta?: Record<string, unknown>;
     },
-  ) =>
-    apiFetch<CatalogItem>("/api/v1/catalog/items/", {
+  ) => {
+    const { meta, description, ...rest } = data;
+    return apiFetch<CatalogItem>("/api/v1/catalog/items/", {
       method: "POST",
-      body: JSON.stringify({ type, ...data, metadata: data.meta }),
-    }),
+      body: JSON.stringify({ type, ...rest, metadata: meta }),
+    });
+  },
 
   update: (
     type: CatalogType,
@@ -512,14 +515,17 @@ export const catalogApi = {
       name_uz?: string;
       name_ru?: string;
       name_en?: string;
+      code?: string;
       description?: string;
       meta?: Record<string, unknown>;
     },
-  ) =>
-    apiFetch<CatalogItem>(`/api/v1/catalog/items/${id}/`, {
+  ) => {
+    const { meta, description, ...rest } = data;
+    return apiFetch<CatalogItem>(`/api/v1/catalog/items/${id}/`, {
       method: "PATCH",
-      body: JSON.stringify({ ...data, metadata: data.meta }),
-    }),
+      body: JSON.stringify({ ...rest, metadata: meta }),
+    });
+  },
 
   delete: (type: CatalogType, id: string) =>
     apiFetch<void>(`/api/v1/catalog/items/${id}/`, {
