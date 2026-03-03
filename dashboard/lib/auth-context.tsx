@@ -34,6 +34,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
 
+    // Skip the /auth/me call entirely when there are no stored tokens
+    // to avoid a guaranteed 401 console error.
+    const hasToken =
+      typeof window !== "undefined" &&
+      (localStorage.getItem("access_token") ||
+        localStorage.getItem("refresh_token"));
+
+    if (!hasToken) {
+      setUser(null);
+      setLoading(false);
+      const pathname = window?.location?.pathname ?? "";
+      if (pathname !== "/login") {
+        router.replace("/login");
+      }
+      return;
+    }
+
     setLoading(true);
     const res = await authApi.me();
 

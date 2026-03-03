@@ -44,7 +44,16 @@ export type CatalogType =
   | "direction"
   | "region"
   | "track"
-  | "subject";
+  | "subject"
+  | "other";
+
+export interface CatalogTypeInfo {
+  value: CatalogType;
+  label: string;
+  description: string;
+  requiresMetadata: boolean;
+  metadataFields?: Record<string, { required: boolean; type: string }>;
+}
 
 export interface CatalogItem {
   id: string;
@@ -63,6 +72,51 @@ export interface CatalogItem {
   created_at: string;
   updated_at: string;
 }
+
+export const CATALOG_TYPES_INFO: CatalogTypeInfo[] = [
+  {
+    value: "program",
+    label: "Dasturlar",
+    description: "Ta'lim dasturlari",
+    requiresMetadata: true,
+    metadataFields: {
+      level: { required: true, type: "string" },
+      track: { required: true, type: "string" },
+      language: { required: true, type: "string" },
+      duration_years: { required: true, type: "number" },
+    },
+  },
+  {
+    value: "direction",
+    label: "Yo'nalishlar",
+    description: "Ta'lim yo'nalishlari",
+    requiresMetadata: false,
+  },
+  {
+    value: "region",
+    label: "Hududlar",
+    description: "Viloyatlar va shaharlar",
+    requiresMetadata: false,
+  },
+  {
+    value: "track",
+    label: "Tarmoqlar",
+    description: "Yo'nalish tarmoqlari",
+    requiresMetadata: false,
+  },
+  {
+    value: "subject",
+    label: "Fanlar",
+    description: "O'quv fanlari",
+    requiresMetadata: false,
+  },
+  {
+    value: "other",
+    label: "Boshqa",
+    description: "Boshqa katalog elementlari",
+    requiresMetadata: false,
+  },
+];
 
 // Bot1 Applicant
 export interface Bot1Applicant {

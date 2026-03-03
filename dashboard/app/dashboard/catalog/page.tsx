@@ -56,35 +56,37 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { TableLoading } from "@/components/loading";
 import { ErrorDisplay } from "@/components/error-display";
-import { catalogApi, CatalogItem, CatalogType, formatDate } from "@/lib/api";
+import {
+  catalogApi,
+  CatalogItem,
+  CatalogType,
+  CATALOG_TYPES_INFO,
+  CatalogTypeInfo,
+  formatDate,
+} from "@/lib/api";
 import { toast } from "sonner";
-
-const CATALOG_TYPES: {
-  value: CatalogType;
-  label: string;
-  description: string;
-}[] = [
-  { value: "program", label: "Dasturlar", description: "Ta'lim dasturlari" },
-  {
-    value: "direction",
-    label: "Yo'nalishlar",
-    description: "Ta'lim yo'nalishlari",
-  },
-  {
-    value: "region",
-    label: "Hududlar",
-    description: "Viloyatlar va shaharlar",
-  },
-  { value: "track", label: "Tarmoqlar", description: "Yo'nalish tarmoqlari" },
-  { value: "subject", label: "Fanlar", description: "O'quv fanlari" },
-];
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CatalogFormData {
+  type: CatalogType;
   name: string;
   name_uz: string;
   name_ru: string;
   name_en: string;
   description: string;
+  code: string;
+  // Program metadata
+  programLevel: string;
+  programTrack: string;
+  programLanguage: string;
+  programDurationYears: string;
+  // Generic metadata
   meta: string;
 }
 
@@ -101,14 +103,24 @@ export default function CatalogPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
   const [formData, setFormData] = useState<CatalogFormData>({
+    type: "program",
     name: "",
     name_uz: "",
     name_ru: "",
     name_en: "",
     description: "",
+    code: "",
+    programLevel: "bachelor",
+    programTrack: "italian",
+    programLanguage: "English",
+    programDurationYears: "4",
     meta: "{}",
   });
   const [submitting, setSubmitting] = useState(false);
+
+  const currentTypeInfo =
+    CATALOG_TYPES_INFO.find((t) => t.value === formData.type) ||
+    CATALOG_TYPES_INFO[0];
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -143,13 +155,19 @@ export default function CatalogPage() {
     );
   });
 
-  const resetForm = () => {
+  const resetForm = (type: CatalogType = "program") => {
     setFormData({
+      type,
       name: "",
       name_uz: "",
       name_ru: "",
       name_en: "",
       description: "",
+      code: "",
+      programLevel: "bachelor",
+      programTrack: "italian",
+      programLanguage: "English",
+      programDurationYears: "4",
       meta: "{}",
     });
     setSelectedItem(null);
@@ -163,32 +181,77 @@ export default function CatalogPage() {
 
     setSubmitting(true);
     try {
-      let meta = {};
-      try {
-        meta = JSON.parse(formData.meta || "{}");
-      } catch {
-        toast.error("Meta noto'g'ri JSON formatida");
-        setSubmitting(false);
-        return;
+      let metadata: Record<string, unknown> = {};
+
+      // Build metadata based on type
+      if (formData.type === "program") {
+        if (!formData.programLevel.trim()) {
+          toast.error("Dastur darajasi (level) kiritilishi shart");
+          setSubmitting(false);
+          return;
+        }
+        if (!formData.programTrack.trim()) {
+          toast.error("Tarmoq (track) kiritilishi shart");
+          setSubmitting(false);
+          return;
+        }
+        if (!formData.programLanguage.trim()) {
+          toast.error("Til (language) kiritilishi shart");
+          setSubmitting(false);
+          return;
+        }
+        if (!formData.programDurationYears.trim()) {
+          toast.error("O'quv muddati (duration_years) kiritilishi shart");
+          setSubmitting(false);
+          return;
+        }
+
+        const durationYears = parseInt(formData.programDurationYears, 10);
+        if (isNaN(durationYears) || durationYears <= 0) {
+          toast.error("O'quv muddati musbat butun son bo'lishi kerak");
+          setSubmitting(false);
+          return;
+        }
+
+        metadata = {
+          level: formData.programLevel,
+          track: formData.programTrack,
+          language: formData.programLanguage,
+          duration_years: durationYears,
+        };
+      } else {
+        // For non-program types, parse JSON metadata if provided
+        if (formData.meta.trim() && formData.meta.trim() !== "{}") {
+          try {
+            metadata = JSON.parse(formData.meta);
+          } catch {
+            toast.error("Meta JSON noto'g'ri formatida");
+            setSubmitting(false);
+            return;
+          }
+        }
       }
 
-      const res = await catalogApi.create(activeTab, {
+      const res = await catalogApi.create(formData.type, {
+        type: formData.type,
         name: formData.name_uz,
         name_uz: formData.name_uz,
         name_ru: formData.name_ru,
         name_en: formData.name_en,
         description: formData.description,
-        meta,
-      });
+        code: formData.code || undefined,
+        meta: metadata,
+      } as any);
 
       if (res.error) throw new Error(res.error.message as string);
 
-      toast.success("Muvaffaqiyatli yaratildi");
+      toast.success("✓ Muvaffaqiyatli yaratildi");
       setCreateDialogOpen(false);
-      resetForm();
+      resetForm(activeTab);
       fetchData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Xatolik yuz berdi");
+      console.error("Catalog create error:", err);
     } finally {
       setSubmitting(false);
     }
@@ -202,32 +265,75 @@ export default function CatalogPage() {
 
     setSubmitting(true);
     try {
-      let meta = {};
-      try {
-        meta = JSON.parse(formData.meta || "{}");
-      } catch {
-        toast.error("Meta noto'g'ri JSON formatida");
-        setSubmitting(false);
-        return;
+      let metadata: Record<string, unknown> = {};
+
+      // Build metadata based on type
+      if (formData.type === "program") {
+        if (!formData.programLevel.trim()) {
+          toast.error("Dastur darajasi (level) kiritilishi shart");
+          setSubmitting(false);
+          return;
+        }
+        if (!formData.programTrack.trim()) {
+          toast.error("Tarmoq (track) kiritilishi shart");
+          setSubmitting(false);
+          return;
+        }
+        if (!formData.programLanguage.trim()) {
+          toast.error("Til (language) kiritilishi shart");
+          setSubmitting(false);
+          return;
+        }
+        if (!formData.programDurationYears.trim()) {
+          toast.error("O'quv muddati (duration_years) kiritilishi shart");
+          setSubmitting(false);
+          return;
+        }
+
+        const durationYears = parseInt(formData.programDurationYears, 10);
+        if (isNaN(durationYears) || durationYears <= 0) {
+          toast.error("O'quv muddati musbat butun son bo'lishi kerak");
+          setSubmitting(false);
+          return;
+        }
+
+        metadata = {
+          level: formData.programLevel,
+          track: formData.programTrack,
+          language: formData.programLanguage,
+          duration_years: durationYears,
+        };
+      } else {
+        // For non-program types, parse JSON metadata if provided
+        if (formData.meta.trim() && formData.meta.trim() !== "{}") {
+          try {
+            metadata = JSON.parse(formData.meta);
+          } catch {
+            toast.error("Meta JSON noto'g'ri formatida");
+            setSubmitting(false);
+            return;
+          }
+        }
       }
 
-      const res = await catalogApi.update(activeTab, selectedItem.id, {
+      const res = await catalogApi.update(formData.type, selectedItem.id, {
         name: formData.name_uz,
         name_uz: formData.name_uz,
         name_ru: formData.name_ru,
         name_en: formData.name_en,
         description: formData.description,
-        meta,
+        meta: metadata,
       });
 
       if (res.error) throw new Error(res.error.message as string);
 
-      toast.success("Muvaffaqiyatli yangilandi");
+      toast.success("✓ Muvaffaqiyatli yangilandi");
       setEditDialogOpen(false);
-      resetForm();
+      resetForm(activeTab);
       fetchData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Xatolik yuz berdi");
+      console.error("Catalog update error:", err);
     } finally {
       setSubmitting(false);
     }
@@ -254,12 +360,32 @@ export default function CatalogPage() {
 
   const openEditDialog = (item: CatalogItem) => {
     setSelectedItem(item);
+
+    // Extract program metadata if it's a program
+    let programLevel = "bachelor";
+    let programTrack = "italian";
+    let programLanguage = "English";
+    let programDurationYears = "4";
+
+    if (item.type === "program" && item.metadata) {
+      programLevel = (item.metadata.level as string) || "bachelor";
+      programTrack = (item.metadata.track as string) || "italian";
+      programLanguage = (item.metadata.language as string) || "English";
+      programDurationYears = String(item.metadata.duration_years) || "4";
+    }
+
     setFormData({
+      type: item.type,
       name: item.name || "",
       name_uz: item.name_uz || item.name || "",
       name_ru: item.name_ru || "",
       name_en: item.name_en || "",
       description: item.description || "",
+      code: item.code || "",
+      programLevel,
+      programTrack,
+      programLanguage,
+      programDurationYears,
       meta: JSON.stringify(item.metadata || {}, null, 2),
     });
     setEditDialogOpen(true);
@@ -269,8 +395,6 @@ export default function CatalogPage() {
     setSelectedItem(item);
     setDeleteDialogOpen(true);
   };
-
-  const currentTypeInfo = CATALOG_TYPES.find((t) => t.value === activeTab);
 
   return (
     <div className="space-y-6">
@@ -293,10 +417,13 @@ export default function CatalogPage() {
 
       <Tabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as CatalogType)}
+        onValueChange={(v) => {
+          setActiveTab(v as CatalogType);
+          resetForm(v as CatalogType);
+        }}
       >
-        <TabsList className="grid w-full grid-cols-5">
-          {CATALOG_TYPES.map((type) => (
+        <TabsList className="grid w-full grid-cols-6">
+          {CATALOG_TYPES_INFO.map((type) => (
             <TabsTrigger key={type.value} value={type.value}>
               {type.label}
             </TabsTrigger>
@@ -308,9 +435,9 @@ export default function CatalogPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>{currentTypeInfo?.label}</CardTitle>
+                  <CardTitle>{currentTypeInfo.label}</CardTitle>
                   <CardDescription>
-                    {currentTypeInfo?.description} • Jami: {items.length} ta
+                    {currentTypeInfo.description} • Jami: {items.length} ta
                   </CardDescription>
                 </div>
                 <div className="relative w-64">
@@ -409,16 +536,44 @@ export default function CatalogPage() {
 
       {/* Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Yangi {currentTypeInfo?.label.toLowerCase()} qo&apos;shish
+              Yangi{" "}
+              {CATALOG_TYPES_INFO.find(
+                (t) => t.value === formData.type,
+              )?.label.toLowerCase()}{" "}
+              qo'shish
             </DialogTitle>
             <DialogDescription>
-              Yangi element ma&apos;lumotlarini 3 tilda kiriting
+              Yangi element ma'lumotlarini to'ldiring
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Type Selector */}
+            <div className="space-y-2">
+              <Label htmlFor="type">Turi *</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value) => {
+                  const newType = value as CatalogType;
+                  setFormData({ ...formData, type: newType });
+                }}
+              >
+                <SelectTrigger id="type">
+                  <SelectValue placeholder="Turdagi element tanlang" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATALOG_TYPES_INFO.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label} - {type.description}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Uzbek Name - Required */}
             <div className="space-y-2">
               <Label htmlFor="name_uz">🇺🇿 O&apos;zbekcha nomi *</Label>
               <Input
@@ -430,6 +585,8 @@ export default function CatalogPage() {
                 placeholder="O'zbekcha nomini kiriting"
               />
             </div>
+
+            {/* Russian Name */}
             <div className="space-y-2">
               <Label htmlFor="name_ru">🇷🇺 Ruscha nomi</Label>
               <Input
@@ -441,6 +598,8 @@ export default function CatalogPage() {
                 placeholder="Русское название"
               />
             </div>
+
+            {/* English Name */}
             <div className="space-y-2">
               <Label htmlFor="name_en">🇬🇧 Inglizcha nomi</Label>
               <Input
@@ -452,6 +611,21 @@ export default function CatalogPage() {
                 placeholder="English name"
               />
             </div>
+
+            {/* Code (optional) */}
+            <div className="space-y-2">
+              <Label htmlFor="code">Kod (Ixtiyoriy)</Label>
+              <Input
+                id="code"
+                value={formData.code}
+                onChange={(e) =>
+                  setFormData({ ...formData, code: e.target.value })
+                }
+                placeholder="Elementin kodi"
+              />
+            </div>
+
+            {/* Description */}
             <div className="space-y-2">
               <Label htmlFor="description">Tavsif</Label>
               <Textarea
@@ -464,24 +638,125 @@ export default function CatalogPage() {
                 rows={2}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="meta">Meta (JSON)</Label>
-              <Textarea
-                id="meta"
-                value={formData.meta}
-                onChange={(e) =>
-                  setFormData({ ...formData, meta: e.target.value })
-                }
-                placeholder='{"key": "value"}'
-                rows={3}
-                className="font-mono text-sm"
-              />
-            </div>
+
+            {/* Program-specific fields */}
+            {formData.type === "program" && (
+              <>
+                <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
+                  <p className="text-sm font-medium text-blue-900 mb-3">
+                    Dastur ma'lumotlari (Jami mahalliy)
+                  </p>
+
+                  <div className="space-y-3">
+                    {/* Level */}
+                    <div className="space-y-2">
+                      <Label htmlFor="programLevel">Darajasi (Level) *</Label>
+                      <Select
+                        value={formData.programLevel}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, programLevel: value })
+                        }
+                      >
+                        <SelectTrigger id="programLevel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bachelor">
+                            Bachelor (Bakalavr)
+                          </SelectItem>
+                          <SelectItem value="master">Master</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Track */}
+                    <div className="space-y-2">
+                      <Label htmlFor="programTrack">Tarmoq (Track) *</Label>
+                      <Select
+                        value={formData.programTrack}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, programTrack: value })
+                        }
+                      >
+                        <SelectTrigger id="programTrack">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="italian">
+                            Italian (Italyan)
+                          </SelectItem>
+                          <SelectItem value="uzbek">Uzbek (O'zbek)</SelectItem>
+                          <SelectItem value="n/a">N/A</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Language */}
+                    <div className="space-y-2">
+                      <Label htmlFor="programLanguage">
+                        O'quv tili (Language) *
+                      </Label>
+                      <Input
+                        id="programLanguage"
+                        value={formData.programLanguage}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            programLanguage: e.target.value,
+                          })
+                        }
+                        placeholder="Masalan: English, O'zbekcha"
+                      />
+                    </div>
+
+                    {/* Duration */}
+                    <div className="space-y-2">
+                      <Label htmlFor="programDurationYears">
+                        O'quv muddati (yillar) *
+                      </Label>
+                      <Input
+                        id="programDurationYears"
+                        type="number"
+                        min="1"
+                        value={formData.programDurationYears}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            programDurationYears: e.target.value,
+                          })
+                        }
+                        placeholder="Masalan: 4"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Generic JSON metadata for non-program types */}
+            {formData.type !== "program" && (
+              <div className="space-y-2">
+                <Label htmlFor="meta">Meta (JSON) - Ixtiyoriy</Label>
+                <Textarea
+                  id="meta"
+                  value={formData.meta}
+                  onChange={(e) =>
+                    setFormData({ ...formData, meta: e.target.value })
+                  }
+                  placeholder='{"key": "value"}'
+                  rows={3}
+                  className="font-mono text-sm"
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setCreateDialogOpen(false)}
+              onClick={() => {
+                setCreateDialogOpen(false);
+                resetForm(activeTab);
+              }}
             >
               Bekor qilish
             </Button>
@@ -494,7 +769,7 @@ export default function CatalogPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Tahrirlash</DialogTitle>
             <DialogDescription>
@@ -502,6 +777,7 @@ export default function CatalogPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Uzbek Name - Required */}
             <div className="space-y-2">
               <Label htmlFor="edit-name_uz">🇺🇿 O&apos;zbekcha nomi *</Label>
               <Input
@@ -513,6 +789,8 @@ export default function CatalogPage() {
                 placeholder="O'zbekcha nomini kiriting"
               />
             </div>
+
+            {/* Russian Name */}
             <div className="space-y-2">
               <Label htmlFor="edit-name_ru">🇷🇺 Ruscha nomi</Label>
               <Input
@@ -524,6 +802,8 @@ export default function CatalogPage() {
                 placeholder="Русское название"
               />
             </div>
+
+            {/* English Name */}
             <div className="space-y-2">
               <Label htmlFor="edit-name_en">🇬🇧 Inglizcha nomi</Label>
               <Input
@@ -535,6 +815,21 @@ export default function CatalogPage() {
                 placeholder="English name"
               />
             </div>
+
+            {/* Code */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-code">Kod</Label>
+              <Input
+                id="edit-code"
+                value={formData.code}
+                onChange={(e) =>
+                  setFormData({ ...formData, code: e.target.value })
+                }
+                placeholder="Elementin kodi"
+              />
+            </div>
+
+            {/* Description */}
             <div className="space-y-2">
               <Label htmlFor="edit-description">Tavsif</Label>
               <Textarea
@@ -547,19 +842,121 @@ export default function CatalogPage() {
                 rows={2}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-meta">Meta (JSON)</Label>
-              <Textarea
-                id="edit-meta"
-                value={formData.meta}
-                onChange={(e) =>
-                  setFormData({ ...formData, meta: e.target.value })
-                }
-                placeholder='{"key": "value"}'
-                rows={3}
-                className="font-mono text-sm"
-              />
-            </div>
+
+            {/* Program-specific fields */}
+            {formData.type === "program" && (
+              <>
+                <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
+                  <p className="text-sm font-medium text-blue-900 mb-3">
+                    Dastur ma'lumotlari
+                  </p>
+
+                  <div className="space-y-3">
+                    {/* Level */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-programLevel">
+                        Darajasi (Level) *
+                      </Label>
+                      <Select
+                        value={formData.programLevel}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, programLevel: value })
+                        }
+                      >
+                        <SelectTrigger id="edit-programLevel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bachelor">
+                            Bachelor (Bakalavr)
+                          </SelectItem>
+                          <SelectItem value="master">Master</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Track */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-programTrack">
+                        Tarmoq (Track) *
+                      </Label>
+                      <Select
+                        value={formData.programTrack}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, programTrack: value })
+                        }
+                      >
+                        <SelectTrigger id="edit-programTrack">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="italian">
+                            Italian (Italyan)
+                          </SelectItem>
+                          <SelectItem value="uzbek">Uzbek (O'zbek)</SelectItem>
+                          <SelectItem value="n/a">N/A</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Language */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-programLanguage">
+                        O'quv tili (Language) *
+                      </Label>
+                      <Input
+                        id="edit-programLanguage"
+                        value={formData.programLanguage}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            programLanguage: e.target.value,
+                          })
+                        }
+                        placeholder="Masalan: English, O'zbekcha"
+                      />
+                    </div>
+
+                    {/* Duration */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-programDurationYears">
+                        O'quv muddati (yillar) *
+                      </Label>
+                      <Input
+                        id="edit-programDurationYears"
+                        type="number"
+                        min="1"
+                        value={formData.programDurationYears}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            programDurationYears: e.target.value,
+                          })
+                        }
+                        placeholder="Masalan: 4"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Generic JSON metadata for non-program types */}
+            {formData.type !== "program" && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-meta">Meta (JSON)</Label>
+                <Textarea
+                  id="edit-meta"
+                  value={formData.meta}
+                  onChange={(e) =>
+                    setFormData({ ...formData, meta: e.target.value })
+                  }
+                  placeholder='{"key": "value"}'
+                  rows={3}
+                  className="font-mono text-sm"
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
