@@ -309,15 +309,12 @@ async def set_company(message: Message, state: FSMContext):
 
 @router.message(SurveyState.waiting_role)
 async def set_role(message: Message, state: FSMContext):
-    """Save role and complete the survey with thanks."""
+    """Save role and ask for suggestions."""
+    data = await state.get_data()
+    lang = data.get("language", "uz")
     await state.update_data(role=message.text.strip() if message.text else "")
-    # Delete previous messages before final submit
-    await _delete_previous_messages(message.chat.id, state, message.bot)
-    try:
-        await message.delete()
-    except Exception:
-        pass
-    await _final_submit(message, state)
+    await state.set_state(SurveyState.waiting_suggestions)
+    await _send_and_save(message, get_text("ask_suggestions", lang), state, reply_markup=NO_KB)
 
 
 # ==================== BRANCH B: Not Employed -> Help -> Share -> Channels -> Thanks ====================
@@ -341,8 +338,10 @@ async def pick_help(call: CallbackQuery, state: FSMContext):
         sent = await call.bot.send_message(call.message.chat.id, get_text("ask_share", lang), reply_markup=yes_no_keyboard("share", lang))
         await state.update_data(last_bot_message_id=sent.message_id)
     else:
-        # If doesn't want help -> just say thanks
-        await _final_submit(call.message, state)
+        # If doesn't want help -> ask for suggestions
+        await state.set_state(SurveyState.waiting_suggestions)
+        sent = await call.bot.send_message(call.message.chat.id, get_text("ask_suggestions", lang), reply_markup=NO_KB)
+        await state.update_data(last_bot_message_id=sent.message_id)
     await call.answer()
 
 
@@ -363,9 +362,25 @@ async def pick_share(call: CallbackQuery, state: FSMContext):
     # Show channels to subscribe
     await call.bot.send_message(call.message.chat.id, get_text("channels", lang), reply_markup=channels_keyboard())
     
-    # Complete the survey
-    await _final_submit(call.message, state, show_thanks_only=True)
+    # Ask for suggestions
+    await state.set_state(SurveyState.waiting_suggestions)
+    sent = await call.bot.send_message(call.message.chat.id, get_text("ask_suggestions", lang), reply_markup=NO_KB)
+    await state.update_data(last_bot_message_id=sent.message_id)
     await call.answer()
+
+
+# ==================== Suggestions -> Final Submission ====================
+@router.message(SurveyState.waiting_suggestions)
+async def set_suggestions(message: Message, state: FSMContext):
+    """Save suggestions and complete the survey."""
+    await state.update_data(suggestions=message.text.strip() if message.text else "")
+    # Delete previous messages before final submit
+    await _delete_previous_messages(message.chat.id, state, message.bot)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    await _final_submit(message, state)
 
 
 # ==================== Final Submission ====================
@@ -399,6 +414,7 @@ async def _final_submit(message: Message, state: FSMContext, show_thanks_only: b
         "employment_status": "employed" if data.get("employed") else "unemployed",
         "employment_company": data.get("company", ""),
         "employment_role": data.get("role", ""),
+        "suggestions": data.get("suggestions", ""),
         "consents": {
             "share_with_employers": data.get("share_consent", False),
             "want_help": data.get("want_help", False),

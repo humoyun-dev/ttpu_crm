@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 
@@ -33,7 +39,10 @@ export default function ApplicationDetailPage() {
         if (active) setError("Noto'g'ri bo'lim");
         return;
       }
-      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("access_token")
+          : null;
       setLoading(true);
       setError(null);
       try {
@@ -55,7 +64,8 @@ export default function ApplicationDetailPage() {
         const body = await res.json();
         if (active) setData(body as DetailData);
       } catch (err: unknown) {
-        if (active) setError(err instanceof Error ? err.message : "Yuklab bo'lmadi");
+        if (active)
+          setError(err instanceof Error ? err.message : "Yuklab bo'lmadi");
       } finally {
         if (active) setLoading(false);
       }
@@ -70,8 +80,10 @@ export default function ApplicationDetailPage() {
     <main className="min-h-screen bg-background px-8 py-10 text-foreground">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Ariza detali</p>
-          <h1 className="text-2xl font-semibold text-white">
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Ariza detali
+          </p>
+          <h1 className="text-2xl font-semibold text-foreground">
             {type} / {id}
           </h1>
         </div>
@@ -83,27 +95,36 @@ export default function ApplicationDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle>ID: {id}</CardTitle>
-          <CardDescription>Serverdan yuklangan batafsil ma&apos;lumotlar.</CardDescription>
+          <CardDescription>
+            Serverdan yuklangan batafsil ma&apos;lumotlar.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Separator className="mb-6" />
           {loading && (
-            <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+            <div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
               Yuklanmoqda...
             </div>
           )}
           {error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-100">
               {error}
             </div>
           )}
           {!loading && !error && data && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {Object.entries(data).map(([key, value]) => (
-                <div key={key} className="rounded-lg border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">{key}</p>
-                  <p className="break-all text-sm text-slate-100">
-                    {typeof value === "object" ? JSON.stringify(value) : String(value ?? "-")}
+                <div
+                  key={key}
+                  className="rounded-lg border border-border bg-muted/50 p-4"
+                >
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {key}
+                  </p>
+                  <p className="break-all text-sm text-foreground">
+                    {typeof value === "object"
+                      ? JSON.stringify(value)
+                      : String(value ?? "-")}
                   </p>
                 </div>
               ))}

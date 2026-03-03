@@ -541,6 +541,12 @@ export const bot2Api = {
   getSurvey: (id: string) =>
     apiFetch<Bot2SurveyResponse>(`/api/v1/bot2/surveys/${id}/`),
 
+  updateSurvey: (id: string, data: Partial<Bot2SurveyResponse>) =>
+    apiFetch<Bot2SurveyResponse>(`/api/v1/bot2/surveys/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
   listStudents: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<Bot2Student>>(
@@ -549,6 +555,12 @@ export const bot2Api = {
   },
   getStudent: (id: string) =>
     apiFetch<Bot2Student>(`/api/v1/bot2/students/${id}/`),
+
+  updateStudent: (id: string, data: Partial<Bot2Student>) =>
+    apiFetch<Bot2Student>(`/api/v1/bot2/students/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 
   // Student Roster CRUD
   listRoster: (params?: Record<string, string>) => {
