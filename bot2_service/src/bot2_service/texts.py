@@ -22,6 +22,7 @@ PROMPTS = {
         "ask_help": "Universitet sizga ish topishda yordam bersinmi?",
         "ask_share": "Ma'lumotlaringizni ish beruvchilarga ulashishni istaysizmi?",
         "channels": "Quyidagi kanallarga a'zo bo'ling va xabardor bo'ling:",
+        "ask_suggestions": "Universitet faoliyatini takomillashtirish bo'yicha takliflaringiz:",
         "thanks": "Rahmat! Ma'lumotlaringiz qabul qilindi. ✅",
     },
     # Russian
@@ -47,6 +48,7 @@ PROMPTS = {
         "ask_help": "Хотите, чтобы университет помог вам найти работу?",
         "ask_share": "Хотите ли вы поделиться своими данными с работодателями?",
         "channels": "Подпишитесь на следующие каналы, чтобы быть в курсе:",
+        "ask_suggestions": "Ваши предложения по улучшению деятельности университета:",
         "thanks": "Спасибо! Ваши данные приняты. ✅",
     },
     # English
@@ -72,6 +74,7 @@ PROMPTS = {
         "ask_help": "Would you like the university to help you find a job?",
         "ask_share": "Would you like to share your information with employers?",
         "channels": "Join the following channels to stay informed:",
+        "ask_suggestions": "Your suggestions for improving university activities:",
         "thanks": "Thank you! Your information has been received. ✅",
     },
 }

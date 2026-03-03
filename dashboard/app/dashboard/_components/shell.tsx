@@ -12,7 +12,13 @@ import {
   BookOpenCheck,
   Users,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 
@@ -42,12 +48,30 @@ type ApiItem = {
   [key: string]: unknown;
 };
 
-const sidebarMain: { id: MainSection; label: string; icon: IconType; href: string }[] = [
-  { id: "applications", label: "Arizalar", icon: ClipboardList, href: "/dashboard/applications" },
-  { id: "analytics", label: "Analitika", icon: BarChart3, href: "/dashboard/analytics" },
+const sidebarMain: {
+  id: MainSection;
+  label: string;
+  icon: IconType;
+  href: string;
+}[] = [
+  {
+    id: "applications",
+    label: "Arizalar",
+    icon: ClipboardList,
+    href: "/dashboard/applications",
+  },
+  {
+    id: "analytics",
+    label: "Analitika",
+    icon: BarChart3,
+    href: "/dashboard/analytics",
+  },
 ];
 
-const sidebarSecondary: Record<MainSection, { id: SubSection; label: string; icon: IconType }[]> = {
+const sidebarSecondary: Record<
+  MainSection,
+  { id: SubSection; label: string; icon: IconType }[]
+> = {
   applications: [
     { id: "admissions", label: "Qabul 2026", icon: GraduationCap },
     { id: "campus", label: "Campus Tour", icon: Building2 },
@@ -81,7 +105,7 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
   const router = useRouter();
   const [main] = useState<MainSection>(initialMain);
   const [sub, setSub] = useState<SubSection>(
-    initialMain === "applications" ? "admissions" : "analytics_admissions"
+    initialMain === "applications" ? "admissions" : "analytics_admissions",
   );
   const [items, setItems] = useState<ApiItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -90,7 +114,10 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
 
   // Simple auth guard based on localStorage token
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("access_token")
+        : null;
     if (!token) router.push("/");
   }, [router]);
 
@@ -107,7 +134,10 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
         setItems([]);
         return;
       }
-      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("access_token")
+          : null;
       const endpoint = endpointMap[sub];
       if (!endpoint) return;
       setLoading(true);
@@ -129,10 +159,11 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
           throw new Error(body?.error?.message || res.statusText);
         }
         const data = await res.json();
-        const results = Array.isArray(data) ? data : data.results ?? [];
+        const results = Array.isArray(data) ? data : (data.results ?? []);
         if (active) setItems(results as ApiItem[]);
       } catch (err: unknown) {
-        if (active) setError(err instanceof Error ? err.message : "Yuklab bo'lmadi");
+        if (active)
+          setError(err instanceof Error ? err.message : "Yuklab bo'lmadi");
       } finally {
         if (active) setLoading(false);
       }
@@ -153,8 +184,8 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
       typeof item.status === "string"
         ? item.status
         : typeof item.answers?.status === "string"
-        ? item.answers.status
-        : "-";
+          ? item.answers.status
+          : "-";
     const status = rawStatus || "-";
     const created = (item.submitted_at || item.created_at || "-") as string;
     const applicant = (item.applicant || item.student || "-") as string;
@@ -166,12 +197,12 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
             router.push(`/dashboard/applications/${sub}/${item.id}`);
           }
         }}
-        className="grid grid-cols-4 items-center gap-4 rounded-lg border border-white/5 bg-white/5 px-4 py-3 text-left text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/10"
+        className="grid grid-cols-4 items-center gap-4 rounded-lg border border-border bg-muted/50 px-4 py-3 text-left text-sm text-foreground transition hover:border-border hover:bg-muted"
       >
         <div className="truncate font-medium">{item.id}</div>
-        <div className="text-slate-300">{status}</div>
-        <div className="text-slate-400">{created}</div>
-        <div className="text-slate-400">{applicant}</div>
+        <div className="text-muted-foreground">{status}</div>
+        <div className="text-muted-foreground">{created}</div>
+        <div className="text-muted-foreground">{applicant}</div>
       </button>
     );
   };
@@ -185,8 +216,10 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
             <LayoutDashboard className="h-6 w-6 text-indigo-300" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-400">TTPU CRM</p>
-            <p className="text-base font-semibold text-white">Dashboard</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+              TTPU CRM
+            </p>
+            <p className="text-base font-semibold text-foreground">Dashboard</p>
           </div>
         </div>
 
@@ -200,8 +233,8 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
                 onClick={() => handleMainSwitch(item.id)}
                 className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
                   active
-                    ? "bg-indigo-500/20 text-white ring-1 ring-indigo-400/50"
-                    : "text-slate-200 hover:bg-white/5"
+                    ? "bg-primary/20 text-primary ring-1 ring-primary/50"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -214,7 +247,7 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
 
       {/* Secondary sidebar */}
       <aside className="border-r bg-muted/30 px-5 py-8">
-        <p className="mb-4 text-xs uppercase tracking-[0.2em] text-slate-400">
+        <p className="mb-4 text-xs uppercase tracking-[0.2em] text-muted-foreground">
           {main === "applications" ? "Arizalar" : "Analitika"}
         </p>
         <div className="space-y-2">
@@ -227,8 +260,8 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
                 onClick={() => setSub(item.id)}
                 className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
                   active
-                    ? "bg-white/10 text-white ring-1 ring-white/15"
-                    : "text-slate-200 hover:bg-white/5"
+                    ? "bg-muted text-foreground ring-1 ring-border"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -243,12 +276,14 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
       <main className="px-10 py-10">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
               {main === "applications" ? "Bo'lim" : "Analitika"}
             </p>
-            <h1 className="text-2xl font-semibold text-white">{pageTitle}</h1>
+            <h1 className="text-2xl font-semibold text-foreground">
+              {pageTitle}
+            </h1>
           </div>
-          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+          <div className="rounded-full border border-border bg-muted/50 px-3 py-1 text-xs text-muted-foreground">
             Beta
           </div>
         </div>
@@ -265,12 +300,12 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
           <CardContent>
             <Separator className="mb-6" />
             {sub.startsWith("analytics") ? (
-              <div className="rounded-xl border border-dashed border-white/10 bg-white/5 p-6 text-sm text-slate-300">
+              <div className="rounded-xl border border-dashed border-border bg-muted/50 p-6 text-sm text-muted-foreground">
                 Analitika bo‘limi tez orada ulab qo‘yiladi.
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs text-slate-400">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>ID / Status / Sana / Foydalanuvchi</span>
                   <div className="flex items-center gap-2">
                     <Button
@@ -284,16 +319,16 @@ export function DashboardShell({ initialMain }: { initialMain: MainSection }) {
                   </div>
                 </div>
                 {error && (
-                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-100">
                     {error}
                   </div>
                 )}
                 {loading ? (
-                  <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                  <div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
                     Yuklanmoqda...
                   </div>
                 ) : items.length === 0 ? (
-                  <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+                  <div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
                     Hozircha ma&apos;lumot yo&apos;q.
                   </div>
                 ) : (

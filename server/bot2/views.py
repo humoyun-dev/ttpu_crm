@@ -71,7 +71,7 @@ class Bot2StudentRosterViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-class Bot2StudentViewSet(viewsets.ReadOnlyModelViewSet):
+class Bot2StudentViewSet(viewsets.ModelViewSet):
     queryset = Bot2Student.objects.select_related("roster", "region")
     serializer_class = None
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
@@ -86,7 +86,7 @@ class Bot2StudentViewSet(viewsets.ReadOnlyModelViewSet):
         return Bot2StudentSerializer
 
 
-class Bot2SurveyResponseViewSet(viewsets.ReadOnlyModelViewSet):
+class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
     queryset = Bot2SurveyResponse.objects.select_related("student", "roster", "program")
     serializer_class = None
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]

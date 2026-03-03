@@ -4,11 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  ClipboardList,
-  GraduationCap,
-  Building2,
-  FlaskConical,
-  BookOpenCheck,
   Users,
   FolderTree,
   LogOut,
@@ -42,33 +37,6 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   {
-    title: "Arizalar",
-    href: "/dashboard/applications",
-    icon: ClipboardList,
-    children: [
-      {
-        title: "Qabul 2026",
-        href: "/dashboard/applications/admissions",
-        icon: GraduationCap,
-      },
-      {
-        title: "Campus Tour",
-        href: "/dashboard/applications/campus",
-        icon: Building2,
-      },
-      {
-        title: "Polito Academy",
-        href: "/dashboard/applications/polito",
-        icon: FlaskConical,
-      },
-      {
-        title: "Foundation Year",
-        href: "/dashboard/applications/foundation",
-        icon: BookOpenCheck,
-      },
-    ],
-  },
-  {
     title: "So'rovnomalar",
     href: "/dashboard/surveys",
     icon: Users,
@@ -84,34 +52,9 @@ const navigation: NavItem[] = [
     icon: BarChart3,
     children: [
       {
-        title: "Qabul 2026",
-        href: "/dashboard/analytics/admissions",
-        icon: GraduationCap,
-      },
-      {
-        title: "Campus Tour",
-        href: "/dashboard/analytics/campus",
-        icon: Building2,
-      },
-      {
-        title: "Polito Academy",
-        href: "/dashboard/analytics/polito",
-        icon: FlaskConical,
-      },
-      {
-        title: "Foundation Year",
-        href: "/dashboard/analytics/foundation",
-        icon: BookOpenCheck,
-      },
-      {
         title: "So'rovnoma",
         href: "/dashboard/analytics/surveys",
         icon: Users,
-      },
-      {
-        title: "Talabalar soni",
-        href: "/dashboard/analytics/enrollments",
-        icon: BarChart3,
       },
     ],
   },
@@ -141,7 +84,7 @@ function NavLink({
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
         isActive
           ? "bg-primary/10 text-primary"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
@@ -202,7 +145,7 @@ function SidebarContent() {
                         "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                         isChildActive
                           ? "bg-primary/10 text-primary font-medium"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
                       <ChildIcon className="h-3.5 w-3.5" />

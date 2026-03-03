@@ -17,3 +17,4 @@ class SurveyState(StatesGroup):
     waiting_help = State()
     waiting_share_consent = State()
     waiting_channels = State()
+    waiting_suggestions = State()
