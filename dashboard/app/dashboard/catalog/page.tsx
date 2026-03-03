@@ -79,13 +79,6 @@ interface CatalogFormData {
   name_uz: string;
   name_ru: string;
   name_en: string;
-  description: string;
-  code: string;
-  // Program metadata
-  programLevel: string;
-  programTrack: string;
-  programLanguage: string;
-  programDurationYears: string;
   // Generic metadata
   meta: string;
 }
@@ -108,12 +101,6 @@ export default function CatalogPage() {
     name_uz: "",
     name_ru: "",
     name_en: "",
-    description: "",
-    code: "",
-    programLevel: "bachelor",
-    programTrack: "italian",
-    programLanguage: "English",
-    programDurationYears: "4",
     meta: "{}",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -162,12 +149,6 @@ export default function CatalogPage() {
       name_uz: "",
       name_ru: "",
       name_en: "",
-      description: "",
-      code: "",
-      programLevel: "bachelor",
-      programTrack: "italian",
-      programLanguage: "English",
-      programDurationYears: "4",
       meta: "{}",
     });
     setSelectedItem(null);
@@ -183,52 +164,14 @@ export default function CatalogPage() {
     try {
       let metadata: Record<string, unknown> = {};
 
-      // Build metadata based on type
-      if (formData.type === "program") {
-        if (!formData.programLevel.trim()) {
-          toast.error("Dastur darajasi (level) kiritilishi shart");
+      // Build metadata from JSON meta field
+      if (formData.meta.trim() && formData.meta.trim() !== "{}") {
+        try {
+          metadata = JSON.parse(formData.meta);
+        } catch {
+          toast.error("Meta JSON noto'g'ri formatida");
           setSubmitting(false);
           return;
-        }
-        if (!formData.programTrack.trim()) {
-          toast.error("Tarmoq (track) kiritilishi shart");
-          setSubmitting(false);
-          return;
-        }
-        if (!formData.programLanguage.trim()) {
-          toast.error("Til (language) kiritilishi shart");
-          setSubmitting(false);
-          return;
-        }
-        if (!formData.programDurationYears.trim()) {
-          toast.error("O'quv muddati (duration_years) kiritilishi shart");
-          setSubmitting(false);
-          return;
-        }
-
-        const durationYears = parseInt(formData.programDurationYears, 10);
-        if (isNaN(durationYears) || durationYears <= 0) {
-          toast.error("O'quv muddati musbat butun son bo'lishi kerak");
-          setSubmitting(false);
-          return;
-        }
-
-        metadata = {
-          level: formData.programLevel,
-          track: formData.programTrack,
-          language: formData.programLanguage,
-          duration_years: durationYears,
-        };
-      } else {
-        // For non-program types, parse JSON metadata if provided
-        if (formData.meta.trim() && formData.meta.trim() !== "{}") {
-          try {
-            metadata = JSON.parse(formData.meta);
-          } catch {
-            toast.error("Meta JSON noto'g'ri formatida");
-            setSubmitting(false);
-            return;
-          }
         }
       }
 
@@ -238,8 +181,6 @@ export default function CatalogPage() {
         name_uz: formData.name_uz,
         name_ru: formData.name_ru,
         name_en: formData.name_en,
-        description: formData.description,
-        code: formData.code || undefined,
         meta: metadata,
       } as any);
 
@@ -267,52 +208,14 @@ export default function CatalogPage() {
     try {
       let metadata: Record<string, unknown> = {};
 
-      // Build metadata based on type
-      if (formData.type === "program") {
-        if (!formData.programLevel.trim()) {
-          toast.error("Dastur darajasi (level) kiritilishi shart");
+      // Build metadata from JSON meta field
+      if (formData.meta.trim() && formData.meta.trim() !== "{}") {
+        try {
+          metadata = JSON.parse(formData.meta);
+        } catch {
+          toast.error("Meta JSON noto'g'ri formatida");
           setSubmitting(false);
           return;
-        }
-        if (!formData.programTrack.trim()) {
-          toast.error("Tarmoq (track) kiritilishi shart");
-          setSubmitting(false);
-          return;
-        }
-        if (!formData.programLanguage.trim()) {
-          toast.error("Til (language) kiritilishi shart");
-          setSubmitting(false);
-          return;
-        }
-        if (!formData.programDurationYears.trim()) {
-          toast.error("O'quv muddati (duration_years) kiritilishi shart");
-          setSubmitting(false);
-          return;
-        }
-
-        const durationYears = parseInt(formData.programDurationYears, 10);
-        if (isNaN(durationYears) || durationYears <= 0) {
-          toast.error("O'quv muddati musbat butun son bo'lishi kerak");
-          setSubmitting(false);
-          return;
-        }
-
-        metadata = {
-          level: formData.programLevel,
-          track: formData.programTrack,
-          language: formData.programLanguage,
-          duration_years: durationYears,
-        };
-      } else {
-        // For non-program types, parse JSON metadata if provided
-        if (formData.meta.trim() && formData.meta.trim() !== "{}") {
-          try {
-            metadata = JSON.parse(formData.meta);
-          } catch {
-            toast.error("Meta JSON noto'g'ri formatida");
-            setSubmitting(false);
-            return;
-          }
         }
       }
 
@@ -321,7 +224,6 @@ export default function CatalogPage() {
         name_uz: formData.name_uz,
         name_ru: formData.name_ru,
         name_en: formData.name_en,
-        description: formData.description,
         meta: metadata,
       });
 
@@ -361,31 +263,12 @@ export default function CatalogPage() {
   const openEditDialog = (item: CatalogItem) => {
     setSelectedItem(item);
 
-    // Extract program metadata if it's a program
-    let programLevel = "bachelor";
-    let programTrack = "italian";
-    let programLanguage = "English";
-    let programDurationYears = "4";
-
-    if (item.type === "program" && item.metadata) {
-      programLevel = (item.metadata.level as string) || "bachelor";
-      programTrack = (item.metadata.track as string) || "italian";
-      programLanguage = (item.metadata.language as string) || "English";
-      programDurationYears = String(item.metadata.duration_years) || "4";
-    }
-
     setFormData({
       type: item.type,
       name: item.name || "",
       name_uz: item.name_uz || item.name || "",
       name_ru: item.name_ru || "",
       name_en: item.name_en || "",
-      description: item.description || "",
-      code: item.code || "",
-      programLevel,
-      programTrack,
-      programLanguage,
-      programDurationYears,
       meta: JSON.stringify(item.metadata || {}, null, 2),
     });
     setEditDialogOpen(true);
@@ -612,128 +495,7 @@ export default function CatalogPage() {
               />
             </div>
 
-            {/* Code (optional) */}
-            <div className="space-y-2">
-              <Label htmlFor="code">Kod (Ixtiyoriy)</Label>
-              <Input
-                id="code"
-                value={formData.code}
-                onChange={(e) =>
-                  setFormData({ ...formData, code: e.target.value })
-                }
-                placeholder="Elementin kodi"
-              />
-            </div>
-
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="description">Tavsif</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                placeholder="Tavsifni kiriting"
-                rows={2}
-              />
-            </div>
-
-            {/* Program-specific fields */}
-            {formData.type === "program" && (
-              <>
-                <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
-                  <p className="text-sm font-medium text-blue-900 mb-3">
-                    Dastur ma'lumotlari (Jami mahalliy)
-                  </p>
-
-                  <div className="space-y-3">
-                    {/* Level */}
-                    <div className="space-y-2">
-                      <Label htmlFor="programLevel">Darajasi (Level) *</Label>
-                      <Select
-                        value={formData.programLevel}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, programLevel: value })
-                        }
-                      >
-                        <SelectTrigger id="programLevel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bachelor">
-                            Bachelor (Bakalavr)
-                          </SelectItem>
-                          <SelectItem value="master">Master</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Track */}
-                    <div className="space-y-2">
-                      <Label htmlFor="programTrack">Tarmoq (Track) *</Label>
-                      <Select
-                        value={formData.programTrack}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, programTrack: value })
-                        }
-                      >
-                        <SelectTrigger id="programTrack">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="italian">
-                            Italian (Italyan)
-                          </SelectItem>
-                          <SelectItem value="uzbek">Uzbek (O'zbek)</SelectItem>
-                          <SelectItem value="n/a">N/A</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Language */}
-                    <div className="space-y-2">
-                      <Label htmlFor="programLanguage">
-                        O'quv tili (Language) *
-                      </Label>
-                      <Input
-                        id="programLanguage"
-                        value={formData.programLanguage}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            programLanguage: e.target.value,
-                          })
-                        }
-                        placeholder="Masalan: English, O'zbekcha"
-                      />
-                    </div>
-
-                    {/* Duration */}
-                    <div className="space-y-2">
-                      <Label htmlFor="programDurationYears">
-                        O'quv muddati (yillar) *
-                      </Label>
-                      <Input
-                        id="programDurationYears"
-                        type="number"
-                        min="1"
-                        value={formData.programDurationYears}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            programDurationYears: e.target.value,
-                          })
-                        }
-                        placeholder="Masalan: 4"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Generic JSON metadata for non-program types */}
+            {/* Generic JSON metadata */}
             {formData.type !== "program" && (
               <div className="space-y-2">
                 <Label htmlFor="meta">Meta (JSON) - Ixtiyoriy</Label>
@@ -816,132 +578,7 @@ export default function CatalogPage() {
               />
             </div>
 
-            {/* Code */}
-            <div className="space-y-2">
-              <Label htmlFor="edit-code">Kod</Label>
-              <Input
-                id="edit-code"
-                value={formData.code}
-                onChange={(e) =>
-                  setFormData({ ...formData, code: e.target.value })
-                }
-                placeholder="Elementin kodi"
-              />
-            </div>
-
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Tavsif</Label>
-              <Textarea
-                id="edit-description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                placeholder="Tavsifni kiriting"
-                rows={2}
-              />
-            </div>
-
-            {/* Program-specific fields */}
-            {formData.type === "program" && (
-              <>
-                <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
-                  <p className="text-sm font-medium text-blue-900 mb-3">
-                    Dastur ma'lumotlari
-                  </p>
-
-                  <div className="space-y-3">
-                    {/* Level */}
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-programLevel">
-                        Darajasi (Level) *
-                      </Label>
-                      <Select
-                        value={formData.programLevel}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, programLevel: value })
-                        }
-                      >
-                        <SelectTrigger id="edit-programLevel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bachelor">
-                            Bachelor (Bakalavr)
-                          </SelectItem>
-                          <SelectItem value="master">Master</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Track */}
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-programTrack">
-                        Tarmoq (Track) *
-                      </Label>
-                      <Select
-                        value={formData.programTrack}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, programTrack: value })
-                        }
-                      >
-                        <SelectTrigger id="edit-programTrack">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="italian">
-                            Italian (Italyan)
-                          </SelectItem>
-                          <SelectItem value="uzbek">Uzbek (O'zbek)</SelectItem>
-                          <SelectItem value="n/a">N/A</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Language */}
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-programLanguage">
-                        O'quv tili (Language) *
-                      </Label>
-                      <Input
-                        id="edit-programLanguage"
-                        value={formData.programLanguage}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            programLanguage: e.target.value,
-                          })
-                        }
-                        placeholder="Masalan: English, O'zbekcha"
-                      />
-                    </div>
-
-                    {/* Duration */}
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-programDurationYears">
-                        O'quv muddati (yillar) *
-                      </Label>
-                      <Input
-                        id="edit-programDurationYears"
-                        type="number"
-                        min="1"
-                        value={formData.programDurationYears}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            programDurationYears: e.target.value,
-                          })
-                        }
-                        placeholder="Masalan: 4"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Generic JSON metadata for non-program types */}
+            {/* Generic JSON metadata */}
             {formData.type !== "program" && (
               <div className="space-y-2">
                 <Label htmlFor="edit-meta">Meta (JSON)</Label>
