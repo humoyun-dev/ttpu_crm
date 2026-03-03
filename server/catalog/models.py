@@ -1,6 +1,5 @@
 from django.db import models
-from django.db.models import Q, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Q
 
 from common.models import BaseModel
 
@@ -38,17 +37,11 @@ class CatalogItem(BaseModel):
             models.Index(fields=["type", "is_active"]),
         ]
         constraints = [
-            # unique when code is provided
+            # unique when code is provided (non-null)
             models.UniqueConstraint(
                 fields=["type", "code"],
-                condition=~Q(code__isnull=True),
+                condition=~Q(code__isnull=True) & ~Q(code=""),
                 name="catalog_item_type_code_unique_nonnull",
-            ),
-            # treat NULL/blank codes as empty string to avoid accidental duplicates
-            models.UniqueConstraint(
-                "type",
-                Coalesce("code", models.Value("")),
-                name="catalog_item_type_code_unique_with_nulls",
             ),
         ]
 

@@ -40,6 +40,18 @@ class CatalogItemSerializer(serializers.ModelSerializer):
         metadata = attrs.get("metadata") or getattr(self.instance, "metadata", {}) or {}
         if item_type == CatalogItem.ItemType.PROGRAM:
             _validate_program_metadata(metadata)
+
+        # Validate uniqueness of (type, code) when code is provided
+        code = attrs.get("code")
+        if code:  # non-null and non-empty
+            qs = CatalogItem.objects.filter(type=item_type, code=code)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    {"code": f"Bu turdagi element uchun '{code}' kodi allaqachon mavjud."}
+                )
+
         return super().validate(attrs)
 
 
