@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   Eye,
@@ -12,6 +12,8 @@ import {
   Briefcase,
   Phone,
   MapPin,
+  Download,
+  CalendarIcon,
 } from "lucide-react";
 import {
   Table,
@@ -31,25 +33,80 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { GenderBadge } from "@/components/status-badge";
 import { TableLoading } from "@/components/loading";
 import { ErrorDisplay } from "@/components/error-display";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import {
   bot2Api,
   Bot2SurveyResponse,
   Bot2Student,
   formatDate,
 } from "@/lib/api";
-import { formatCourseYearLabel } from "@/lib/utils";
+import { formatCourseYearLabel, cn } from "@/lib/utils";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 const EMPLOYMENT_LABELS: Record<string, string> = {
-  employed: "Ishlamoqda",
-  unemployed: "Ishlamaydi",
-  self_employed: "O'z ishi",
-  student: "Talaba",
-  intern: "Stajer",
-  part_time: "Yarim stavka",
+  employed: "Ha",
+  unemployed: "Yo'q",
 };
+
+const GENDER_LABELS: Record<string, string> = {
+  male: "Erkak",
+  female: "Ayol",
+};
+
+type DatePreset = "all" | "today" | "week" | "month" | "year" | "custom";
+
+function getDateRange(preset: DatePreset): {
+  from: Date | null;
+  to: Date | null;
+} {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  switch (preset) {
+    case "today":
+      return { from: today, to: new Date(today.getTime() + 86400000) };
+    case "week": {
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return { from: weekAgo, to: new Date(today.getTime() + 86400000) };
+    }
+    case "month": {
+      const monthAgo = new Date(today);
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      return { from: monthAgo, to: new Date(today.getTime() + 86400000) };
+    }
+    case "year": {
+      const yearAgo = new Date(today);
+      yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+      return { from: yearAgo, to: new Date(today.getTime() + 86400000) };
+    }
+    default:
+      return { from: null, to: null };
+  }
+}
+
+function formatLocalDate(d: Date | null): string {
+  if (!d) return "";
+  return d.toLocaleDateString("uz-UZ", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
 
 export default function SurveysPage() {
   const [surveys, setSurveys] = useState<Bot2SurveyResponse[]>([]);
@@ -57,6 +114,12 @@ export default function SurveysPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  // Date range export
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [customFrom, setCustomFrom] = useState<Date | undefined>();
+  const [customTo, setCustomTo] = useState<Date | undefined>();
+  const [exporting, setExporting] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -106,7 +169,112 @@ export default function SurveysPage() {
     );
   });
 
+  /* ── date-filtered surveys for export ── */
+  const exportSurveys = useMemo(() => {
+    let range: { from: Date | null; to: Date | null };
+    if (datePreset === "custom") {
+      range = {
+        from: customFrom ?? null,
+        to: customTo ? new Date(customTo.getTime() + 86400000) : null,
+      };
+    } else {
+      range = getDateRange(datePreset);
+    }
+
+    return filteredSurveys.filter((s) => {
+      if (!range.from && !range.to) return true;
+      const d = new Date(s.submitted_at || s.created_at);
+      if (range.from && d < range.from) return false;
+      if (range.to && d >= range.to) return false;
+      return true;
+    });
+  }, [filteredSurveys, datePreset, customFrom, customTo]);
+
   const campaigns = [...new Set(surveys.map((s) => s.survey_campaign))];
+
+  /* ── export to Excel ── */
+  const handleExport = () => {
+    if (exportSurveys.length === 0) {
+      toast.error("Eksport qilish uchun ma'lumot topilmadi");
+      return;
+    }
+    setExporting(true);
+    try {
+      const rows = exportSurveys.map((survey) => {
+        const student = survey.student_details || students[survey.student];
+        const consents = (survey.consents as Record<string, boolean>) || {};
+        const regionName =
+          student?.region_details?.name_uz ||
+          student?.region_details?.name ||
+          "";
+        const programName =
+          survey.program_details?.name_uz || survey.program_details?.name || "";
+
+        return {
+          Ism: student?.first_name || "",
+          Familiya: student?.last_name || "",
+          "Student ID": student?.student_external_id || "",
+          Telefon: student?.phone || "",
+          Jins: GENDER_LABELS[student?.gender || ""] || student?.gender || "",
+          Viloyat: regionName,
+          "Telegram username": student?.username || "",
+          "Telegram ID": student?.telegram_user_id || "",
+          "Yo'nalish": programName,
+          Kurs:
+            survey.course_year === 5
+              ? "Bitirgan"
+              : survey.course_year
+                ? `${survey.course_year}-kurs`
+                : "",
+          "Ishlaysizmi?":
+            EMPLOYMENT_LABELS[survey.employment_status] ||
+            survey.employment_status ||
+            "",
+          Kompaniya: survey.employment_company || "",
+          Lavozim: survey.employment_role || "",
+          "Yordam kerakmi?": consents.want_help ? "Ha" : "Yo'q",
+          "Ma'lumot ulashish": consents.share_with_employers ? "Ha" : "Yo'q",
+          Takliflar: survey.suggestions || "",
+          Kampaniya: survey.survey_campaign || "",
+          Sana: formatDate(survey.submitted_at || survey.created_at, true),
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+
+      /* auto-width columns */
+      const colKeys = Object.keys(rows[0] || {});
+      ws["!cols"] = colKeys.map((key) => {
+        const maxLen = Math.max(
+          key.length,
+          ...rows.map(
+            (r) => String((r as Record<string, unknown>)[key] ?? "").length,
+          ),
+        );
+        return { wch: Math.min(maxLen + 2, 50) };
+      });
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "So'rovnomalar");
+
+      const presetLabels: Record<string, string> = {
+        all: "barchasi",
+        today: "bugun",
+        week: "haftalik",
+        month: "oylik",
+        year: "yillik",
+        custom: "maxsus",
+      };
+      const fileName = `sorovnomalar_${presetLabels[datePreset]}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      toast.success(`${exportSurveys.length} ta yozuv eksport qilindi`);
+    } catch (err) {
+      toast.error("Eksport qilishda xatolik yuz berdi");
+      console.error(err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -170,6 +338,108 @@ export default function SurveysPage() {
         </Card>
       </div>
 
+      {/* Export section */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Excel eksport</CardTitle>
+          <CardDescription>
+            Vaqt oralig&apos;ini tanlang va ma&apos;lumotlarni yuklab oling
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">
+                Vaqt oralig&apos;i
+              </label>
+              <Select
+                value={datePreset}
+                onValueChange={(v) => setDatePreset(v as DatePreset)}
+              >
+                <SelectTrigger className="w-44 h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Barchasi</SelectItem>
+                  <SelectItem value="today">Bugun</SelectItem>
+                  <SelectItem value="week">Haftalik</SelectItem>
+                  <SelectItem value="month">Oylik</SelectItem>
+                  <SelectItem value="year">Yillik</SelectItem>
+                  <SelectItem value="custom">Maxsus oraliq</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {datePreset === "custom" && (
+              <>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Dan</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-40 h-9 justify-start text-left font-normal",
+                          !customFrom && "text-muted-foreground",
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {customFrom ? formatLocalDate(customFrom) : "Sana"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={customFrom}
+                        onSelect={setCustomFrom}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Gacha</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-40 h-9 justify-start text-left font-normal",
+                          !customTo && "text-muted-foreground",
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {customTo ? formatLocalDate(customTo) : "Sana"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={customTo}
+                        onSelect={setCustomTo}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </>
+            )}
+
+            <Button
+              onClick={handleExport}
+              disabled={exporting || exportSurveys.length === 0}
+              size="sm"
+              className="h-9"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {exporting
+                ? "Yuklanmoqda..."
+                : `Eksport (${exportSurveys.length})`}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -205,20 +475,21 @@ export default function SurveysPage() {
                     <TableHead>Viloyat</TableHead>
                     <TableHead>Yo&apos;nalish</TableHead>
                     <TableHead>Kurs</TableHead>
-                    <TableHead>Ish holati</TableHead>
+                    <TableHead>Ishlaysizmi?</TableHead>
                     <TableHead>Kompaniya</TableHead>
                     <TableHead>Lavozim</TableHead>
+                    <TableHead>Yordam</TableHead>
                     <TableHead>Kampaniya</TableHead>
                     <TableHead>Takliflar</TableHead>
                     <TableHead>Sana</TableHead>
-                    <TableHead className="w-[100px]">Amal</TableHead>
+                    <TableHead className="w-24">Amal</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredSurveys.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={14}
+                        colSpan={15}
                         className="text-center text-muted-foreground"
                       >
                         Ma&apos;lumot topilmadi
@@ -235,6 +506,8 @@ export default function SurveysPage() {
                         survey.program_details?.name_uz ||
                         survey.program_details?.name ||
                         "-";
+                      const consents =
+                        (survey.consents as Record<string, boolean>) || {};
 
                       return (
                         <TableRow key={survey.id}>
@@ -258,10 +531,10 @@ export default function SurveysPage() {
                               "-"
                             )}
                           </TableCell>
-                          <TableCell>
-                            <GenderBadge
-                              gender={student?.gender || "unspecified"}
-                            />
+                          <TableCell className="text-xs">
+                            {GENDER_LABELS[student?.gender || ""] ||
+                              student?.gender ||
+                              "-"}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             {regionName !== "-" ? (
@@ -288,7 +561,6 @@ export default function SurveysPage() {
                               }
                               className="text-xs whitespace-nowrap"
                             >
-                              <Briefcase className="h-3 w-3 mr-1" />
                               {EMPLOYMENT_LABELS[survey.employment_status] ||
                                 survey.employment_status ||
                                 "-"}
@@ -300,13 +572,22 @@ export default function SurveysPage() {
                           <TableCell className="text-xs whitespace-nowrap">
                             {survey.employment_role || "-"}
                           </TableCell>
+                          <TableCell className="text-xs">
+                            {consents.want_help ? (
+                              <Badge variant="outline" className="text-xs">
+                                Ha
+                              </Badge>
+                            ) : (
+                              "Yo'q"
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline" className="text-xs">
                               {survey.survey_campaign || "-"}
                             </Badge>
                           </TableCell>
                           <TableCell
-                            className="max-w-[200px] truncate text-xs"
+                            className="max-w-50 truncate text-xs"
                             title={survey.suggestions || ""}
                           >
                             {survey.suggestions || "-"}

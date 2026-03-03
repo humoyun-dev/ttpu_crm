@@ -9,7 +9,6 @@ import {
   Clock,
   CheckCircle,
   FileText,
-  Briefcase,
   Phone,
   MapPin,
   MessageSquare,
@@ -23,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { GenderBadge } from "@/components/status-badge";
 import { PageLoading } from "@/components/loading";
 import { ErrorDisplay } from "@/components/error-display";
 import {
@@ -35,8 +33,10 @@ import {
 } from "@/components/ui/select";
 import {
   bot2Api,
+  catalogApi,
   Bot2SurveyResponse,
   Bot2Student,
+  CatalogItem,
   formatDate,
 } from "@/lib/api";
 import { formatUzPhone } from "@/lib/utils";
@@ -71,19 +71,13 @@ const LABEL_TRANSLATIONS: Record<string, string> = {
 };
 
 const EMPLOYMENT_LABELS: Record<string, string> = {
-  employed: "Ishlamoqda",
-  unemployed: "Ishlamaydi",
-  self_employed: "O'z ishi",
-  student: "Talaba",
-  intern: "Stajer",
-  part_time: "Yarim stavka",
+  employed: "Ha",
+  unemployed: "Yo'q",
 };
 
 const CONSENT_LABELS: Record<string, string> = {
-  share_with_employers: "Ish beruvchilarga ulashish",
-  want_help: "Yordam olishni xohlaydi",
-  contact_permission: "Bog'lanish ruxsati",
-  data_processing: "Ma'lumotlarni qayta ishlash",
+  share_with_employers: "Ma'lumotlarni ish beruvchilarga ulashish",
+  want_help: "Universitet ish topishda yordam bersinmi",
 };
 
 function courseYearLabel(year: number | null | undefined): string {
@@ -151,6 +145,9 @@ export default function SurveyDetailPage() {
   const [editing, setEditing] = useState(searchParams.get("edit") === "true");
   const [saving, setSaving] = useState(false);
 
+  // Catalog data for dropdowns
+  const [regions, setRegions] = useState<CatalogItem[]>([]);
+
   // Edit form state
   const [editStudent, setEditStudent] = useState({
     first_name: "",
@@ -158,6 +155,7 @@ export default function SurveyDetailPage() {
     phone: "",
     gender: "unspecified" as string,
     username: "",
+    region: "" as string,
   });
   const [editSurvey, setEditSurvey] = useState({
     employment_status: "",
@@ -165,8 +163,13 @@ export default function SurveyDetailPage() {
     employment_role: "",
     suggestions: "",
     survey_campaign: "",
+    course_year: 1 as number,
   });
-  const [editConsents, setEditConsents] = useState<Record<string, boolean>>({});
+  const [editConsents, setEditConsents] = useState<Record<string, boolean>>({
+    want_help: false,
+    share_with_employers: false,
+  });
+  const [editAnswers, setEditAnswers] = useState<Record<string, string>>({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -190,6 +193,10 @@ export default function SurveyDetailPage() {
           populateStudentForm(studentRes.data);
         }
       }
+
+      // Fetch regions for dropdown
+      const regionsRes = await catalogApi.list("region");
+      if (regionsRes.data?.results) setRegions(regionsRes.data.results);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Ma'lumotni yuklab bo'lmadi",
@@ -206,8 +213,20 @@ export default function SurveyDetailPage() {
       employment_role: s.employment_role || "",
       suggestions: s.suggestions || "",
       survey_campaign: s.survey_campaign || "",
+      course_year: s.course_year || 1,
     });
-    setEditConsents((s.consents as Record<string, boolean>) || {});
+    const existingConsents = (s.consents as Record<string, boolean>) || {};
+    setEditConsents({
+      want_help: existingConsents.want_help ?? false,
+      share_with_employers: existingConsents.share_with_employers ?? false,
+      ...existingConsents,
+    });
+    const existingAnswers = (s.answers as Record<string, string>) || {};
+    const strAnswers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(existingAnswers)) {
+      strAnswers[k] = String(v ?? "");
+    }
+    setEditAnswers(strAnswers);
   }
 
   function populateStudentForm(st: Bot2Student) {
@@ -217,6 +236,7 @@ export default function SurveyDetailPage() {
       phone: st.phone || "",
       gender: st.gender || "unspecified",
       username: st.username || "",
+      region: st.region || "",
     });
   }
 
@@ -231,13 +251,20 @@ export default function SurveyDetailPage() {
     try {
       // Update student
       if (student) {
-        const studentRes = await bot2Api.updateStudent(student.id, {
+        const studentPayload: Partial<Bot2Student> = {
           first_name: editStudent.first_name,
           last_name: editStudent.last_name,
           phone: editStudent.phone,
           gender: editStudent.gender as Bot2Student["gender"],
           username: editStudent.username,
-        });
+        };
+        if (editStudent.region) {
+          studentPayload.region = editStudent.region;
+        }
+        const studentRes = await bot2Api.updateStudent(
+          student.id,
+          studentPayload,
+        );
         if (studentRes.error)
           throw new Error(studentRes.error.message as string);
         if (studentRes.data) setStudent(studentRes.data);
@@ -250,7 +277,9 @@ export default function SurveyDetailPage() {
         employment_role: editSurvey.employment_role,
         suggestions: editSurvey.suggestions,
         survey_campaign: editSurvey.survey_campaign,
+        course_year: editSurvey.course_year,
         consents: editConsents,
+        answers: editAnswers,
       });
       if (surveyRes.error) throw new Error(surveyRes.error.message as string);
       if (surveyRes.data) {
@@ -422,10 +451,6 @@ export default function SurveyDetailPage() {
                     <SelectContent>
                       <SelectItem value="male">Erkak</SelectItem>
                       <SelectItem value="female">Ayol</SelectItem>
-                      <SelectItem value="other">Boshqa</SelectItem>
-                      <SelectItem value="unspecified">
-                        Ko&apos;rsatilmagan
-                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -442,6 +467,28 @@ export default function SurveyDetailPage() {
                     setEditStudent((p) => ({ ...p, username: v }))
                   }
                 />
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    Viloyat (yashash manzili)
+                  </Label>
+                  <Select
+                    value={editStudent.region || ""}
+                    onValueChange={(v) =>
+                      setEditStudent((p) => ({ ...p, region: v }))
+                    }
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Viloyatni tanlang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {regions.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.name_uz || r.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 {/* Read-only fields in edit mode */}
                 <div className="pt-2 space-y-1 border-t text-sm text-muted-foreground">
                   <div>
@@ -450,7 +497,6 @@ export default function SurveyDetailPage() {
                       {student?.student_external_id || "-"}
                     </code>
                   </div>
-                  {regionName && <div>Viloyat: {regionName}</div>}
                   {student?.telegram_user_id && (
                     <div>Telegram ID: {student.telegram_user_id}</div>
                   )}
@@ -462,7 +508,11 @@ export default function SurveyDetailPage() {
                   {student?.first_name || "-"} {student?.last_name || ""}
                 </InfoRow>
                 <InfoRow label="Jins">
-                  <GenderBadge gender={student?.gender || "unspecified"} />
+                  {student?.gender === "male"
+                    ? "Erkak"
+                    : student?.gender === "female"
+                      ? "Ayol"
+                      : "-"}
                 </InfoRow>
                 <InfoRow label="Tug'ilgan sana">
                   {student?.birth_date ? formatDate(student.birth_date) : "-"}
@@ -512,25 +562,42 @@ export default function SurveyDetailPage() {
           <CardContent>
             {editing ? (
               <div className="space-y-3">
-                {/* Read-only education info */}
-                <div className="space-y-1 text-sm pb-2 border-b">
-                  {programName && (
-                    <div>
-                      <span className="text-muted-foreground">
-                        Yo&apos;nalish:{" "}
-                      </span>
-                      {programName}
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-muted-foreground">Kurs: </span>
-                    {courseYearLabel(survey.course_year)}
+                {/* Education info */}
+                {programName && (
+                  <div className="text-sm pb-2 border-b">
+                    <span className="text-muted-foreground">
+                      Yo&apos;nalish:{" "}
+                    </span>
+                    {programName}
                   </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Kurs</Label>
+                  <Select
+                    value={String(editSurvey.course_year)}
+                    onValueChange={(v) =>
+                      setEditSurvey((p) => ({
+                        ...p,
+                        course_year: parseInt(v),
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1-kurs</SelectItem>
+                      <SelectItem value="2">2-kurs</SelectItem>
+                      <SelectItem value="3">3-kurs</SelectItem>
+                      <SelectItem value="4">4-kurs</SelectItem>
+                      <SelectItem value="5">Bitirgan</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">
-                    Ish holati
+                    Hozirda ishlaysizmi?
                   </Label>
                   <Select
                     value={editSurvey.employment_status}
@@ -542,14 +609,8 @@ export default function SurveyDetailPage() {
                       <SelectValue placeholder="Tanlang" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="employed">Ishlamoqda</SelectItem>
-                      <SelectItem value="unemployed">Ishlamaydi</SelectItem>
-                      <SelectItem value="self_employed">
-                        O&apos;z ishi
-                      </SelectItem>
-                      <SelectItem value="student">Talaba</SelectItem>
-                      <SelectItem value="intern">Stajer</SelectItem>
-                      <SelectItem value="part_time">Yarim stavka</SelectItem>
+                      <SelectItem value="employed">Ha</SelectItem>
+                      <SelectItem value="unemployed">Yo&apos;q</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -588,7 +649,7 @@ export default function SurveyDetailPage() {
                     {survey.survey_campaign || "-"}
                   </Badge>
                 </InfoRow>
-                <InfoRow label="Ish holati">
+                <InfoRow label="Ishlaysizmi?">
                   <Badge
                     variant={
                       survey.employment_status === "employed"
@@ -597,7 +658,6 @@ export default function SurveyDetailPage() {
                     }
                     className="text-xs"
                   >
-                    <Briefcase className="h-3 w-3 mr-1" />
                     {EMPLOYMENT_LABELS[survey.employment_status] ||
                       survey.employment_status ||
                       "-"}
@@ -737,7 +797,7 @@ export default function SurveyDetailPage() {
         </Card>
 
         {/* ─── So'rovnoma javoblari ─── */}
-        {Object.keys(answers).length > 0 && (
+        {(Object.keys(answers).length > 0 || editing) && (
           <Card className="md:col-span-2">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -746,27 +806,49 @@ export default function SurveyDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {Object.entries(answers).map(([key, value]) => {
-                  if (value === null || value === undefined || value === "")
-                    return null;
-
-                  return (
-                    <div key={key} className="rounded-lg border p-3">
-                      <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide">
+              {editing ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {Object.entries(editAnswers).map(([key, value]) => (
+                    <div key={key} className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground uppercase tracking-wide">
                         {LABEL_TRANSLATIONS[key] || key.replace(/_/g, " ")}
-                      </p>
-                      {isRating(key, value as string | number) ? (
-                        renderRating(value as string | number)
-                      ) : (
-                        <p className="text-sm font-medium whitespace-pre-wrap">
-                          {String(value)}
-                        </p>
-                      )}
+                      </Label>
+                      <Input
+                        value={value}
+                        onChange={(e) =>
+                          setEditAnswers((p) => ({
+                            ...p,
+                            [key]: e.target.value,
+                          }))
+                        }
+                        className="h-9"
+                      />
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {Object.entries(answers).map(([key, value]) => {
+                    if (value === null || value === undefined || value === "")
+                      return null;
+
+                    return (
+                      <div key={key} className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide">
+                          {LABEL_TRANSLATIONS[key] || key.replace(/_/g, " ")}
+                        </p>
+                        {isRating(key, value as string | number) ? (
+                          renderRating(value as string | number)
+                        ) : (
+                          <p className="text-sm font-medium whitespace-pre-wrap">
+                            {String(value)}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
