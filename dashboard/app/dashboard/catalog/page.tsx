@@ -195,9 +195,9 @@ export default function CatalogPage() {
           const msgs = Object.entries(details)
             .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
             .join("; ");
-          throw new Error(msgs || res.error.message);
+          throw new Error(msgs || String(res.error.message));
         }
-        throw new Error((res.error.message || "Xatolik yuz berdi") as string);
+        throw new Error(String(res.error.message || "Xatolik yuz berdi"));
       }
 
       toast.success("✓ Muvaffaqiyatli yaratildi");
@@ -256,9 +256,9 @@ export default function CatalogPage() {
           const msgs = Object.entries(details)
             .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
             .join("; ");
-          throw new Error(msgs || res.error.message);
+          throw new Error(msgs || String(res.error.message));
         }
-        throw new Error((res.error.message || "Xatolik yuz berdi") as string);
+        throw new Error(String(res.error.message || "Xatolik yuz berdi"));
       }
 
       toast.success("✓ Muvaffaqiyatli yangilandi");
