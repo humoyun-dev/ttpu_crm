@@ -14,6 +14,10 @@ import {
   MapPin,
   Download,
   CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import {
   Table,
@@ -68,6 +72,8 @@ const GENDER_LABELS: Record<string, string> = {
   female: "Ayol",
 };
 
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
+
 type DatePreset = "all" | "today" | "week" | "month" | "year" | "custom";
 
 function getDateRange(preset: DatePreset): {
@@ -115,6 +121,10 @@ export default function SurveysPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
   // Date range export
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
@@ -126,13 +136,16 @@ export default function SurveysPage() {
     setError(null);
 
     try {
-      const surveyRes = await bot2Api.listSurveys();
+      const surveyRes = await bot2Api.listSurveys({
+        page_size: "500",
+        ordering: "-submitted_at",
+      });
       if (surveyRes.error) throw new Error(surveyRes.error.message as string);
 
       const surveyList = surveyRes.data?.results || [];
       setSurveys(surveyList);
 
-      const studentRes = await bot2Api.listStudents();
+      const studentRes = await bot2Api.listStudents({ page_size: "500" });
       const studentMap: Record<string, Bot2Student> = {};
       if (studentRes.data?.results) {
         studentRes.data.results.forEach((st) => {
@@ -153,21 +166,41 @@ export default function SurveysPage() {
     fetchData();
   }, [fetchData]);
 
-  const filteredSurveys = surveys.filter((survey) => {
-    if (!search) return true;
-    const student = students[survey.student];
-    const searchLower = search.toLowerCase();
-    return (
-      student?.first_name?.toLowerCase().includes(searchLower) ||
-      student?.last_name?.toLowerCase().includes(searchLower) ||
-      student?.student_external_id?.toLowerCase().includes(searchLower) ||
-      student?.phone?.includes(searchLower) ||
-      survey.survey_campaign?.toLowerCase().includes(searchLower) ||
-      survey.employment_company?.toLowerCase().includes(searchLower) ||
-      survey.employment_role?.toLowerCase().includes(searchLower) ||
-      survey.suggestions?.toLowerCase().includes(searchLower)
-    );
-  });
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  const filteredSurveys = useMemo(() => {
+    const filtered = surveys.filter((survey) => {
+      if (!search) return true;
+      const student = students[survey.student];
+      const searchLower = search.toLowerCase();
+      return (
+        student?.first_name?.toLowerCase().includes(searchLower) ||
+        student?.last_name?.toLowerCase().includes(searchLower) ||
+        student?.student_external_id?.toLowerCase().includes(searchLower) ||
+        student?.phone?.includes(searchLower) ||
+        survey.survey_campaign?.toLowerCase().includes(searchLower) ||
+        survey.employment_company?.toLowerCase().includes(searchLower) ||
+        survey.employment_role?.toLowerCase().includes(searchLower) ||
+        survey.suggestions?.toLowerCase().includes(searchLower)
+      );
+    });
+    // Already ordered by -submitted_at from API, but ensure client-side sort
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.submitted_at || a.created_at).getTime();
+      const dateB = new Date(b.submitted_at || b.created_at).getTime();
+      return dateB - dateA;
+    });
+  }, [surveys, students, search]);
+
+  // Pagination calculations
+  const totalPages = Math.max(1, Math.ceil(filteredSurveys.length / pageSize));
+  const paginatedSurveys = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredSurveys.slice(start, start + pageSize);
+  }, [filteredSurveys, currentPage, pageSize]);
 
   /* ── date-filtered surveys for export ── */
   const exportSurveys = useMemo(() => {
@@ -277,11 +310,12 @@ export default function SurveysPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">So&apos;rovnomalar</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold">So&apos;rovnomalar</h1>
+          <p className="text-sm text-muted-foreground">
             Talabalar so&apos;rovnomalari natijalari
           </p>
         </div>
@@ -292,43 +326,55 @@ export default function SurveysPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Jami javoblar</CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">
+              Jami javoblar
+            </CardTitle>
+            <ClipboardList className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{surveys.length}</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {surveys.length}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Kampaniyalar</CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">
+              Kampaniyalar
+            </CardTitle>
+            <ClipboardList className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{campaigns.length}</div>
+            <div className="text-xl sm:text-2xl font-bold">
+              {campaigns.length}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ishlamoqda</CardTitle>
-            <Briefcase className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-xs sm:text-sm font-medium">
+              Ishlamoqda
+            </CardTitle>
+            <Briefcase className="h-4 w-4 text-green-500 hidden sm:block" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl sm:text-2xl font-bold">
               {surveys.filter((s) => s.employment_status === "employed").length}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ishlamaydi</CardTitle>
-            <XCircle className="h-4 w-4 text-yellow-500" />
+            <CardTitle className="text-xs sm:text-sm font-medium">
+              Ishlamaydi
+            </CardTitle>
+            <XCircle className="h-4 w-4 text-yellow-500 hidden sm:block" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl sm:text-2xl font-bold">
               {
                 surveys.filter((s) => s.employment_status === "unemployed")
                   .length
@@ -348,7 +394,7 @@ export default function SurveysPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
+            <div className="space-y-1 w-full sm:w-auto">
               <label className="text-xs text-muted-foreground">
                 Vaqt oralig&apos;i
               </label>
@@ -356,7 +402,7 @@ export default function SurveysPage() {
                 value={datePreset}
                 onValueChange={(v) => setDatePreset(v as DatePreset)}
               >
-                <SelectTrigger className="w-44 h-9">
+                <SelectTrigger className="w-full sm:w-44 h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -429,7 +475,7 @@ export default function SurveysPage() {
               onClick={handleExport}
               disabled={exporting || exportSurveys.length === 0}
               size="sm"
-              className="h-9"
+              className="h-9 w-full sm:w-auto"
             >
               <Download className="mr-2 h-4 w-4" />
               {exporting
@@ -442,12 +488,17 @@ export default function SurveysPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle>So&apos;rovnomalar ro&apos;yxati</CardTitle>
-              <CardDescription>Jami: {surveys.length} ta javob</CardDescription>
+              <CardTitle className="text-base sm:text-lg">
+                So&apos;rovnomalar ro&apos;yxati
+              </CardTitle>
+              <CardDescription>
+                Jami: {filteredSurveys.length} ta javob
+                {search && ` (${surveys.length} dan)`}
+              </CardDescription>
             </div>
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Qidirish..."
@@ -464,170 +515,278 @@ export default function SurveysPage() {
           ) : error ? (
             <ErrorDisplay message={error} onRetry={fetchData} />
           ) : (
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ism Familiya</TableHead>
-                    <TableHead>Student ID</TableHead>
-                    <TableHead>Telefon</TableHead>
-                    <TableHead>Jins</TableHead>
-                    <TableHead>Viloyat</TableHead>
-                    <TableHead>Yo&apos;nalish</TableHead>
-                    <TableHead>Kurs</TableHead>
-                    <TableHead>Ishlaysizmi?</TableHead>
-                    <TableHead>Kompaniya</TableHead>
-                    <TableHead>Lavozim</TableHead>
-                    <TableHead>Yordam</TableHead>
-                    <TableHead>Kampaniya</TableHead>
-                    <TableHead>Takliflar</TableHead>
-                    <TableHead>Sana</TableHead>
-                    <TableHead className="w-24">Amal</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSurveys.length === 0 ? (
+            <>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell
-                        colSpan={15}
-                        className="text-center text-muted-foreground"
-                      >
-                        Ma&apos;lumot topilmadi
-                      </TableCell>
+                      <TableHead>Ism Familiya</TableHead>
+                      <TableHead className="hidden xl:table-cell">
+                        Student ID
+                      </TableHead>
+                      <TableHead className="hidden lg:table-cell">
+                        Telefon
+                      </TableHead>
+                      <TableHead className="hidden xl:table-cell">
+                        Jins
+                      </TableHead>
+                      <TableHead className="hidden xl:table-cell">
+                        Viloyat
+                      </TableHead>
+                      <TableHead className="hidden lg:table-cell">
+                        Yo&apos;nalish
+                      </TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        Kurs
+                      </TableHead>
+                      <TableHead>Ishlaysizmi?</TableHead>
+                      <TableHead className="hidden lg:table-cell">
+                        Kompaniya
+                      </TableHead>
+                      <TableHead className="hidden xl:table-cell">
+                        Lavozim
+                      </TableHead>
+                      <TableHead className="hidden xl:table-cell">
+                        Yordam
+                      </TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        Kampaniya
+                      </TableHead>
+                      <TableHead className="hidden xl:table-cell">
+                        Takliflar
+                      </TableHead>
+                      <TableHead>Sana</TableHead>
+                      <TableHead className="w-20 sm:w-24">Amal</TableHead>
                     </TableRow>
-                  ) : (
-                    filteredSurveys.map((survey) => {
-                      const student = students[survey.student];
-                      const regionName =
-                        student?.region_details?.name_uz ||
-                        student?.region_details?.name ||
-                        "-";
-                      const programName =
-                        survey.program_details?.name_uz ||
-                        survey.program_details?.name ||
-                        "-";
-                      const consents =
-                        (survey.consents as Record<string, boolean>) || {};
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedSurveys.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={15}
+                          className="text-center text-muted-foreground"
+                        >
+                          Ma&apos;lumot topilmadi
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      paginatedSurveys.map((survey) => {
+                        const student = students[survey.student];
+                        const regionName =
+                          student?.region_details?.name_uz ||
+                          student?.region_details?.name ||
+                          "-";
+                        const programName =
+                          survey.program_details?.name_uz ||
+                          survey.program_details?.name ||
+                          "-";
+                        const consents =
+                          (survey.consents as Record<string, boolean>) || {};
 
-                      return (
-                        <TableRow key={survey.id}>
-                          <TableCell className="font-medium whitespace-nowrap">
-                            {student
-                              ? `${student.first_name} ${student.last_name}`
-                              : "-"}
-                          </TableCell>
-                          <TableCell>
-                            <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                              {student?.student_external_id || "-"}
-                            </code>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {student?.phone ? (
-                              <span className="flex items-center gap-1 text-xs">
-                                <Phone className="h-3 w-3 text-muted-foreground" />
-                                {student.phone}
-                              </span>
-                            ) : (
-                              "-"
-                            )}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {GENDER_LABELS[student?.gender || ""] ||
-                              student?.gender ||
-                              "-"}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {regionName !== "-" ? (
-                              <span className="flex items-center gap-1 text-xs">
-                                <MapPin className="h-3 w-3 text-muted-foreground" />
-                                {regionName}
-                              </span>
-                            ) : (
-                              "-"
-                            )}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs">
-                            {programName}
-                          </TableCell>
-                          <TableCell>
-                            {formatCourseYearLabel(survey.course_year)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                survey.employment_status === "employed"
-                                  ? "default"
-                                  : "secondary"
-                              }
-                              className="text-xs whitespace-nowrap"
-                            >
-                              {EMPLOYMENT_LABELS[survey.employment_status] ||
-                                survey.employment_status ||
+                        return (
+                          <TableRow key={survey.id}>
+                            <TableCell className="font-medium whitespace-nowrap">
+                              {student
+                                ? `${student.first_name} ${student.last_name}`
+                                : "-"}
+                            </TableCell>
+                            <TableCell className="hidden xl:table-cell">
+                              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                                {student?.student_external_id || "-"}
+                              </code>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap hidden lg:table-cell">
+                              {student?.phone ? (
+                                <span className="flex items-center gap-1 text-xs">
+                                  <Phone className="h-3 w-3 text-muted-foreground" />
+                                  {student.phone}
+                                </span>
+                              ) : (
+                                "-"
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs hidden xl:table-cell">
+                              {GENDER_LABELS[student?.gender || ""] ||
+                                student?.gender ||
                                 "-"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs whitespace-nowrap">
-                            {survey.employment_company || "-"}
-                          </TableCell>
-                          <TableCell className="text-xs whitespace-nowrap">
-                            {survey.employment_role || "-"}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {consents.want_help ? (
-                              <Badge variant="outline" className="text-xs">
-                                Ha
-                              </Badge>
-                            ) : (
-                              "Yo'q"
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {survey.survey_campaign || "-"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell
-                            className="max-w-50 truncate text-xs"
-                            title={survey.suggestions || ""}
-                          >
-                            {survey.suggestions || "-"}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs">
-                            {formatDate(
-                              survey.submitted_at || survey.created_at,
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Link href={`/dashboard/surveys/${survey.id}`}>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  title="Ko'rish"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                              <Link
-                                href={`/dashboard/surveys/${survey.id}?edit=true`}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap hidden xl:table-cell">
+                              {regionName !== "-" ? (
+                                <span className="flex items-center gap-1 text-xs">
+                                  <MapPin className="h-3 w-3 text-muted-foreground" />
+                                  {regionName}
+                                </span>
+                              ) : (
+                                "-"
+                              )}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-xs hidden lg:table-cell">
+                              {programName}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              {formatCourseYearLabel(survey.course_year)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  survey.employment_status === "employed"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className="text-xs whitespace-nowrap"
                               >
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  title="Tahrirlash"
+                                {EMPLOYMENT_LABELS[survey.employment_status] ||
+                                  survey.employment_status ||
+                                  "-"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs whitespace-nowrap hidden lg:table-cell">
+                              {survey.employment_company || "-"}
+                            </TableCell>
+                            <TableCell className="text-xs whitespace-nowrap hidden xl:table-cell">
+                              {survey.employment_role || "-"}
+                            </TableCell>
+                            <TableCell className="text-xs hidden xl:table-cell">
+                              {consents.want_help ? (
+                                <Badge variant="outline" className="text-xs">
+                                  Ha
+                                </Badge>
+                              ) : (
+                                "Yo'q"
+                              )}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              <Badge variant="outline" className="text-xs">
+                                {survey.survey_campaign || "-"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell
+                              className="max-w-50 truncate text-xs hidden xl:table-cell"
+                              title={survey.suggestions || ""}
+                            >
+                              {survey.suggestions || "-"}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-xs">
+                              {formatDate(
+                                survey.submitted_at || survey.created_at,
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Link href={`/dashboard/surveys/${survey.id}`}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Ko'rish"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </Link>
+                                <Link
+                                  href={`/dashboard/surveys/${survey.id}?edit=true`}
                                 >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Tahrirlash"
+                                    className="hidden sm:inline-flex"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </Link>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {filteredSurveys.length > 0 && (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className="hidden sm:inline">
+                      {(currentPage - 1) * pageSize + 1}–
+                      {Math.min(currentPage * pageSize, filteredSurveys.length)}{" "}
+                      / {filteredSurveys.length}
+                    </span>
+                    <span className="sm:hidden text-xs">
+                      {currentPage} / {totalPages} sahifa
+                    </span>
+                    <Select
+                      value={String(pageSize)}
+                      onValueChange={(v) => {
+                        setPageSize(Number(v));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-[70px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAGE_SIZE_OPTIONS.map((size) => (
+                          <SelectItem key={size} value={String(size)}>
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronsLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+
+                    <span className="hidden sm:flex items-center gap-1 px-2 text-sm">
+                      Sahifa{" "}
+                      <strong>
+                        {currentPage} / {totalPages}
+                      </strong>
+                    </span>
+
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronsRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
