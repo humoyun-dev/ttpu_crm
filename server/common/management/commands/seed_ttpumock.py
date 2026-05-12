@@ -5,47 +5,24 @@ from django.core.management import BaseCommand, call_command
 from django.db import transaction
 from django.utils import timezone
 
-from bot1.models import (
-    Admissions2026Application,
-    ApplicationStatus,
-    Bot1Applicant,
-    CampusTourRequest,
-    FoundationRequest,
-    PolitoAcademyRequest,
-)
 from bot2.models import Bot2Student, Bot2SurveyResponse, StudentRoster
 from catalog.models import CatalogItem
 
 
 SCALE_CONFIG = {
     "small": {
-        "applicants": 350,
-        "admissions": 300,
-        "campus": 100,
-        "foundation": 80,
-        "polito": 150,
         "roster_active": 800,
         "roster_inactive": 80,
         "survey_ratio": (0.45, 0.55),
         "student_ratio": (0.65, 0.8),
     },
     "medium": {
-        "applicants": 800,
-        "admissions": 700,
-        "campus": 250,
-        "foundation": 180,
-        "polito": 350,
         "roster_active": 1500,
         "roster_inactive": 150,
         "survey_ratio": (0.5, 0.65),
         "student_ratio": (0.7, 0.85),
     },
     "large": {
-        "applicants": 1400,
-        "admissions": 1100,
-        "campus": 380,
-        "foundation": 260,
-        "polito": 600,
         "roster_active": 3000,
         "roster_inactive": 300,
         "survey_ratio": (0.55, 0.7),
@@ -70,10 +47,6 @@ REGIONS = [
     ("REG_KHO", "Khorezm"),
     ("REG_NUK", "Nukus"),
 ]
-
-DIRS = [(f"DIR_TEST_{i:02d}", f"Direction {i}") for i in range(1, 9)]
-TRACKS = [(f"TRK_TEST_{i:02d}", f"Track {i}") for i in range(1, 11)]
-SUBJECTS = [(f"SUB_TEST_{i:02d}", f"Subject {i}") for i in range(1, 13)]
 
 CAMPAIGNS = ["2025-FALL", "2026-SPRING", "default"]
 
@@ -106,13 +79,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             call_command("seed_programs")
             region_items = self._seed_catalog_type(CatalogItem.ItemType.REGION, REGIONS, rng, upsert)
-            directions = self._seed_catalog_type(CatalogItem.ItemType.DIRECTION, DIRS, rng, upsert)
-            tracks = self._seed_catalog_type(CatalogItem.ItemType.TRACK, TRACKS, rng, upsert)
-            subjects = self._seed_catalog_type(CatalogItem.ItemType.SUBJECT, SUBJECTS, rng, upsert)
             programs = list(CatalogItem.objects.filter(type=CatalogItem.ItemType.PROGRAM, is_active=True))
-
-            applicants = self._seed_applicants(config["applicants"], region_items, rng, upsert)
-            self._seed_bot1_applications(config, applicants, directions, tracks, subjects, days, rng, upsert)
 
             rosters = self._seed_roster(config, programs, rng, upsert)
             students = self._seed_students(config, rosters, region_items, rng, upsert)
@@ -132,99 +99,8 @@ class Command(BaseCommand):
             created_items.append(obj)
         return created_items
 
-    def _seed_applicants(self, count, regions, rng, upsert):
-        applicants = []
-        for i in range(count):
-            tg_user = 10_000_000 + i
-            tg_chat = 20_000_000 + i
-            first = _choice(rng, FIRST_NAMES)
-            last = _choice(rng, LAST_NAMES)
-            email = f"{first.lower()}.{last.lower()}.{i}@example.local"
-            phone = f"+9989{rng.randint(10000000, 99999999)}"
-            region = regions[i % len(regions)]
-            obj, _ = Bot1Applicant.objects.update_or_create(
-                telegram_user_id=tg_user,
-                defaults={
-                    "telegram_chat_id": tg_chat,
-                    "username": f"user_{tg_user}",
-                    "first_name": first,
-                    "last_name": last,
-                    "phone": phone,
-                    "email": email,
-                    "region": region,
-                },
-            )
-            applicants.append(obj)
-        return applicants
-
-    def _random_status(self, rng):
-        return rng.choices(
-            population=[
-                ApplicationStatus.SUBMITTED,
-                ApplicationStatus.IN_PROGRESS,
-                ApplicationStatus.APPROVED,
-                ApplicationStatus.REJECTED,
-                ApplicationStatus.NEW,
-            ],
-            weights=[40, 25, 15, 10, 10],
-            k=1,
-        )[0]
-
     def _random_time(self, rng, days):
         return timezone.now() - timedelta(days=rng.randint(0, days), hours=rng.randint(0, 23))
-
-    def _seed_bot1_applications(self, config, applicants, directions, tracks, subjects, days, rng, upsert):
-        self._seed_app_model(
-            Admissions2026Application,
-            config["admissions"],
-            applicants,
-            lambda app: {
-                "direction": _choice(rng, directions),
-                "track": _choice(rng, tracks),
-                "answers": {"q1": "yes", "score": rng.randint(60, 100)},
-            },
-            days,
-            rng,
-        )
-        self._seed_app_model(
-            CampusTourRequest,
-            config["campus"],
-            applicants,
-            lambda app: {"preferred_date": timezone.now().date(), "answers": {"slot": "morning"}},
-            days,
-            rng,
-        )
-        self._seed_app_model(
-            FoundationRequest,
-            config["foundation"],
-            applicants,
-            lambda app: {"answers": {"need_dorm": bool(rng.randint(0, 1))}},
-            days,
-            rng,
-        )
-        self._seed_app_model(
-            PolitoAcademyRequest,
-            config["polito"],
-            applicants,
-            lambda app: {"subject": _choice(rng, subjects), "answers": {"motivation": "explore"}},
-            days,
-            rng,
-        )
-
-    def _seed_app_model(self, model, target_count, applicants, extra_builder, days, rng):
-        chosen = rng.sample(applicants, min(target_count, len(applicants)))
-        for idx, applicant in enumerate(chosen):
-            status = self._random_status(rng)
-            payload = {
-                "status": status,
-            }
-            payload.update(extra_builder(applicant))
-            if status != ApplicationStatus.NEW:
-                payload["submitted_at"] = self._random_time(rng, days)
-            model.objects.update_or_create(
-                applicant=applicant,
-                defaults=payload,
-            )
 
     def _seed_roster(self, config, programs, rng, upsert):
         rosters = []
@@ -275,7 +151,6 @@ class Command(BaseCommand):
         ratio = rng.uniform(*config["survey_ratio"])
         target = int(len(active_rosters) * ratio)
         selected_rosters = rng.sample(active_rosters, min(target, len(active_rosters)))
-        roster_map = {r.student_external_id: r for r in rosters}
         student_map = {s.student_external_id: s for s in students}
 
         for roster in selected_rosters:

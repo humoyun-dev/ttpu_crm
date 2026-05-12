@@ -23,6 +23,17 @@ import { formatCourseYearLabel } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { bot2Api, ProgramEnrollment } from "@/lib/api";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function EnrollmentsPage() {
   const router = useRouter();
@@ -67,11 +78,18 @@ export default function EnrollmentsPage() {
     }
   };
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const handleDelete = async (id: string) => {
-    if (!confirm("Rostdan ham o'chirmoqchimisiz?")) return;
-    const res = await bot2Api.deleteEnrollment(id);
+    setDeletingId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingId) return;
+    const res = await bot2Api.deleteEnrollment(deletingId);
+    setDeletingId(null);
     if (res.error) {
-      alert(
+      toast.error(
         Array.isArray(res.error.message)
           ? res.error.message.join(", ")
           : res.error.message,
@@ -81,6 +99,13 @@ export default function EnrollmentsPage() {
     await load();
   };
 
+  const { totalStudents, totalResponded, overallCoverage } = useMemo(() => {
+    const total = items.reduce((sum, it) => sum + (it.student_count || 0), 0);
+    const responded = items.reduce((sum, it) => sum + (it.responded_count || 0), 0);
+    const coverage = total === 0 ? "0.0" : ((responded / total) * 100).toFixed(1);
+    return { totalStudents: total, totalResponded: responded, overallCoverage: coverage };
+  }, [items]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -88,20 +113,6 @@ export default function EnrollmentsPage() {
       </div>
     );
   }
-
-  const totalStudents = items.reduce(
-    (sum, it) => sum + (it.student_count || 0),
-    0,
-  );
-  const totalResponded = items.reduce(
-    (sum, it) => sum + (it.responded_count || 0),
-    0,
-  );
-
-  const overallCoverage =
-    totalStudents === 0
-      ? "0.0"
-      : ((totalResponded / totalStudents) * 100).toFixed(1);
 
   return (
     <div className="space-y-6 p-6">
@@ -232,6 +243,23 @@ export default function EnrollmentsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deletingId} onOpenChange={(open) => !open && setDeletingId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>O'chirishni tasdiqlang</AlertDialogTitle>
+            <AlertDialogDescription>
+              Rostdan ham bu yozuvni o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Bekor qilish</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              O'chirish
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -12,6 +12,7 @@ from audit.utils import log_audit
 from authn.serializers import LoginSerializer, UserSerializer
 from authn.models import RevokedToken
 from common.exceptions import APIError, build_error_response
+from common.throttles import LoginRateThrottle
 
 
 def _set_cookie(response: Response, name: str, value: str, expires: timedelta):
@@ -43,6 +44,7 @@ def _clear_cookie(response: Response, name: str):
 class LoginView(generics.GenericAPIView):
     serializer_class = LoginSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

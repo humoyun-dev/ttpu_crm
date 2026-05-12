@@ -7,7 +7,6 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from bot1.models import Admissions2026Application, PolitoAcademyRequest
 from bot2.models import Bot2SurveyResponse, ProgramEnrollment, StudentRoster
 from common.exceptions import build_error_response
 from common.permissions import IsViewerOrAdminReadOnly
@@ -67,54 +66,6 @@ def _latest_responses_qs(start, end, campaign):
         .values("id")[:1]
     )
     return base.annotate(latest_id=Subquery(latest_ids)).filter(id=F("latest_id"))
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated, IsViewerOrAdminReadOnly])
-def admissions_by_direction(request):
-    start, end, error = _require_range(request)
-    if error:
-        return error
-    qs = (
-        Admissions2026Application.objects.filter(submitted_at__gte=start, submitted_at__lte=end)
-        .values("direction__id", "direction__name")
-        .annotate(count=Count("id"))
-        .order_by("-count")
-    )
-    data = [{"label": row["direction__name"], "value": row["count"], "direction_id": row["direction__id"]} for row in qs]
-    return Response(data)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated, IsViewerOrAdminReadOnly])
-def admissions_by_track(request):
-    start, end, error = _require_range(request)
-    if error:
-        return error
-    qs = (
-        Admissions2026Application.objects.filter(submitted_at__gte=start, submitted_at__lte=end)
-        .values("track__id", "track__name")
-        .annotate(count=Count("id"))
-        .order_by("-count")
-    )
-    data = [{"label": row["track__name"], "value": row["count"], "track_id": row["track__id"]} for row in qs if row["track__id"]]
-    return Response(data)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated, IsViewerOrAdminReadOnly])
-def polito_by_subject(request):
-    start, end, error = _require_range(request)
-    if error:
-        return error
-    qs = (
-        PolitoAcademyRequest.objects.filter(submitted_at__gte=start, submitted_at__lte=end)
-        .values("subject__id", "subject__name")
-        .annotate(count=Count("id"))
-        .order_by("-count")
-    )
-    data = [{"label": row["subject__name"], "value": row["count"], "subject_id": row["subject__id"]} for row in qs if row["subject__id"]]
-    return Response(data)
 
 
 @api_view(["GET"])
@@ -186,11 +137,12 @@ def bot2_program_coverage(request):
     if course_year:
         resp_qs = resp_qs.filter(course_year=course_year)
     responded = resp_qs.values("program__id", "program__name").annotate(count=Count("student_id", distinct=True))
+    resp_map = {r["program__id"]: r for r in responded}
 
     data = []
     for program_id, row in total_map.items():
         total = row["total"]
-        resp_row = next((r for r in responded if r["program__id"] == program_id), None)
+        resp_row = resp_map.get(program_id)
         resp = resp_row["count"] if resp_row else 0
         coverage = round((resp / total * 100) if total else 0, 2)
         data.append(

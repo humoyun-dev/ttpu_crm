@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { bot2Api, catalogApi, StudentRoster, CatalogItem } from "@/lib/api";
 import { ArrowLeft, Save } from "lucide-react";
+import { toast } from "sonner";
 
 export default function StudentFormPage() {
   const router = useRouter();
@@ -73,7 +74,7 @@ export default function StudentFormPage() {
       }
     } catch (error) {
       console.error("Error loading roster:", error);
-      alert("Ma'lumotlarni yuklashda xatolik");
+      toast.error("Ma'lumotlarni yuklashda xatolik");
     } finally {
       setLoading(false);
     }
@@ -83,7 +84,7 @@ export default function StudentFormPage() {
     e.preventDefault();
 
     if (!formData.student_external_id || !formData.program) {
-      alert("Barcha majburiy maydonlarni to'ldiring");
+      toast.error("Barcha majburiy maydonlarni to'ldiring");
       return;
     }
 
@@ -97,7 +98,7 @@ export default function StudentFormPage() {
       router.push("/dashboard/students");
     } catch (error) {
       console.error("Error saving roster:", error);
-      alert("Saqlashda xatolik yuz berdi");
+      toast.error("Saqlashda xatolik yuz berdi");
     } finally {
       setSaving(false);
     }

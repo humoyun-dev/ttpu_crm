@@ -87,7 +87,7 @@ class Bot2StudentViewSet(viewsets.ModelViewSet):
 
 
 class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
-    queryset = Bot2SurveyResponse.objects.select_related("student", "roster", "program")
+    queryset = Bot2SurveyResponse.objects.select_related("student", "student__region", "roster", "program")
     serializer_class = None
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]

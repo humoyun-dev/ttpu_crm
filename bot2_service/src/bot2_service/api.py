@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -27,7 +28,7 @@ class CrmApiClient:
         self.password = settings.dashboard_password
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
-            timeout=httpx.Timeout(15.0),
+            timeout=httpx.Timeout(connect=5.0, read=15.0, write=10.0, pool=5.0),
             follow_redirects=True,
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
         )
@@ -136,7 +137,6 @@ class CrmApiClient:
             except httpx.ConnectError as exc:
                 logger.warning("POST %s connection error (attempt %d): %s", path, attempt, exc)
                 if attempt == 1:
-                    import asyncio
                     await asyncio.sleep(1)
                     continue
                 return ApiResult(ok=False, error=f"Connection error: {exc}")
@@ -155,7 +155,6 @@ class CrmApiClient:
 
             logger.warning("POST %s returned %s (attempt %d): %s", path, resp.status_code, attempt, resp.text[:500])
             if attempt == 1 and resp.status_code >= 500:
-                import asyncio
                 await asyncio.sleep(1)
                 continue
 

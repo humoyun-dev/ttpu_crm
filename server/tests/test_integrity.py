@@ -9,22 +9,9 @@ from rest_framework import status
 from rest_framework.reverse import reverse
 from rest_framework.test import APIClient
 
-from audit.models import AuditLog
 from bot2.models import Bot2Student, Bot2SurveyResponse, StudentRoster
 from bot2.services import upsert_roster_row
 from catalog.models import CatalogItem
-from common.auth import _hashed
-from common.models import ServiceToken
-
-
-@pytest.fixture
-def service_token_bot1(db):
-    return ServiceToken.objects.create(
-        service_name=ServiceToken.Service.BOT1,
-        token_hash=_hashed("bot1secret"),
-        scope="default",
-        is_active=True,
-    )
 
 
 def test_catalog_null_code_duplicate_allowed(db):
@@ -157,24 +144,3 @@ def test_logout_revokes_access_cookie(api_client, admin_user):
     assert me_resp.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-def test_audit_masks_pii(api_client, service_token_bot1):
-    AuditLog.objects.all().delete()
-    payload = {
-        "telegram_user_id": 123,
-        "email": "foo@example.com",
-        "phone": "+123456",
-        "first_name": "Alice",
-    }
-    resp = api_client.post(
-        reverse("bot1-applicant-upsert"),
-        payload,
-        format="json",
-        HTTP_X_SERVICE_TOKEN="bot1secret",
-    )
-    assert resp.status_code == status.HTTP_200_OK
-    log = AuditLog.objects.order_by("-created_at").first()
-    assert log is not None
-    assert log.actor_service == "bot1"
-    assert log.after_data.get("email") == "[REDACTED]"
-    assert log.after_data.get("phone") == "[REDACTED]"
-    assert log.after_data.get("first_name") == "[REDACTED]"

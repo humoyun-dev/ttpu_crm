@@ -42,7 +42,6 @@ INSTALLED_APPS = [
     "common",
     "authn",
     "catalog",
-    "bot1",
     "bot2",
     "audit",
     "analytics",
@@ -89,6 +88,8 @@ DATABASES = {
         "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        "CONN_MAX_AGE": int(os.getenv("POSTGRES_CONN_MAX_AGE", "60")),
+        "CONN_HEALTH_CHECKS": True,
     }
 }
 
@@ -137,7 +138,7 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
         "rest_framework.throttling.AnonRateThrottle",
     ],
-    "DEFAULT_THROTTLE_RATES": {"user": "1000/day", "anon": "100/day"},
+    "DEFAULT_THROTTLE_RATES": {"user": "1000/day", "anon": "100/day", "login": "10/minute"},
     "EXCEPTION_HANDLER": "common.exceptions.custom_exception_handler",
 }
 
@@ -172,7 +173,6 @@ else:
 CORS_ALLOW_HEADERS = list(default_headers) + ["x-service-token"]
 
 SERVICE_TOKENS = {
-    "bot1": os.getenv("SERVICE_TOKEN_BOT1_HASH", ""),
     "bot2": os.getenv("SERVICE_TOKEN_BOT2_HASH", ""),
 }
 

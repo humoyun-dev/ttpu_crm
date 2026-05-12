@@ -26,7 +26,6 @@ class BaseModel(UUIDModel, TimeStampedModel):
 
 class ServiceToken(BaseModel):
     class Service(models.TextChoices):
-        BOT1 = "bot1", "Bot1"
         BOT2 = "bot2", "Bot2"
         DASHBOARD = "dashboard", "Dashboard"
         OTHER = "other", "Other"

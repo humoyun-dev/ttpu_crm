@@ -21,13 +21,15 @@ def _sanitize_value(key: str, value: Any):
     return value
 
 
-def _sanitize_payload(payload: Optional[dict]) -> dict:
+def _sanitize_payload(payload: Optional[dict], depth: int = 0) -> dict:
     if not payload:
         return {}
+    if depth > 5:
+        return {"__truncated__": True}
     cleaned = {}
     for key, value in payload.items():
         if isinstance(value, dict):
-            cleaned[key] = _sanitize_payload(value)
+            cleaned[key] = _sanitize_payload(value, depth + 1)
         elif isinstance(value, uuid.UUID):
             cleaned[key] = str(value)
         else:

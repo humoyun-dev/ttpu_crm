@@ -1,15 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  GraduationCap,
-  Building2,
-  FlaskConical,
-  BookOpenCheck,
-  Users,
-  ArrowRight,
-  BarChart3,
-} from "lucide-react";
+import { Users, ArrowRight, BarChart3 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -20,38 +12,6 @@ import {
 
 const analyticsCategories = [
   {
-    title: "Qabul 2026",
-    description: "2026-yil qabul arizalari bo'yicha statistika",
-    href: "/dashboard/analytics/admissions",
-    icon: GraduationCap,
-    color: "text-blue-600 dark:text-blue-400",
-    bgColor: "bg-blue-50 dark:bg-blue-950",
-  },
-  {
-    title: "Campus Tour",
-    description: "Kampus turiga arizalar analitikasi",
-    href: "/dashboard/analytics/campus",
-    icon: Building2,
-    color: "text-green-600 dark:text-green-400",
-    bgColor: "bg-green-50 dark:bg-green-950",
-  },
-  {
-    title: "Polito Academy",
-    description: "Polito akademiyasi bo'yicha ma'lumotlar",
-    href: "/dashboard/analytics/polito",
-    icon: FlaskConical,
-    color: "text-purple-600 dark:text-purple-400",
-    bgColor: "bg-purple-50 dark:bg-purple-950",
-  },
-  {
-    title: "Foundation Year",
-    description: "Tayyorlov kursi arizalari tahlili",
-    href: "/dashboard/analytics/foundation",
-    icon: BookOpenCheck,
-    color: "text-orange-600 dark:text-orange-400",
-    bgColor: "bg-orange-50 dark:bg-orange-950",
-  },
-  {
     title: "So'rovnoma",
     description: "Talabalar so'rovnomasi va bandlik statistikasi",
     href: "/dashboard/analytics/surveys",
@@ -61,7 +21,7 @@ const analyticsCategories = [
   },
   {
     title: "Talabalar soni",
-    description: "Umumiy talabalar soni va qamrov",
+    description: "Umumiy talabalar soni va qamrov ko'rsatkichlari",
     href: "/dashboard/analytics/enrollments",
     icon: BarChart3,
     color: "text-indigo-600 dark:text-indigo-400",
@@ -77,12 +37,12 @@ export default function AnalyticsPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Analitika</h2>
           <p className="text-muted-foreground">
-            Barcha bo&apos;limlar bo&apos;yicha statistika va tahlillar
+            Statistika va tahlillar
           </p>
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2">
         {analyticsCategories.map((category) => {
           const Icon = category.icon;
           return (
@@ -117,25 +77,20 @@ export default function AnalyticsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Ushbu bo&apos;limda siz turli xil statistik ma&apos;lumotlarni
-            ko&apos;rishingiz mumkin:
+            Ushbu bo&apos;limda siz quyidagi statistik ma&apos;lumotlarni ko&apos;rishingiz mumkin:
           </p>
           <ul className="space-y-2 text-sm text-muted-foreground">
-            <li className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-              Arizalar soni va dinamikasi
-            </li>
-            <li className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-              Yo&apos;nalishlar va fanlar bo&apos;yicha taqsimlanish
-            </li>
             <li className="flex items-center gap-2">
               <div className="h-1.5 w-1.5 rounded-full bg-primary" />
               Talabalar so&apos;rovnomasi va bandlik ma&apos;lumotlari
             </li>
             <li className="flex items-center gap-2">
               <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-              Qamrov va ishtirok foizlari
+              Dasturlar bo&apos;yicha qamrov va ishtirok foizlari
+            </li>
+            <li className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+              Kurs yillari bo&apos;yicha talabalar soni dinamikasi
             </li>
           </ul>
         </CardContent>

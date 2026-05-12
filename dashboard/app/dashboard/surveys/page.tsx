@@ -61,16 +61,7 @@ import {
 import { formatCourseYearLabel, cn } from "@/lib/utils";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
-
-const EMPLOYMENT_LABELS: Record<string, string> = {
-  employed: "Ha",
-  unemployed: "Yo'q",
-};
-
-const GENDER_LABELS: Record<string, string> = {
-  male: "Erkak",
-  female: "Ayol",
-};
+import { EMPLOYMENT_LABELS, GENDER_LABELS } from "@/lib/constants";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 

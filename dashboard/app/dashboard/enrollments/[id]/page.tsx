@@ -22,6 +22,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { bot2Api, catalogApi, CatalogItem, ProgramEnrollment } from "@/lib/api";
 import { ArrowLeft, Save } from "lucide-react";
+import { toast } from "sonner";
+
+function currentAcademicYear(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  return now.getMonth() + 1 >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+}
 
 export default function EnrollmentFormPage() {
   const router = useRouter();
@@ -39,7 +46,7 @@ export default function EnrollmentFormPage() {
     program: "",
     course_year: 1,
     student_count: 0,
-    academic_year: "2025-2026",
+    academic_year: currentAcademicYear(),
     campaign: "default",
     is_active: true,
     notes: "",
@@ -84,7 +91,7 @@ export default function EnrollmentFormPage() {
     const res = await bot2Api.getEnrollment(id);
     if (res.data) setForm(res.data);
     if (res.error) {
-      alert(
+      toast.error(
         Array.isArray(res.error.message)
           ? res.error.message.join(", ")
           : res.error.message,
@@ -102,7 +109,7 @@ export default function EnrollmentFormPage() {
       !form.course_year ||
       form.student_count === undefined
     ) {
-      alert("Majburiy maydonlarni to'ldiring");
+      toast.error("Majburiy maydonlarni to'ldiring");
       return;
     }
 
@@ -111,7 +118,7 @@ export default function EnrollmentFormPage() {
       program: form.program,
       course_year: Number(form.course_year),
       student_count: Number(form.student_count),
-      academic_year: String(form.academic_year || "2025-2026"),
+      academic_year: String(form.academic_year || currentAcademicYear()),
       campaign: String(form.campaign || "default"),
       is_active: Boolean(form.is_active),
       notes: String(form.notes || ""),
@@ -122,7 +129,7 @@ export default function EnrollmentFormPage() {
       : await bot2Api.updateEnrollment(id, payload);
 
     if (res.error) {
-      alert(
+      toast.error(
         Array.isArray(res.error.message)
           ? res.error.message.join(", ")
           : res.error.message,
@@ -279,11 +286,11 @@ export default function EnrollmentFormPage() {
                 <Label htmlFor="academic_year">O&apos;quv yili</Label>
                 <Input
                   id="academic_year"
-                  value={String(form.academic_year ?? "2025-2026")}
+                  value={String(form.academic_year ?? currentAcademicYear())}
                   onChange={(e) =>
                     setForm((s) => ({ ...s, academic_year: e.target.value }))
                   }
-                  placeholder="2025-2026"
+                  placeholder={currentAcademicYear()}
                 />
               </div>
 

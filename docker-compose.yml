@@ -8,6 +8,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-crm_server}"]
       interval: 10s
@@ -28,19 +30,11 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
-
-  bot1:
-    build:
-      context: ./bot1_service
-    command: python -m bot1_service.main
-    restart: unless-stopped
-    env_file:
-      - ./bot1_service/.env
-    volumes:
-      - ./bot1_service/src:/app/src
-      - ./bot1_service/data:/app/data
-    depends_on:
-      - server
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   bot2:
     build:
@@ -52,7 +46,22 @@ services:
     volumes:
       - ./bot2_service/src:/app/src
     depends_on:
-      - server
+      server:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   dashboard:
     build:
@@ -65,3 +74,11 @@ services:
       - "3000:3000"
     depends_on:
       - server
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:

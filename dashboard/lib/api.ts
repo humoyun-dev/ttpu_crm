@@ -118,22 +118,6 @@ export const CATALOG_TYPES_INFO: CatalogTypeInfo[] = [
   },
 ];
 
-// Bot1 Applicant
-export interface Bot1Applicant {
-  id: string;
-  telegram_user_id: number;
-  telegram_chat_id: number | null;
-  username: string;
-  first_name: string;
-  last_name: string;
-  phone: string;
-  email: string;
-  region: string | null;
-  region_details?: CatalogItemNested;
-  created_at: string;
-  updated_at: string;
-}
-
 // Nested Catalog Item (from API)
 export interface CatalogItemNested {
   id: string;
@@ -143,58 +127,6 @@ export interface CatalogItemNested {
   name_ru: string;
   name_en: string;
   type: CatalogType;
-}
-
-// Applications
-export interface Admissions2026Application {
-  id: string;
-  applicant: string;
-  applicant_details?: Bot1Applicant;
-  direction: string;
-  direction_details?: CatalogItemNested;
-  track: string | null;
-  track_details?: CatalogItemNested;
-  status: "new" | "submitted" | "in_progress" | "approved" | "rejected";
-  answers?: Record<string, unknown>;
-  submitted_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CampusTourRequest {
-  id: string;
-  applicant: string;
-  applicant_details?: Bot1Applicant;
-  preferred_date: string | null;
-  answers: Record<string, unknown>;
-  status: "new" | "submitted" | "in_progress" | "approved" | "rejected";
-  submitted_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface FoundationRequest {
-  id: string;
-  applicant: string;
-  applicant_details?: Bot1Applicant;
-  answers?: Record<string, unknown>;
-  status: "new" | "submitted" | "in_progress" | "approved" | "rejected";
-  submitted_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PolitoAcademyRequest {
-  id: string;
-  applicant: string;
-  applicant_details?: Bot1Applicant;
-  subject: string | null;
-  subject_details?: CatalogItemNested;
-  answers?: Record<string, unknown>;
-  status: "new" | "submitted" | "in_progress" | "approved" | "rejected";
-  submitted_at: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 // Bot2 Survey
@@ -370,7 +302,6 @@ async function apiFetch<T>(
         return apiFetch<T>(endpoint, options, false);
       }
 
-      // Token invalid yoki refresh ishlamadi - tozalash va yo'naltirish
       if (typeof window !== "undefined") {
         clearStoredTokens();
         const pathname = window.location.pathname;
@@ -384,7 +315,6 @@ async function apiFetch<T>(
     const body = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      // DRF returns field errors as {field: ["error"]} or {detail: "error"}
       let message = body.detail || "";
       if (!message && typeof body === "object") {
         const fieldErrors = Object.entries(body)
@@ -533,64 +463,7 @@ export const catalogApi = {
     }),
 };
 
-// Bot1 Applications API
-export const bot1Api = {
-  // Admissions 2026
-  listAdmissions: (params?: Record<string, string>) => {
-    const query = params ? `?${new URLSearchParams(params)}` : "";
-    return apiFetch<PaginatedResponse<Admissions2026Application>>(
-      `/api/v1/bot1/applications/admissions-2026/${query}`,
-    );
-  },
-  getAdmission: (id: string) =>
-    apiFetch<Admissions2026Application>(
-      `/api/v1/bot1/applications/admissions-2026/${id}/`,
-    ),
-
-  // Campus Tour
-  listCampusTours: (params?: Record<string, string>) => {
-    const query = params ? `?${new URLSearchParams(params)}` : "";
-    return apiFetch<PaginatedResponse<CampusTourRequest>>(
-      `/api/v1/bot1/applications/campus-tour/${query}`,
-    );
-  },
-  getCampusTour: (id: string) =>
-    apiFetch<CampusTourRequest>(`/api/v1/bot1/applications/campus-tour/${id}/`),
-
-  // Foundation
-  listFoundation: (params?: Record<string, string>) => {
-    const query = params ? `?${new URLSearchParams(params)}` : "";
-    return apiFetch<PaginatedResponse<FoundationRequest>>(
-      `/api/v1/bot1/applications/foundation/${query}`,
-    );
-  },
-  getFoundation: (id: string) =>
-    apiFetch<FoundationRequest>(`/api/v1/bot1/applications/foundation/${id}/`),
-
-  // Polito Academy
-  listPolito: (params?: Record<string, string>) => {
-    const query = params ? `?${new URLSearchParams(params)}` : "";
-    return apiFetch<PaginatedResponse<PolitoAcademyRequest>>(
-      `/api/v1/bot1/applications/polito-academy/${query}`,
-    );
-  },
-  getPolito: (id: string) =>
-    apiFetch<PolitoAcademyRequest>(
-      `/api/v1/bot1/applications/polito-academy/${id}/`,
-    ),
-
-  // Applicants
-  listApplicants: (params?: Record<string, string>) => {
-    const query = params ? `?${new URLSearchParams(params)}` : "";
-    return apiFetch<PaginatedResponse<Bot1Applicant>>(
-      `/api/v1/bot1/applicants/${query}`,
-    );
-  },
-  getApplicant: (id: string) =>
-    apiFetch<Bot1Applicant>(`/api/v1/bot1/applicants/${id}/`),
-};
-
-// Bot2 Survey API
+// Bot2 API
 export const bot2Api = {
   listSurveys: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
@@ -622,7 +495,6 @@ export const bot2Api = {
       body: JSON.stringify(data),
     }),
 
-  // Student Roster CRUD
   listRoster: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<StudentRoster>>(
@@ -649,7 +521,6 @@ export const bot2Api = {
       method: "DELETE",
     }),
 
-  // Program Enrollment CRUD (aggregated totals)
   listEnrollments: (params?: Record<string, string>) => {
     const query = params ? `?${new URLSearchParams(params)}` : "";
     return apiFetch<PaginatedResponse<ProgramEnrollment>>(
@@ -772,14 +643,11 @@ export function getItemName(
 ): string {
   if (!item) return "-";
 
-  // Both CatalogItem and CatalogItemNested have name_uz, name_ru, name_en
   const langName = item[`name_${lang}` as keyof typeof item] as string;
   if (langName) return langName;
 
-  // Fallback to name field
   if (item.name) return item.name;
 
-  // Check metadata as last resort (for backward compatibility)
   const meta = (item as CatalogItem).metadata || (item as CatalogItem).meta;
   if (meta) {
     const metaName = meta[`name_${lang}`] as string;
@@ -787,16 +655,6 @@ export function getItemName(
   }
 
   return item.code || "-";
-}
-
-// Get applicant full name
-export function getApplicantName(applicant: Bot1Applicant | undefined): string {
-  if (!applicant) return "-";
-  const name = [applicant.first_name, applicant.last_name]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  return name || applicant.username || `ID: ${applicant.telegram_user_id}`;
 }
 
 export function formatDate(date: string | null, includeTime = false): string {
@@ -809,17 +667,6 @@ export function formatDate(date: string | null, includeTime = false): string {
     ...(includeTime ? { hour: "2-digit", minute: "2-digit" } : {}),
   };
   return d.toLocaleDateString("uz-UZ", options);
-}
-
-export function getStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    new: "Yangi",
-    submitted: "Yuborilgan",
-    in_progress: "Ko'rib chiqilmoqda",
-    approved: "Tasdiqlangan",
-    rejected: "Rad etilgan",
-  };
-  return labels[status] || status;
 }
 
 export function getGenderLabel(gender: string): string {

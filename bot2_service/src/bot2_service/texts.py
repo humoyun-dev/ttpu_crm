@@ -24,6 +24,7 @@ PROMPTS = {
         "channels": "Quyidagi kanallarga a'zo bo'ling va xabardor bo'ling:",
         "ask_suggestions": "Universitet faoliyatini takomillashtirish bo'yicha takliflaringiz:",
         "thanks": "Rahmat! Ma'lumotlaringiz qabul qilindi. ✅",
+        "submission_failed": "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring: /start",
     },
     # Russian
     "ru": {
@@ -50,6 +51,7 @@ PROMPTS = {
         "channels": "Подпишитесь на следующие каналы, чтобы быть в курсе:",
         "ask_suggestions": "Ваши предложения по улучшению деятельности университета:",
         "thanks": "Спасибо! Ваши данные приняты. ✅",
+        "submission_failed": "Произошла ошибка. Пожалуйста, попробуйте снова: /start",
     },
     # English
     "en": {
@@ -76,6 +78,7 @@ PROMPTS = {
         "channels": "Join the following channels to stay informed:",
         "ask_suggestions": "Your suggestions for improving university activities:",
         "thanks": "Thank you! Your information has been received. ✅",
+        "submission_failed": "An error occurred. Please try again: /start",
     },
 }
 

@@ -26,8 +26,8 @@ def _verify_db_token(incoming_hash: str, service_name: Optional[str]) -> bool:
     token = qs.order_by("-created_at").first()
     if not token:
         return False
-    token.last_used_at = now
-    token.save(update_fields=["last_used_at"])
+    if not token.last_used_at or (now - token.last_used_at).total_seconds() > 60:
+        ServiceToken.objects.filter(pk=token.pk).update(last_used_at=now)
     return True
 
 

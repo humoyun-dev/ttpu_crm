@@ -22,11 +22,23 @@ import { formatCourseYearLabel } from "@/lib/utils";
 import { bot2Api, StudentRoster } from "@/lib/api";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function StudentsPage() {
   const [rosters, setRosters] = useState<StudentRoster[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -48,15 +60,20 @@ export default function StudentsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Rostdan ham o'chirmoqchimisiz?")) return;
+  const handleDelete = (id: string) => {
+    setDeletingId(id);
+  };
 
+  const confirmDelete = async () => {
+    if (!deletingId) return;
     try {
-      await bot2Api.deleteRoster(id);
+      await bot2Api.deleteRoster(deletingId);
+      setDeletingId(null);
       await loadRosters();
     } catch (error) {
       console.error("Error deleting roster:", error);
-      alert("O'chirishda xatolik yuz berdi");
+      setDeletingId(null);
+      toast.error("O'chirishda xatolik yuz berdi");
     }
   };
 
@@ -167,6 +184,23 @@ export default function StudentsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deletingId} onOpenChange={(open) => !open && setDeletingId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>O'chirishni tasdiqlang</AlertDialogTitle>
+            <AlertDialogDescription>
+              Rostdan ham bu talabani o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Bekor qilish</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              O'chirish
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

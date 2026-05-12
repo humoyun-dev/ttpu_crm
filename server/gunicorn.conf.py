@@ -12,6 +12,10 @@ timeout = int(os.getenv("GUNICORN_TIMEOUT", "120"))
 graceful_timeout = int(os.getenv("GUNICORN_GRACEFUL_TIMEOUT", "30"))
 keepalive = int(os.getenv("GUNICORN_KEEPALIVE", "5"))
 
+max_requests = int(os.getenv("GUNICORN_MAX_REQUESTS", "1000"))
+max_requests_jitter = int(os.getenv("GUNICORN_MAX_REQUESTS_JITTER", "100"))
+preload_app = os.getenv("GUNICORN_PRELOAD_APP", "true").lower() == "true"
+
 accesslog = os.getenv("GUNICORN_ACCESSLOG", "-")
 errorlog = os.getenv("GUNICORN_ERRORLOG", "-")
 loglevel = os.getenv("GUNICORN_LOGLEVEL", "info")

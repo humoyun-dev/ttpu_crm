@@ -1,5 +1,6 @@
 import uuid
 
+from django.db.models import Max
 from rest_framework import serializers
 
 from catalog.models import CatalogItem, CatalogRelation
@@ -33,19 +34,17 @@ def _validate_program_metadata(metadata: dict):
 
 
 def _auto_generate_code(item_type: str) -> str:
-    """Auto-generate a unique code like PROGRAM-001, DIRECTION-002, etc."""
     prefix = (item_type or "item").upper()
-    existing = CatalogItem.objects.filter(
+    result = CatalogItem.objects.filter(
         type=item_type, code__startswith=f"{prefix}-"
-    ).order_by("-code")
+    ).aggregate(max_code=Max("code"))
+    max_code = result["max_code"]
     max_num = 0
-    for item in existing:
+    if max_code:
         try:
-            num = int(item.code.split("-")[-1])
-            if num > max_num:
-                max_num = num
+            max_num = int(max_code.split("-")[-1])
         except (ValueError, IndexError):
-            continue
+            pass
     return f"{prefix}-{max_num + 1:03d}"
 
 

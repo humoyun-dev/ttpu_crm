@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from aiogram import F, Router
@@ -149,10 +150,10 @@ async def set_contact(message: Message, state: FSMContext):
     lang = data.get("language", "uz")
     contact = message.contact
     await state.update_data(
-        phone=contact.phone_number,
+        phone=contact.phone_number or "",
         chat_id=message.chat.id,
         telegram_user_id=message.from_user.id,
-        username=message.from_user.username,
+        username=message.from_user.username or "",
     )
     await state.set_state(SurveyState.waiting_first_name)
     await _send_and_save(message, get_text("ask_first", lang), state, reply_markup=NO_KB)
@@ -438,8 +439,6 @@ async def _final_submit(message: Message, state: FSMContext, show_thanks_only: b
             "Survey submission failed for student_id=%s: status=%s error=%s payload=%s",
             student_id, res.status, res.error, payload,
         )
-        # Retry once after a short delay
-        import asyncio
         await asyncio.sleep(1)
         res2 = await api_client.submit_survey(payload)
         if res2.ok:
@@ -450,8 +449,7 @@ async def _final_submit(message: Message, state: FSMContext, show_thanks_only: b
                 "Survey submission failed on RETRY for student_id=%s: status=%s error=%s",
                 student_id, res2.status, res2.error,
             )
-            # Still show thanks but log the error for investigation
-            await message.answer(get_text("thanks", lang), reply_markup=NO_KB)
+            await message.answer(get_text("submission_failed", lang), reply_markup=NO_KB)
     
     await state.clear()
 

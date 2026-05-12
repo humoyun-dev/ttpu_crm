@@ -11,6 +11,8 @@ import {
   Menu,
   Loader2,
   BarChart3,
+  GraduationCap,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -42,9 +44,14 @@ const navigation: NavItem[] = [
     icon: Users,
   },
   {
+    title: "Talabalar",
+    href: "/dashboard/students",
+    icon: GraduationCap,
+  },
+  {
     title: "Talabalar soni",
     href: "/dashboard/enrollments",
-    icon: Users,
+    icon: BookOpen,
   },
   {
     title: "Analitika",
@@ -55,6 +62,11 @@ const navigation: NavItem[] = [
         title: "So'rovnoma",
         href: "/dashboard/analytics/surveys",
         icon: Users,
+      },
+      {
+        title: "Talabalar soni",
+        href: "/dashboard/analytics/enrollments",
+        icon: BarChart3,
       },
     ],
   },

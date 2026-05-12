@@ -41,52 +41,6 @@ interface Overview {
   }>;
 }
 
-const fallbackOverview: Overview = {
-  total_students: 820,
-  total_responded: 410,
-  coverage_percent: 50,
-  by_year: [
-    { course_year: 1, total: 220, responded: 110, coverage_percent: 50 },
-    { course_year: 2, total: 210, responded: 120, coverage_percent: 57.1 },
-    { course_year: 3, total: 200, responded: 90, coverage_percent: 45 },
-    { course_year: 4, total: 190, responded: 90, coverage_percent: 47.4 },
-  ],
-  by_program: [
-    {
-      program_id: "mock-1",
-      program_name: "Software Engineering",
-      course_year: 1,
-      total: 120,
-      responded: 70,
-      coverage_percent: 58.3,
-    },
-    {
-      program_id: "mock-2",
-      program_name: "Data Science",
-      course_year: 2,
-      total: 110,
-      responded: 60,
-      coverage_percent: 54.5,
-    },
-    {
-      program_id: "mock-3",
-      program_name: "Cyber Security",
-      course_year: 3,
-      total: 95,
-      responded: 40,
-      coverage_percent: 42.1,
-    },
-    {
-      program_id: "mock-4",
-      program_name: "Computer Networks",
-      course_year: 4,
-      total: 88,
-      responded: 35,
-      coverage_percent: 39.8,
-    },
-  ],
-};
-
 export default function EnrollmentAnalyticsPage() {
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,15 +53,12 @@ export default function EnrollmentAnalyticsPage() {
         if (res.data) {
           setData(res.data);
         } else {
-          setData(fallbackOverview);
+          setError("Ma'lumot topilmadi.");
         }
       })
       .catch((err) => {
         console.error(err);
-        setError(
-          "Ma'lumotni yuklab bo'lmadi, mock ma'lumotlar ko'rsatilmoqda.",
-        );
-        setData(fallbackOverview);
+        setError("Ma'lumotni yuklab bo'lmadi. Iltimos, qayta urinib ko'ring.");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -125,7 +76,15 @@ export default function EnrollmentAnalyticsPage() {
     );
   }
 
-  const overview = data || fallbackOverview;
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <p className="text-muted-foreground">{error || "Ma'lumot topilmadi."}</p>
+      </div>
+    );
+  }
+
+  const overview = data;
 
   return (
     <div className="space-y-6 p-6">
@@ -140,12 +99,6 @@ export default function EnrollmentAnalyticsPage() {
           </p>
         </div>
       </div>
-
-      {error && (
-        <div className="rounded-md border border-dashed border-yellow-500/50 bg-yellow-500/5 p-3 text-sm text-yellow-700 dark:text-yellow-400">
-          {error}
-        </div>
-      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

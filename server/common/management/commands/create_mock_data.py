@@ -2,14 +2,6 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from authn.models import User
-from bot1.models import (
-    Admissions2026Application,
-    ApplicationStatus,
-    Bot1Applicant,
-    CampusTourRequest,
-    FoundationRequest,
-    PolitoAcademyRequest,
-)
 from bot2.models import Bot2Student, Bot2SurveyResponse, StudentRoster
 from catalog.models import CatalogItem
 from common.auth import _hashed
@@ -40,19 +32,12 @@ class Command(BaseCommand):
         viewer.set_password(viewer_pwd)
         viewer.save()
 
-        # Service tokens
-        ServiceToken.objects.update_or_create(
-            service_name=ServiceToken.Service.BOT1,
-            scope="default",
-            defaults={"token_hash": _hashed("bot1secret"), "is_active": True},
-        )
         ServiceToken.objects.update_or_create(
             service_name=ServiceToken.Service.BOT2,
             scope="default",
             defaults={"token_hash": _hashed("bot2secret"), "is_active": True},
         )
 
-        # Catalog
         region, _ = CatalogItem.objects.update_or_create(
             type=CatalogItem.ItemType.REGION,
             code="TASH",
@@ -64,67 +49,7 @@ class Command(BaseCommand):
         program_b, _ = CatalogItem.objects.update_or_create(
             type=CatalogItem.ItemType.PROGRAM, code="PB", defaults={"name": "Program B"}
         )
-        direction, _ = CatalogItem.objects.update_or_create(
-            type=CatalogItem.ItemType.DIRECTION, code="ENG", defaults={"name": "Engineering"}
-        )
-        track, _ = CatalogItem.objects.update_or_create(
-            type=CatalogItem.ItemType.TRACK, code="ENG-1", defaults={"name": "Engineering Track 1", "parent": direction}
-        )
-        subject, _ = CatalogItem.objects.update_or_create(
-            type=CatalogItem.ItemType.SUBJECT, code="MATH", defaults={"name": "Math"}
-        )
 
-        # Bot1
-        applicant, _ = Bot1Applicant.objects.update_or_create(
-            telegram_user_id=123456,
-            defaults={
-                "telegram_chat_id": 654321,
-                "username": "mock_user",
-                "first_name": "Alice",
-                "last_name": "Applicant",
-                "phone": "+123456789",
-                "email": "mock@applicant.com",
-                "region": region,
-            },
-        )
-        Admissions2026Application.objects.update_or_create(
-            applicant=applicant,
-            defaults={
-                "direction": direction,
-                "track": track,
-                "status": ApplicationStatus.SUBMITTED,
-                "answers": {"q1": "yes"},
-                "submitted_at": timezone.now(),
-            },
-        )
-        CampusTourRequest.objects.update_or_create(
-            applicant=applicant,
-            defaults={
-                "preferred_date": timezone.now().date(),
-                "status": ApplicationStatus.SUBMITTED,
-                "answers": {"slots": "morning"},
-                "submitted_at": timezone.now(),
-            },
-        )
-        FoundationRequest.objects.update_or_create(
-            applicant=applicant,
-            defaults={
-                "status": ApplicationStatus.SUBMITTED,
-                "answers": {"interested": True},
-                "submitted_at": timezone.now(),
-            },
-        )
-        PolitoAcademyRequest.objects.update_or_create(
-            applicant=applicant,
-            defaults={
-                "subject": subject,
-                "status": ApplicationStatus.SUBMITTED,
-                "answers": {"level": "beginner"},
-                "submitted_at": timezone.now(),
-            },
-        )
-
-        # Bot2
         roster1, _ = StudentRoster.objects.update_or_create(
             student_external_id="S-001",
             defaults={
