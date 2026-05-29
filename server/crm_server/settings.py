@@ -13,8 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
 
-# Fail fast in production: never run with the shipped dev secret key.
-if not DEBUG and SECRET_KEY == "dev-secret-key-change-me":
+# Fail fast in production: never run with a shipped placeholder secret key.
+if not DEBUG and SECRET_KEY in {"dev-secret-key-change-me", "replace-me"}:
     from django.core.exceptions import ImproperlyConfigured
 
     raise ImproperlyConfigured(
@@ -192,8 +192,8 @@ SERVICE_TOKENS = {
     "bot2": os.getenv("SERVICE_TOKEN_BOT2_HASH", ""),
 }
 
-# Transport-security flags default to ON in production (DEBUG off) so a forgotten
-# env var can't silently ship insecure cookies / plain HTTP. Override per-flag via env.
+# Cookie security defaults to ON in production (DEBUG off) so a forgotten env var
+# can't silently ship non-Secure auth cookies; override per-flag via env.
 _secure_default = "false" if DEBUG else "true"
 
 ACCESS_COOKIE_NAME = os.getenv("ACCESS_COOKIE_NAME", "access_token")
@@ -202,17 +202,20 @@ JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE", _secure_default).lower() == "
 JWT_COOKIE_SAMESITE = os.getenv("JWT_COOKIE_SAMESITE", "Lax")
 JWT_COOKIE_DOMAIN = os.getenv("JWT_COOKIE_DOMAIN") or None
 
-# Production security knobs (secure-by-default when DEBUG is off; configure via env)
+# Transport knobs stay OFF by default (explicit opt-in via env / .env.example).
+# SSL redirect must NOT default on: it would 301 internal service-to-service HTTP
+# (docker bot2 -> http://server:8000) and plain-HTTP health probes. Enable behind
+# a TLS-terminating proxy via SECURE_SSL_REDIRECT/SECURE_PROXY_SSL_HEADER_ENABLED.
 USE_X_FORWARDED_HOST = os.getenv("USE_X_FORWARDED_HOST", "false").lower() == "true"
 SECURE_PROXY_SSL_HEADER = (
     ("HTTP_X_FORWARDED_PROTO", "https")
-    if os.getenv("SECURE_PROXY_SSL_HEADER_ENABLED", _secure_default).lower() == "true"
+    if os.getenv("SECURE_PROXY_SSL_HEADER_ENABLED", "false").lower() == "true"
     else None
 )
-SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", _secure_default).lower() == "true"
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "false").lower() == "true"
 SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", _secure_default).lower() == "true"
 CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", _secure_default).lower() == "true"
-SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000"))
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0"))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "false").lower() == "true"
 SECURE_HSTS_PRELOAD = os.getenv("SECURE_HSTS_PRELOAD", "false").lower() == "true"
 SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "strict-origin-when-cross-origin")
