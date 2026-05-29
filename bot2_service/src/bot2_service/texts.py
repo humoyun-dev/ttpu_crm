@@ -24,7 +24,12 @@ PROMPTS = {
         "channels": "Quyidagi kanallarga a'zo bo'ling va xabardor bo'ling:",
         "ask_suggestions": "Universitet faoliyatini takomillashtirish bo'yicha takliflaringiz:",
         "thanks": "Rahmat! Ma'lumotlaringiz qabul qilindi. ✅",
-        "submission_failed": "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring: /start",
+        "submission_failed": "Ma'lumotlarni yuborishda xatolik yuz berdi. Javoblaringiz saqlanib qoldi — qayta yuborish uchun /retry buyrug'ini bosing.",
+        "student_id_required": "Iltimos, Student ID raqamingizni matn ko'rinishida kiriting.",
+        "use_buttons": "Iltimos, yuqoridagi tugmalardan birini tanlang.",
+        "cancelled": "So'rovnoma bekor qilindi. Qaytadan boshlash uchun /start buyrug'ini bosing.",
+        "unknown_command": "So'rovnomani boshlash uchun /start buyrug'ini bosing.",
+        "retry_nothing": "Qayta yuboriladigan ma'lumot topilmadi. /start bilan boshlang.",
     },
     # Russian
     "ru": {
@@ -51,7 +56,12 @@ PROMPTS = {
         "channels": "Подпишитесь на следующие каналы, чтобы быть в курсе:",
         "ask_suggestions": "Ваши предложения по улучшению деятельности университета:",
         "thanks": "Спасибо! Ваши данные приняты. ✅",
-        "submission_failed": "Произошла ошибка. Пожалуйста, попробуйте снова: /start",
+        "submission_failed": "Произошла ошибка при отправке данных. Ваши ответы сохранены — нажмите /retry, чтобы повторить отправку.",
+        "student_id_required": "Пожалуйста, введите ваш Student ID текстом.",
+        "use_buttons": "Пожалуйста, выберите один из вариантов на кнопках выше.",
+        "cancelled": "Опрос отменён. Нажмите /start, чтобы начать заново.",
+        "unknown_command": "Нажмите /start, чтобы начать опрос.",
+        "retry_nothing": "Нет данных для повторной отправки. Начните с /start.",
     },
     # English
     "en": {
@@ -78,7 +88,12 @@ PROMPTS = {
         "channels": "Join the following channels to stay informed:",
         "ask_suggestions": "Your suggestions for improving university activities:",
         "thanks": "Thank you! Your information has been received. ✅",
-        "submission_failed": "An error occurred. Please try again: /start",
+        "submission_failed": "An error occurred while submitting. Your answers were saved — press /retry to resend.",
+        "student_id_required": "Please enter your Student ID as text.",
+        "use_buttons": "Please choose one of the buttons above.",
+        "cancelled": "Survey cancelled. Press /start to begin again.",
+        "unknown_command": "Press /start to begin the survey.",
+        "retry_nothing": "Nothing to resubmit. Start with /start.",
     },
 }
 

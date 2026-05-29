@@ -27,4 +27,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src /app/src
 
+# The package lives under /app/src (src-layout) and is not pip-installed,
+# so it must be on PYTHONPATH for `python -m bot2_service.main` to resolve.
+ENV PYTHONPATH=/app/src
+
 CMD ["python", "-m", "bot2_service.main"]

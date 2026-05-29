@@ -18,6 +18,10 @@ COPY . /app
 
 RUN chmod +x /app/entrypoint.sh
 
+# In containers bind to all interfaces so the published port is reachable.
+# (gunicorn.conf.py defaults to 127.0.0.1 for bare-metal-behind-nginx safety.)
+ENV GUNICORN_BIND=0.0.0.0:8000
+
 EXPOSE 8000
 
 CMD ["/app/entrypoint.sh"]

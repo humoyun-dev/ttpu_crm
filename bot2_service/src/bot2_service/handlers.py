@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from aiogram.client.default import DefaultBotProperties
@@ -132,6 +132,26 @@ async def cmd_start(message: Message, state: FSMContext):
     await state.update_data(last_bot_message_id=sent.message_id)
 
 
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, state: FSMContext):
+    """Abort the current survey at any step and reset state."""
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    await state.clear()
+    await message.answer(get_text("cancelled", lang), reply_markup=NO_KB)
+
+
+@router.message(Command("retry"))
+async def cmd_retry(message: Message, state: FSMContext):
+    """Resend the last (failed) submission using the answers still in state."""
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    if not data.get("student_id"):
+        await message.answer(get_text("retry_nothing", lang), reply_markup=NO_KB)
+        return
+    await _final_submit(message, state)
+
+
 # ==================== STEP 2: Language -> Contact ====================
 @router.message(SurveyState.waiting_language)
 async def set_language(message: Message, state: FSMContext):
@@ -234,7 +254,13 @@ async def set_student_id(message: Message, state: FSMContext):
     """Save student ID and ask for education program."""
     data = await state.get_data()
     lang = data.get("language", "uz")
-    await state.update_data(student_id=message.text.strip() if message.text else "")
+    student_id = message.text.strip() if message.text else ""
+    if not student_id:
+        # Non-text input (sticker/photo/...) would otherwise become an empty ID
+        # and the whole survey would be silently dropped at submit. Re-prompt.
+        await _send_and_save(message, get_text("student_id_required", lang), state, reply_markup=NO_KB)
+        return
+    await state.update_data(student_id=student_id)
     programs = await catalog.get_programs()
     await state.set_state(SurveyState.waiting_program)
     await _send_and_save(message, get_text("ask_program", lang), state, reply_markup=programs_keyboard(programs, lang))
@@ -384,18 +410,35 @@ async def set_suggestions(message: Message, state: FSMContext):
     await _final_submit(message, state)
 
 
+# ==================== Fallback: unmatched messages ====================
+@router.message()
+async def fallback_handler(message: Message, state: FSMContext):
+    """Catch messages that match no step — e.g. free text sent during a
+    button-only step, or any message outside an active survey. Registered last,
+    so it only runs when nothing else matched (prevents silent drops / users
+    getting stuck after a restart wiped their in-memory state)."""
+    current = await state.get_state()
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    if current is None:
+        await message.answer(get_text("unknown_command", lang))
+    else:
+        await message.answer(get_text("use_buttons", lang))
+
+
 # ==================== Final Submission ====================
 async def _final_submit(message: Message, state: FSMContext, show_thanks_only: bool = False):
     """Submit survey data to the server and send thanks message."""
     data = await state.get_data()
     lang = data.get("language", "uz")
     
-    # Validate required fields before submission
+    # Validate required fields before submission. Never show a fake "thanks" on
+    # missing data — send the user back to re-enter their Student ID instead.
     student_id = data.get("student_id")
     if not student_id or not str(student_id).strip():
         logger.error("Survey submission skipped: student_id is empty. data=%s", data)
-        await message.answer(get_text("thanks", lang), reply_markup=NO_KB)
-        await state.clear()
+        await message.answer(get_text("student_id_required", lang), reply_markup=NO_KB)
+        await state.set_state(SurveyState.waiting_student_id)
         return
     
     payload = {
@@ -430,28 +473,31 @@ async def _final_submit(message: Message, state: FSMContext, show_thanks_only: b
     logger.info("Submitting survey for student_id=%s, telegram_user_id=%s", student_id, data.get("telegram_user_id"))
     
     res = await api_client.submit_survey(payload)
-    
     if res.ok:
         logger.info("Survey submitted successfully for student_id=%s", student_id)
         await message.answer(get_text("thanks", lang), reply_markup=NO_KB)
-    else:
-        logger.error(
-            "Survey submission failed for student_id=%s: status=%s error=%s payload=%s",
-            student_id, res.status, res.error, payload,
-        )
-        await asyncio.sleep(1)
-        res2 = await api_client.submit_survey(payload)
-        if res2.ok:
-            logger.info("Survey submitted on retry for student_id=%s", student_id)
-            await message.answer(get_text("thanks", lang), reply_markup=NO_KB)
-        else:
-            logger.error(
-                "Survey submission failed on RETRY for student_id=%s: status=%s error=%s",
-                student_id, res2.status, res2.error,
-            )
-            await message.answer(get_text("submission_failed", lang), reply_markup=NO_KB)
-    
-    await state.clear()
+        await state.clear()
+        return
+
+    logger.error(
+        "Survey submission failed for student_id=%s: status=%s error=%s payload=%s",
+        student_id, res.status, res.error, payload,
+    )
+    await asyncio.sleep(1)
+    res2 = await api_client.submit_survey(payload)
+    if res2.ok:
+        logger.info("Survey submitted on retry for student_id=%s", student_id)
+        await message.answer(get_text("thanks", lang), reply_markup=NO_KB)
+        await state.clear()
+        return
+
+    # Both attempts failed. Keep the collected answers in state so the user can
+    # resend with /retry instead of losing the whole survey.
+    logger.error(
+        "Survey submission failed on RETRY for student_id=%s: status=%s error=%s",
+        student_id, res2.status, res2.error,
+    )
+    await message.answer(get_text("submission_failed", lang), reply_markup=NO_KB)
 
 
 async def start_bot():
@@ -464,6 +510,9 @@ async def start_bot():
         logger.error(str(e))
         return
     bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    # In-memory FSM storage: in-flight (half-finished) surveys are lost on restart.
+    # The default-state fallback handler keeps users from getting silently stuck;
+    # switch to RedisStorage if cross-restart persistence becomes a requirement.
     dp = Dispatcher(storage=MemoryStorage())
     api = CrmApiClient()
     cache = CatalogCache(api=api)
@@ -565,5 +614,14 @@ async def _polling_exit_on_conflict(
             failed = False
 
         for update in updates:
-            await dp.feed_update(bot, update)
-            get_updates.offset = update.update_id + 1
+            try:
+                await dp.feed_update(bot, update)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # noqa: BLE001 - one bad update must not kill the bot
+                logging.getLogger("aiogram.dispatcher").exception(
+                    "Error handling update id=%s: %s", update.update_id, e
+                )
+            finally:
+                # Always advance the offset so a poison update isn't reprocessed forever.
+                get_updates.offset = update.update_id + 1

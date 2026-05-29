@@ -66,10 +66,12 @@ services:
   dashboard:
     build:
       context: ./dashboard
+      args:
+        # Baked into the client bundle at build time; set to the public API URL the
+        # browser can reach (NOT the internal docker hostname).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     command: npm run start
     restart: unless-stopped
-    env_file:
-      - ./dashboard/.env
     ports:
       - "3000:3000"
     depends_on:

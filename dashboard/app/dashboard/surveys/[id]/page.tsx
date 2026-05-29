@@ -40,6 +40,7 @@ import {
   formatDate,
 } from "@/lib/api";
 import { formatUzPhone } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 
 import { EMPLOYMENT_LABELS, CONSENT_LABELS, LABEL_TRANSLATIONS, courseYearLabel } from "@/lib/constants";
@@ -94,13 +95,17 @@ export default function SurveyDetailPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const id = params.id as string;
 
   const [survey, setSurvey] = useState<Bot2SurveyResponse | null>(null);
   const [student, setStudent] = useState<Bot2Student | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(searchParams.get("edit") === "true");
+  const [editing, setEditing] = useState(
+    isAdmin && searchParams.get("edit") === "true",
+  );
   const [saving, setSaving] = useState(false);
 
   // Catalog data for dropdowns
@@ -338,34 +343,36 @@ export default function SurveyDetailPage() {
             {survey.survey_campaign || "—"}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {editing ? (
-            <>
+        {isAdmin && (
+          <div className="flex items-center gap-2 shrink-0">
+            {editing ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Bekor qilish
+                </Button>
+                <Button size="sm" onClick={handleSave} disabled={saving}>
+                  <Save className="h-4 w-4 mr-1" />
+                  {saving ? "Saqlanmoqda..." : "Saqlash"}
+                </Button>
+              </>
+            ) : (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleCancelEdit}
-                disabled={saving}
+                onClick={() => setEditing(true)}
               >
-                <X className="h-4 w-4 mr-1" />
-                Bekor qilish
+                <Pencil className="h-4 w-4 mr-1" />
+                Tahrirlash
               </Button>
-              <Button size="sm" onClick={handleSave} disabled={saving}>
-                <Save className="h-4 w-4 mr-1" />
-                {saving ? "Saqlanmoqda..." : "Saqlash"}
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditing(true)}
-            >
-              <Pencil className="h-4 w-4 mr-1" />
-              Tahrirlash
-            </Button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Main grid ── */}

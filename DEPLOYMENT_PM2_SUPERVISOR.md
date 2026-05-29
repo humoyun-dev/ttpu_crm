@@ -1,6 +1,6 @@
 # TTPU CRM Deployment Guide (PM2 + Supervisor, Docker'siz)
 
-Ushbu yo‘riqnoma `server/` (Django API) + `dashboard/` (Next.js) + `bot1_service/` va `bot2_service/` (Python Telegram bot servislar) ni **Docker ishlatmasdan** VPS/production serverda doimiy ishlatish uchun.
+Ushbu yo‘riqnoma `server/` (Django API) + `dashboard/` (Next.js) + `bot2_service/` (Python Telegram bot servisi) ni **Docker ishlatmasdan** VPS/production serverda doimiy ishlatish uchun.
 
 - **Next.js**: PM2 orqali
 - **Django + bot servislar**: Supervisor orqali
@@ -104,8 +104,7 @@ USE_SQLITE=1
 JWT_COOKIE_SECURE=true
 JWT_COOKIE_SAMESITE=Lax
 
-# Service token hashlar (botlar uchun)
-SERVICE_TOKEN_BOT1_HASH=<sha256-of-bot1-raw-token>
+# Service token hash (bot uchun)
 SERVICE_TOKEN_BOT2_HASH=<sha256-of-bot2-raw-token>
 
 # Reverse proxy / HTTPS (Nginx ortida)
@@ -133,31 +132,7 @@ python manage.py create_admin --email admin@example.com --password 'StrongPass!1
 
 ---
 
-## 4) Bot1/Bot2 servislar sozlash
-
-### 4.1. Bot1
-
-```bash
-cd /opt/ttpu_crm/bot1_service
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-```
-
-`bot1_service/.env` ichida production uchun:
-
-```env
-BOT_TOKEN=<telegram-bot-token>
-SERVER_BASE_URL=https://api.example.uz/api/v1
-SERVICE_TOKEN=<raw-bot1-service-token>
-DASHBOARD_EMAIL=admin@example.com
-DASHBOARD_PASSWORD=StrongPass!123
-DEFAULT_LANGUAGE=uz
-CATALOG_CACHE_TTL=900
-```
-
-### 4.2. Bot2
+## 4) Bot2 servisini sozlash
 
 ```bash
 cd /opt/ttpu_crm/bot2_service
@@ -180,7 +155,7 @@ DASHBOARD_PASSWORD=
 
 ---
 
-## 5) Supervisor orqali doimiy ishga tushirish (API + botlar)
+## 5) Supervisor orqali doimiy ishga tushirish (API + bot)
 
 Supervisor konfiguratsiyalari odatda: `/etc/supervisor/conf.d/*.conf`
 
@@ -202,25 +177,7 @@ stderr_logfile=/var/log/ttpu-api.err.log
 environment=PATH="/opt/ttpu_crm/server/.venv/bin",PYTHONUNBUFFERED="1"
 ```
 
-### 5.2. Bot1
-
-Fayl yarating: `/etc/supervisor/conf.d/ttpu-bot1.conf`
-
-```ini
-[program:ttpu-bot1]
-directory=/opt/ttpu_crm/bot1_service
-command=/opt/ttpu_crm/bot1_service/.venv/bin/python -m bot1_service.main
-user=www-data
-autostart=true
-autorestart=true
-stopasgroup=true
-killasgroup=true
-stdout_logfile=/var/log/ttpu-bot1.out.log
-stderr_logfile=/var/log/ttpu-bot1.err.log
-environment=PATH="/opt/ttpu_crm/bot1_service/.venv/bin",PYTHONUNBUFFERED="1"
-```
-
-### 5.3. Bot2
+### 5.2. Bot2
 
 Fayl yarating: `/etc/supervisor/conf.d/ttpu-bot2.conf`
 
@@ -238,7 +195,7 @@ stderr_logfile=/var/log/ttpu-bot2.err.log
 environment=PATH="/opt/ttpu_crm/bot2_service/.venv/bin",PYTHONUNBUFFERED="1"
 ```
 
-### 5.4. Supervisor’ni reload qilish
+### 5.3. Supervisor’ni reload qilish
 
 ```bash
 sudo supervisorctl reread
@@ -250,7 +207,6 @@ Log ko‘rish:
 
 ```bash
 sudo tail -n 200 /var/log/ttpu-api.err.log
-sudo tail -n 200 /var/log/ttpu-bot1.err.log
 sudo tail -n 200 /var/log/ttpu-bot2.err.log
 ```
 
@@ -387,14 +343,9 @@ npm run build
 pm2 restart ttpu-dashboard
 ```
 
-### Botlar
+### Bot
 
 ```bash
-cd /opt/ttpu_crm/bot1_service
-source .venv/bin/activate
-pip install -r requirements.txt
-sudo supervisorctl restart ttpu-bot1
-
 cd /opt/ttpu_crm/bot2_service
 source .venv/bin/activate
 pip install -r requirements.txt

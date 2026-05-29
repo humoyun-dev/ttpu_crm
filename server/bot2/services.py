@@ -29,10 +29,10 @@ def parse_roster_payload(row: dict) -> dict:
     try:
         course_year = int(row.get("course_year"))
     except (TypeError, ValueError):
-        raise APIError(code="INVALID_COURSE_YEAR", detail="course_year must be 1..4.")
+        raise APIError(code="INVALID_COURSE_YEAR", detail="course_year must be an integer between 1 and 5.")
 
-    if course_year not in (1, 2, 3, 4):
-        raise APIError(code="INVALID_COURSE_YEAR", detail="course_year must be between 1 and 4.")
+    if course_year not in (1, 2, 3, 4, 5):
+        raise APIError(code="INVALID_COURSE_YEAR", detail="course_year must be between 1 and 5 (5 = graduated).")
 
     campaign = row.get("campaign") or "default"
     return {

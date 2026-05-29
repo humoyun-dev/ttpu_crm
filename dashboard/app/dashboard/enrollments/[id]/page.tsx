@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { bot2Api, catalogApi, CatalogItem, ProgramEnrollment } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { ArrowLeft, Save } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,6 +34,8 @@ function currentAcademicYear(): string {
 export default function EnrollmentFormPage() {
   const router = useRouter();
   const params = useParams();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const id = params?.id as string;
   const isNew = id === "new";
 
@@ -345,10 +348,12 @@ export default function EnrollmentFormPage() {
               >
                 Bekor qilish
               </Button>
-              <Button type="submit" disabled={saving}>
-                <Save className="h-4 w-4 mr-2" />
-                {saving ? "Saqlanmoqda..." : "Saqlash"}
-              </Button>
+              {isAdmin && (
+                <Button type="submit" disabled={saving}>
+                  <Save className="h-4 w-4 mr-2" />
+                  {saving ? "Saqlanmoqda..." : "Saqlash"}
+                </Button>
+              )}
             </div>
           </form>
         </CardContent>

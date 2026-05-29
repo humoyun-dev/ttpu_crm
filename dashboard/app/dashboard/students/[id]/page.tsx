@@ -19,13 +19,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { bot2Api, catalogApi, StudentRoster, CatalogItem } from "@/lib/api";
+import { bot2Api, catalogApi, CatalogItem } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { ArrowLeft, Save } from "lucide-react";
 import { toast } from "sonner";
 
 export default function StudentFormPage() {
   const router = useRouter();
   const params = useParams();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const id = params?.id as string;
   const isNew = id === "new";
 
@@ -89,19 +92,21 @@ export default function StudentFormPage() {
     }
 
     setSaving(true);
-    try {
-      if (isNew) {
-        await bot2Api.createRoster(formData);
-      } else {
-        await bot2Api.updateRoster(id, formData);
-      }
-      router.push("/dashboard/students");
-    } catch (error) {
-      console.error("Error saving roster:", error);
-      toast.error("Saqlashda xatolik yuz berdi");
-    } finally {
+    const res = isNew
+      ? await bot2Api.createRoster(formData)
+      : await bot2Api.updateRoster(id, formData);
+
+    if (res.error) {
+      toast.error(
+        Array.isArray(res.error.message)
+          ? res.error.message.join(", ")
+          : res.error.message,
+      );
       setSaving(false);
+      return;
     }
+
+    router.push("/dashboard/students");
   };
 
   if (loading) {
@@ -252,10 +257,12 @@ export default function StudentFormPage() {
               >
                 Bekor qilish
               </Button>
-              <Button type="submit" disabled={saving}>
-                <Save className="h-4 w-4 mr-2" />
-                {saving ? "Saqlanmoqda..." : "Saqlash"}
-              </Button>
+              {isAdmin && (
+                <Button type="submit" disabled={saving}>
+                  <Save className="h-4 w-4 mr-2" />
+                  {saving ? "Saqlanmoqda..." : "Saqlash"}
+                </Button>
+              )}
             </div>
           </form>
         </CardContent>

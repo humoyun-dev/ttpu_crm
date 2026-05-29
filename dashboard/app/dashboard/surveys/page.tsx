@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Eye,
@@ -52,18 +52,16 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import {
-  bot2Api,
-  Bot2SurveyResponse,
-  Bot2Student,
-  formatDate,
-} from "@/lib/api";
+import { bot2Api, Bot2SurveyResponse, formatDate } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { useSearch } from "@/lib/hooks/use-search";
 import { formatCourseYearLabel, cn } from "@/lib/utils";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { EMPLOYMENT_LABELS, GENDER_LABELS } from "@/lib/constants";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
+const FETCH_ALL_PAGE_SIZE = 500;
 
 type DatePreset = "all" | "today" | "week" | "month" | "year" | "custom";
 
@@ -105,16 +103,53 @@ function formatLocalDate(d: Date | null): string {
   });
 }
 
+/* Fetch every survey by looping through all pages (page_size capped at 500). */
+async function fetchAllSurveys(
+  params: Record<string, string>,
+): Promise<Bot2SurveyResponse[]> {
+  const all: Bot2SurveyResponse[] = [];
+  let page = 1;
+  // Safety cap to avoid an unbounded loop if `next` is mis-reported.
+  for (let guard = 0; guard < 1000; guard += 1) {
+    const res = await bot2Api.listSurveys({
+      ...params,
+      page: String(page),
+      page_size: String(FETCH_ALL_PAGE_SIZE),
+    });
+    if (res.error) {
+      throw new Error(
+        Array.isArray(res.error.message)
+          ? res.error.message.join(", ")
+          : res.error.message,
+      );
+    }
+    const data = res.data;
+    if (!data) break;
+    all.push(...data.results);
+    if (!data.next) break;
+    page += 1;
+  }
+  return all;
+}
+
 export default function SurveysPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
+  // Current page of surveys (server-side pagination)
   const [surveys, setSurveys] = useState<Bot2SurveyResponse[]>([]);
-  const [students, setStudents] = useState<Record<string, Bot2Student>>({});
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
 
-  // Pagination
+  // Server-side search + pagination state
+  const { searchTerm, debouncedSearch, setSearch } = useSearch();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+
+  // Full dataset (all surveys) for whole-dataset stats + export
+  const [allSurveys, setAllSurveys] = useState<Bot2SurveyResponse[]>([]);
+  const [allLoaded, setAllLoaded] = useState(false);
 
   // Date range export
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
@@ -122,79 +157,79 @@ export default function SurveysPage() {
   const [customTo, setCustomTo] = useState<Date | undefined>();
   const [exporting, setExporting] = useState(false);
 
-  const fetchData = useCallback(async () => {
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  /* ── load current page from server ── */
+  const fetchPage = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    try {
-      const surveyRes = await bot2Api.listSurveys({
-        page_size: "500",
-        ordering: "-submitted_at",
-      });
-      if (surveyRes.error) throw new Error(surveyRes.error.message as string);
+    const params: Record<string, string> = {
+      page: String(currentPage),
+      page_size: String(pageSize),
+      ordering: "-submitted_at",
+    };
+    if (debouncedSearch) params.search = debouncedSearch;
 
-      const surveyList = surveyRes.data?.results || [];
-      setSurveys(surveyList);
-
-      const studentRes = await bot2Api.listStudents({ page_size: "500" });
-      const studentMap: Record<string, Bot2Student> = {};
-      if (studentRes.data?.results) {
-        studentRes.data.results.forEach((st) => {
-          studentMap[st.id] = st;
-        });
-      }
-      setStudents(studentMap);
-    } catch (err) {
+    const res = await bot2Api.listSurveys(params);
+    if (res.error) {
       setError(
-        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi",
+        Array.isArray(res.error.message)
+          ? res.error.message.join(", ")
+          : res.error.message,
       );
-    } finally {
       setLoading(false);
+      return;
+    }
+    if (res.data) {
+      setSurveys(res.data.results);
+      setTotalCount(res.data.count);
+    }
+    setLoading(false);
+  }, [currentPage, pageSize, debouncedSearch]);
+
+  /* ── load whole dataset (stats + export) ── */
+  const fetchAll = useCallback(async () => {
+    setAllLoaded(false);
+    try {
+      const all = await fetchAllSurveys({ ordering: "-submitted_at" });
+      setAllSurveys(all);
+      setAllLoaded(true);
+    } catch {
+      // Stats/export remain unavailable; the table itself still works.
+      setAllLoaded(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const refresh = useCallback(() => {
+    fetchPage();
+    fetchAll();
+  }, [fetchPage, fetchAll]);
 
-  // Reset page when search changes
   useEffect(() => {
+    fetchPage();
+  }, [fetchPage]);
+
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
     setCurrentPage(1);
-  }, [search]);
+  };
 
-  const filteredSurveys = useMemo(() => {
-    const filtered = surveys.filter((survey) => {
-      if (!search) return true;
-      const student = students[survey.student];
-      const searchLower = search.toLowerCase();
-      return (
-        student?.first_name?.toLowerCase().includes(searchLower) ||
-        student?.last_name?.toLowerCase().includes(searchLower) ||
-        student?.student_external_id?.toLowerCase().includes(searchLower) ||
-        student?.phone?.includes(searchLower) ||
-        survey.survey_campaign?.toLowerCase().includes(searchLower) ||
-        survey.employment_company?.toLowerCase().includes(searchLower) ||
-        survey.employment_role?.toLowerCase().includes(searchLower) ||
-        survey.suggestions?.toLowerCase().includes(searchLower)
-      );
-    });
-    // Already ordered by -submitted_at from API, but ensure client-side sort
-    return filtered.sort((a, b) => {
-      const dateA = new Date(a.submitted_at || a.created_at).getTime();
-      const dateB = new Date(b.submitted_at || b.created_at).getTime();
-      return dateB - dateA;
-    });
-  }, [surveys, students, search]);
+  /* ── whole-dataset stats ── */
+  const employedCount = allSurveys.filter(
+    (s) => s.employment_status === "employed",
+  ).length;
+  const unemployedCount = allSurveys.filter(
+    (s) => s.employment_status === "unemployed",
+  ).length;
+  const campaignsCount = new Set(allSurveys.map((s) => s.survey_campaign)).size;
 
-  // Pagination calculations
-  const totalPages = Math.max(1, Math.ceil(filteredSurveys.length / pageSize));
-  const paginatedSurveys = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredSurveys.slice(start, start + pageSize);
-  }, [filteredSurveys, currentPage, pageSize]);
-
-  /* ── date-filtered surveys for export ── */
-  const exportSurveys = useMemo(() => {
+  /* ── date-filtered surveys for export (from full dataset) ── */
+  const exportSurveys = (() => {
     let range: { from: Date | null; to: Date | null };
     if (datePreset === "custom") {
       range = {
@@ -205,19 +240,21 @@ export default function SurveysPage() {
       range = getDateRange(datePreset);
     }
 
-    return filteredSurveys.filter((s) => {
+    return allSurveys.filter((s) => {
       if (!range.from && !range.to) return true;
       const d = new Date(s.submitted_at || s.created_at);
       if (range.from && d < range.from) return false;
       if (range.to && d >= range.to) return false;
       return true;
     });
-  }, [filteredSurveys, datePreset, customFrom, customTo]);
-
-  const campaigns = [...new Set(surveys.map((s) => s.survey_campaign))];
+  })();
 
   /* ── export to Excel ── */
   const handleExport = () => {
+    if (!allLoaded) {
+      toast.error("Ma'lumotlar hali yuklanmoqda, biroz kuting");
+      return;
+    }
     if (exportSurveys.length === 0) {
       toast.error("Eksport qilish uchun ma'lumot topilmadi");
       return;
@@ -225,7 +262,7 @@ export default function SurveysPage() {
     setExporting(true);
     try {
       const rows = exportSurveys.map((survey) => {
-        const student = survey.student_details || students[survey.student];
+        const student = survey.student_details;
         const consents = (survey.consents as Record<string, boolean>) || {};
         const regionName =
           student?.region_details?.name_uz ||
@@ -310,7 +347,7 @@ export default function SurveysPage() {
             Talabalar so&apos;rovnomalari natijalari
           </p>
         </div>
-        <Button onClick={fetchData} variant="outline" size="sm">
+        <Button onClick={refresh} variant="outline" size="sm">
           <RefreshCw className="mr-2 h-4 w-4" />
           Yangilash
         </Button>
@@ -326,9 +363,7 @@ export default function SurveysPage() {
             <ClipboardList className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">
-              {surveys.length}
-            </div>
+            <div className="text-xl sm:text-2xl font-bold">{totalCount}</div>
           </CardContent>
         </Card>
         <Card>
@@ -340,7 +375,7 @@ export default function SurveysPage() {
           </CardHeader>
           <CardContent>
             <div className="text-xl sm:text-2xl font-bold">
-              {campaigns.length}
+              {allLoaded ? campaignsCount : "…"}
             </div>
           </CardContent>
         </Card>
@@ -353,7 +388,7 @@ export default function SurveysPage() {
           </CardHeader>
           <CardContent>
             <div className="text-xl sm:text-2xl font-bold">
-              {surveys.filter((s) => s.employment_status === "employed").length}
+              {allLoaded ? employedCount : "…"}
             </div>
           </CardContent>
         </Card>
@@ -366,10 +401,7 @@ export default function SurveysPage() {
           </CardHeader>
           <CardContent>
             <div className="text-xl sm:text-2xl font-bold">
-              {
-                surveys.filter((s) => s.employment_status === "unemployed")
-                  .length
-              }
+              {allLoaded ? unemployedCount : "…"}
             </div>
           </CardContent>
         </Card>
@@ -464,14 +496,16 @@ export default function SurveysPage() {
 
             <Button
               onClick={handleExport}
-              disabled={exporting || exportSurveys.length === 0}
+              disabled={exporting || !allLoaded || exportSurveys.length === 0}
               size="sm"
               className="h-9 w-full sm:w-auto"
             >
               <Download className="mr-2 h-4 w-4" />
               {exporting
                 ? "Yuklanmoqda..."
-                : `Eksport (${exportSurveys.length})`}
+                : !allLoaded
+                  ? "Yuklanmoqda..."
+                  : `Eksport (${exportSurveys.length})`}
             </Button>
           </div>
         </CardContent>
@@ -484,17 +518,14 @@ export default function SurveysPage() {
               <CardTitle className="text-base sm:text-lg">
                 So&apos;rovnomalar ro&apos;yxati
               </CardTitle>
-              <CardDescription>
-                Jami: {filteredSurveys.length} ta javob
-                {search && ` (${surveys.length} dan)`}
-              </CardDescription>
+              <CardDescription>Jami: {totalCount} ta javob</CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Qidirish..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ID yoki username bo'yicha qidirish..."
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="pl-8"
               />
             </div>
@@ -504,7 +535,7 @@ export default function SurveysPage() {
           {loading ? (
             <TableLoading />
           ) : error ? (
-            <ErrorDisplay message={error} onRetry={fetchData} />
+            <ErrorDisplay message={error} onRetry={fetchPage} />
           ) : (
             <>
               <div className="rounded-md border overflow-x-auto">
@@ -551,7 +582,7 @@ export default function SurveysPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedSurveys.length === 0 ? (
+                    {surveys.length === 0 ? (
                       <TableRow>
                         <TableCell
                           colSpan={15}
@@ -561,8 +592,8 @@ export default function SurveysPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      paginatedSurveys.map((survey) => {
-                        const student = students[survey.student];
+                      surveys.map((survey) => {
+                        const student = survey.student_details;
                         const regionName =
                           student?.region_details?.name_uz ||
                           student?.region_details?.name ||
@@ -673,18 +704,20 @@ export default function SurveysPage() {
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                 </Link>
-                                <Link
-                                  href={`/dashboard/surveys/${survey.id}?edit=true`}
-                                >
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    title="Tahrirlash"
-                                    className="hidden sm:inline-flex"
+                                {isAdmin && (
+                                  <Link
+                                    href={`/dashboard/surveys/${survey.id}?edit=true`}
                                   >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                </Link>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      title="Tahrirlash"
+                                      className="hidden sm:inline-flex"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                  </Link>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -696,13 +729,13 @@ export default function SurveysPage() {
               </div>
 
               {/* Pagination */}
-              {filteredSurveys.length > 0 && (
+              {totalCount > 0 && (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <span className="hidden sm:inline">
                       {(currentPage - 1) * pageSize + 1}–
-                      {Math.min(currentPage * pageSize, filteredSurveys.length)}{" "}
-                      / {filteredSurveys.length}
+                      {Math.min(currentPage * pageSize, totalCount)} /{" "}
+                      {totalCount}
                     </span>
                     <span className="sm:hidden text-xs">
                       {currentPage} / {totalPages} sahifa

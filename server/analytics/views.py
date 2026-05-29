@@ -68,6 +68,14 @@ def _latest_responses_qs(start, end, campaign):
     return base.annotate(latest_id=Subquery(latest_ids)).filter(id=F("latest_id"))
 
 
+def _coverage_percent(responded, total):
+    """Coverage %, clamped to [0, 100]. Totals and responses come from
+    independent sources, so off-roster responders could otherwise push it >100."""
+    if not total:
+        return 0.0
+    return round(min((responded or 0) * 100.0 / total, 100.0), 2)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, IsViewerOrAdminReadOnly])
 def bot2_course_year_coverage(request):
@@ -105,7 +113,7 @@ def bot2_course_year_coverage(request):
     for year in BOT2_COURSE_YEARS:
         total = total_map.get(year, 0)
         resp = resp_map.get(year, 0)
-        coverage = round((resp / total * 100) if total else 0, 2)
+        coverage = _coverage_percent(resp, total)
         result.append({"course_year": year, "total": total, "responded": resp, "coverage_percent": coverage})
     return Response(result)
 
@@ -120,38 +128,60 @@ def bot2_program_coverage(request):
     academic_year = _resolve_academic_year(campaign, request.query_params.get("academic_year"))
     course_year = request.query_params.get("course_year")
 
-    if academic_year:
+    # Per-program totals. ProgramEnrollment tracks only years 1-4, so graduates
+    # (year 5) always come from roster counts; accumulate per program.
+    total_map = {}
+
+    def _add_total(pid, name, value):
+        if pid in total_map:
+            total_map[pid]["total"] += value or 0
+        else:
+            total_map[pid] = {"program__name": name, "total": value or 0}
+
+    if academic_year and course_year != "5":
         enroll_qs = ProgramEnrollment.objects.filter(is_active=True, campaign=campaign, academic_year=academic_year)
         if course_year:
             enroll_qs = enroll_qs.filter(course_year=course_year)
-        totals = enroll_qs.values("program__id", "program__name").annotate(total=Sum("student_count"))
+        for row in enroll_qs.values("program__id", "program__name").annotate(total=Sum("student_count")):
+            _add_total(row["program__id"], row["program__name"], row["total"])
+        # Fold in graduates (year 5) from the roster unless filtered to a 1-4 year.
+        if not course_year:
+            for row in (
+                _bot2_roster_totals_qs(campaign=campaign, course_year=5)
+                .values("program__id", "program__name")
+                .annotate(total=Count("id"))
+            ):
+                _add_total(row["program__id"], row["program__name"], row["total"])
     else:
         roster_qs = _bot2_roster_totals_qs(campaign=campaign)
         if course_year:
             roster_qs = roster_qs.filter(course_year=course_year)
-        totals = roster_qs.values("program__id", "program__name").annotate(total=Count("id"))
-
-    total_map = {row["program__id"]: row for row in totals}
+        for row in roster_qs.values("program__id", "program__name").annotate(total=Count("id")):
+            _add_total(row["program__id"], row["program__name"], row["total"])
 
     resp_qs = _latest_responses_qs(start, end, campaign)
     if course_year:
         resp_qs = resp_qs.filter(course_year=course_year)
-    responded = resp_qs.values("program__id", "program__name").annotate(count=Count("student_id", distinct=True))
-    resp_map = {r["program__id"]: r for r in responded}
+    resp_map = {
+        r["program__id"]: r
+        for r in resp_qs.values("program__id", "program__name").annotate(count=Count("student_id", distinct=True))
+    }
 
     data = []
-    for program_id, row in total_map.items():
-        total = row["total"]
+    # Iterate the union of totals and responses so programs that have responses
+    # but no enrollment row (graduates / off-roster) are not silently dropped.
+    for program_id in total_map.keys() | resp_map.keys():
+        total = total_map.get(program_id, {}).get("total", 0)
+        name = (total_map.get(program_id) or resp_map.get(program_id, {})).get("program__name")
         resp_row = resp_map.get(program_id)
         resp = resp_row["count"] if resp_row else 0
-        coverage = round((resp / total * 100) if total else 0, 2)
         data.append(
             {
                 "program_id": program_id,
-                "program_name": row["program__name"],
+                "program_name": name,
                 "total": total,
                 "responded": resp,
-                "coverage_percent": coverage,
+                "coverage_percent": _coverage_percent(resp, total),
             }
         )
     return Response(data)
@@ -211,7 +241,7 @@ def bot2_program_course_matrix(request):
         for year in BOT2_COURSE_YEARS:
             total = totals_map[pid].get(year, 0)
             resp = resp_map[pid].get(year, 0)
-            coverage = round((resp / total * 100) if total else 0, 2)
+            coverage = _coverage_percent(resp, total)
             cells.append(
                 {
                     "program_id": pid,
@@ -298,7 +328,7 @@ def bot2_program_details_by_year(request):
     for program_id, info in total_map.items():
         total = info.get("total", 0)
         responded = info.get("responded", 0)
-        coverage = round((responded / total * 100) if total else 0, 2)
+        coverage = _coverage_percent(responded, total)
         data.append({
             "program_id": program_id,
             "program_name": info["name"],
@@ -375,7 +405,7 @@ def enrollments_overview(request):
         course_year = row["course_year"]
         total = row["total"] or 0
         responded_count = resp_map.get((program_id, course_year), 0)
-        coverage = round((responded_count / total * 100) if total else 0, 2)
+        coverage = _coverage_percent(responded_count, total)
 
         overview.append(
             {
@@ -403,11 +433,11 @@ def enrollments_overview(request):
                 "course_year": year,
                 "total": total,
                 "responded": resp,
-                "coverage_percent": round((resp / total * 100) if total else 0, 2),
+                "coverage_percent": _coverage_percent(resp, total),
             }
         )
 
-    overall_coverage = round((total_responded / total_students * 100) if total_students else 0, 2)
+    overall_coverage = _coverage_percent(total_responded, total_students)
 
     return Response(
         {

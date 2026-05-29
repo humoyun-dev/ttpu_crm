@@ -35,8 +35,19 @@ class StudentRoster(BaseModel):
         return f"Roster {self.student_external_id}"
 
     def clean(self):
-        if self.program and self.program.type != CatalogItem.ItemType.PROGRAM:
-            raise ValidationError("program must reference a catalog item with type=program.")
+        # The bot submits DIRECTION catalog items as "programs", while admin
+        # import uses PROGRAM items — accept both so every write path agrees.
+        allowed = (CatalogItem.ItemType.PROGRAM, CatalogItem.ItemType.DIRECTION)
+        if self.program and self.program.type not in allowed:
+            raise ValidationError(
+                "program must reference a catalog item with type=program or direction."
+            )
+
+    def save(self, *args, **kwargs):
+        # Enforce clean() on every write path (admin CRUD + bot auto-create),
+        # not only the roster-import path which called full_clean() explicitly.
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class Bot2Student(BaseModel):
@@ -117,6 +128,12 @@ class Bot2SurveyResponse(BaseModel):
             models.CheckConstraint(
                 check=Q(course_year__gte=1) & Q(course_year__lte=5),
                 name="survey_course_year_between_1_and_5",
+            ),
+            # Enforce one survey per (student, campaign) at the DB level so
+            # concurrent submits / bot retries cannot create duplicate rows.
+            models.UniqueConstraint(
+                fields=["student", "survey_campaign"],
+                name="uq_survey_student_campaign",
             ),
         ]
         indexes = [

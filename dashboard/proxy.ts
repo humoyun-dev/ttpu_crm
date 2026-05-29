@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const ACCESS_COOKIE_NAME = "access_token";
-const REFRESH_COOKIE_NAME = "refresh_token";
+// Next.js 16 uses the "proxy" file/export convention (formerly "middleware").
+// Gate on the non-httpOnly `dashboard_auth` marker cookie that the dashboard
+// sets on its OWN origin (api.ts persistTokens) — the access_token/refresh_token
+// cookies are httpOnly and live on the API origin, so they are NOT visible here.
+const AUTH_MARKER_COOKIE = "dashboard_auth";
 
 export function proxy(request: NextRequest) {
-  const accessToken = request.cookies.get(ACCESS_COOKIE_NAME)?.value;
-  const refreshToken = request.cookies.get(REFRESH_COOKIE_NAME)?.value;
-  const isAuthenticated = Boolean(accessToken || refreshToken);
+  const isAuthenticated = Boolean(
+    request.cookies.get(AUTH_MARKER_COOKIE)?.value,
+  );
 
   const pathname = request.nextUrl.pathname;
   const isLoginPage = pathname === "/login";
