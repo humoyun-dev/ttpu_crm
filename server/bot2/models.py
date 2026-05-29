@@ -79,10 +79,8 @@ class Bot2Student(BaseModel):
 
     class Meta:
         ordering = ("student_external_id",)
-        indexes = [
-            models.Index(fields=["student_external_id"]),
-            models.Index(fields=["telegram_user_id"]),
-        ]
+        # No explicit single-field indexes: student_external_id and telegram_user_id
+        # are unique=True, which already creates an index for each.
 
     def clean(self):
         # Region validation

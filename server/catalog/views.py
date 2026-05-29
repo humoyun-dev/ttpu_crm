@@ -1,5 +1,4 @@
 from django.db import IntegrityError
-from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.response import Response
 

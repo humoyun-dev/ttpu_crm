@@ -10,7 +10,7 @@ from django.http import HttpRequest
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -21,6 +21,7 @@ from catalog.models import CatalogItem
 from common.auth import verify_service_token
 from common.exceptions import APIError, build_error_response
 from common.permissions import IsAdminUserRole, IsViewerOrAdminReadOnly
+from common.throttles import SurveySubmitThrottle
 from common.time import parse_iso_datetime
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,10 @@ class Bot2StudentViewSet(viewsets.ModelViewSet):
     queryset = Bot2Student.objects.select_related("roster", "region")
     serializer_class = None
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
+    # Bot2Students are created by the Telegram bot (submit_survey), never via the
+    # admin API: roster is a required FK but read-only in the serializer, so a
+    # direct POST would 500. Disallow create (405); read/update/delete remain.
+    http_method_names = ["get", "head", "options", "patch", "put", "delete"]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["gender", "region"]
     search_fields = ["student_external_id", "username", "first_name", "last_name"]
@@ -87,6 +92,30 @@ class Bot2StudentViewSet(viewsets.ModelViewSet):
         from bot2.serializers import Bot2StudentSerializer
 
         return Bot2StudentSerializer
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="create",
+            entity=instance, request=self.request,
+            after_data={"student_external_id": instance.student_external_id},
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="update",
+            entity=instance, request=self.request,
+            after_data={"student_external_id": instance.student_external_id},
+        )
+
+    def perform_destroy(self, instance):
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="delete",
+            entity=instance, request=self.request,
+            after_data={"student_external_id": instance.student_external_id},
+        )
+        instance.delete()
 
 
 class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
@@ -112,6 +141,30 @@ class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
         from bot2.serializers import Bot2SurveyResponseSerializer
 
         return Bot2SurveyResponseSerializer
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="create",
+            entity=instance, request=self.request,
+            after_data={"student": str(instance.student_id), "survey_campaign": instance.survey_campaign},
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="update",
+            entity=instance, request=self.request,
+            after_data={"student": str(instance.student_id), "survey_campaign": instance.survey_campaign},
+        )
+
+    def perform_destroy(self, instance):
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="delete",
+            entity=instance, request=self.request,
+            after_data={"student": str(instance.student_id), "survey_campaign": instance.survey_campaign},
+        )
+        instance.delete()
 
 
 class ProgramEnrollmentViewSet(viewsets.ModelViewSet):
@@ -231,6 +284,7 @@ def import_roster(request):
 
 @api_view(["POST"])
 @permission_classes([])
+@throttle_classes([SurveySubmitThrottle])
 @transaction.atomic
 def submit_survey(request):
     verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")

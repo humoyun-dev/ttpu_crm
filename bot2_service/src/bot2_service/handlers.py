@@ -35,7 +35,7 @@ from bot2_service.keyboards import (
     channels_keyboard,
 )
 from bot2_service.states import SurveyState
-from bot2_service.texts import get_text, get_regions
+from bot2_service.texts import get_text
 from bot2_service.single_instance import SingleInstanceLock
 
 logger = logging.getLogger(__name__)

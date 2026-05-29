@@ -13,6 +13,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
 
+# Fail fast in production: never run with the shipped dev secret key.
+if not DEBUG and SECRET_KEY == "dev-secret-key-change-me":
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set to a unique value when DJANGO_DEBUG is false."
+    )
+
 ALLOWED_HOSTS: List[str] = []
 raw_allowed_hosts = os.getenv("DJANGO_ALLOWED_HOSTS")
 if raw_allowed_hosts:
@@ -138,7 +146,12 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
         "rest_framework.throttling.AnonRateThrottle",
     ],
-    "DEFAULT_THROTTLE_RATES": {"user": "1000/day", "anon": "100/day", "login": "10/minute"},
+    "DEFAULT_THROTTLE_RATES": {
+        "user": "1000/day",
+        "anon": "100/day",
+        "login": "10/minute",
+        "survey_submit": "1000/hour",
+    },
     "EXCEPTION_HANDLER": "common.exceptions.custom_exception_handler",
 }
 
@@ -176,23 +189,27 @@ SERVICE_TOKENS = {
     "bot2": os.getenv("SERVICE_TOKEN_BOT2_HASH", ""),
 }
 
+# Transport-security flags default to ON in production (DEBUG off) so a forgotten
+# env var can't silently ship insecure cookies / plain HTTP. Override per-flag via env.
+_secure_default = "false" if DEBUG else "true"
+
 ACCESS_COOKIE_NAME = os.getenv("ACCESS_COOKIE_NAME", "access_token")
 REFRESH_COOKIE_NAME = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
-JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE", "false").lower() == "true"
+JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE", _secure_default).lower() == "true"
 JWT_COOKIE_SAMESITE = os.getenv("JWT_COOKIE_SAMESITE", "Lax")
 JWT_COOKIE_DOMAIN = os.getenv("JWT_COOKIE_DOMAIN") or None
 
-# Production security knobs (keep safe defaults, configure via env in production)
+# Production security knobs (secure-by-default when DEBUG is off; configure via env)
 USE_X_FORWARDED_HOST = os.getenv("USE_X_FORWARDED_HOST", "false").lower() == "true"
 SECURE_PROXY_SSL_HEADER = (
     ("HTTP_X_FORWARDED_PROTO", "https")
-    if os.getenv("SECURE_PROXY_SSL_HEADER_ENABLED", "false").lower() == "true"
+    if os.getenv("SECURE_PROXY_SSL_HEADER_ENABLED", _secure_default).lower() == "true"
     else None
 )
-SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "false").lower() == "true"
-SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
-CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "false").lower() == "true"
-SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0"))
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", _secure_default).lower() == "true"
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", _secure_default).lower() == "true"
+CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", _secure_default).lower() == "true"
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000"))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "false").lower() == "true"
 SECURE_HSTS_PRELOAD = os.getenv("SECURE_HSTS_PRELOAD", "false").lower() == "true"
 SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "strict-origin-when-cross-origin")

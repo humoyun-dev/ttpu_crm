@@ -16,11 +16,9 @@ class IsViewerOrAdminReadOnly(BasePermission):
         return bool(request.user and request.user.is_authenticated and request.user.role == User.Role.ADMIN)
 
 
-class IsAdminCatalogWriter(BasePermission):
-    def has_permission(self, request, view):
-        if request.method in SAFE_METHODS:
-            return bool(request.user and request.user.is_authenticated)
-        return bool(request.user and request.user.is_authenticated and request.user.role == User.Role.ADMIN)
+class IsAdminCatalogWriter(IsViewerOrAdminReadOnly):
+    """Named alias of IsViewerOrAdminReadOnly (read for any authenticated user,
+    write for ADMIN only) — kept as a distinct name for catalog call-site clarity."""
 
 
 class ServiceTokenPermission(BasePermission):

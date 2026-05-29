@@ -2,24 +2,23 @@
 
 ## Loyiha Haqida
 
-**TTPU CRM 2** - Turin Polytechnic University in Tashkent uchun CRM tizimi. Tizim 3 ta asosiy komponentdan iborat:
+**TTPU CRM 2** - Turin Polytechnic University in Tashkent uchun CRM tizimi. Tizim 2 ta asosiy komponentdan iborat:
 
 1. **Django Backend (Server)** - REST API, ma'lumotlar bazasi, admin panel
-2. **Bot1 Service** - Asosiy Telegram bot (aiogram 3.x)
-3. **Bot2 Service** - Anketalash uchun qo'shimcha Telegram bot
+2. **Bot2 Service** - Anketalash uchun Telegram bot (aiogram 3.x)
 
 ---
 
 ## Arxitektura
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Docker Compose                          │
-├──────────────┬──────────────┬──────────────┬───────────────┤
-│   Server     │    Bot1      │    Bot2      │   PostgreSQL  │
-│  (Django)    │  (aiogram)   │  (aiogram)   │   Database    │
-│  Port: 8000  │              │              │   Port: 5432  │
-└──────────────┴──────────────┴──────────────┴───────────────┘
+┌──────────────────────────────────────────────┐
+│                Docker Compose                 │
+├──────────────┬──────────────┬─────────────────┤
+│   Server     │    Bot2      │   PostgreSQL    │
+│  (Django)    │  (aiogram)   │   Database      │
+│  Port: 8000  │              │   Port: 5432    │
+└──────────────┴──────────────┴─────────────────┘
 ```
 
 ### Texnologiyalar
@@ -45,8 +44,8 @@ docker compose up -d --build
 ```
 
 - Django: `http://localhost:8000`
-- Botlar: Telegram tokenlari `.env` ichida (`bot1_service/.env`, `bot2_service/.env`).
-- Service tokenlari: `server/.env` dagi `SERVICE_TOKEN_BOT1_HASH`, `SERVICE_TOKEN_BOT2_HASH` (sha256 hash); bot envlarida `SERVICE_TOKEN` — xom token.
+- Bot: Telegram tokeni `.env` ichida (`bot2_service/.env`).
+- Service tokeni: `server/.env` dagi `SERVICE_TOKEN_BOT2_HASH` (sha256 hash); bot envida `SERVICE_TOKEN` — xom token.
 
 ---
 
@@ -59,7 +58,6 @@ server/
 ├── crm_server/          # Asosiy settings va URL konfiguratsiya
 ├── authn/               # Autentifikatsiya (JWT, login/logout)
 ├── catalog/             # Katalog tizimi (yo'nalishlar, fanlar, hududlar)
-├── bot1/                # Bot1 uchun API endpointlari
 ├── bot2/                # Bot2 uchun API endpointlari
 ├── audit/               # Audit logging tizimi
 ├── analytics/           # Statistika va hisobotlar
@@ -78,14 +76,6 @@ class CatalogItem:
     is_active = BooleanField
 ```
 
-#### Bot1 (bot1/models.py)
-
-- `Bot1Applicant` - Telegram foydalanuvchilar
-- `Admissions2026Application` - Qabul arizalari
-- `CampusTourRequest` - Campus Tour so'rovlari
-- `FoundationRequest` - Foundation Year arizalari
-- `PolitoAcademyRequest` - Polito Academy arizalari
-
 #### Bot2 (bot2/models.py)
 
 - `StudentRoster` - Talabalar ro'yxati
@@ -100,12 +90,6 @@ class CatalogItem:
 
 - `/api/v1/auth/login` (POST) – email/password, JWT qaytaradi.
 - `/api/v1/catalog/items/` – filter: `type`, `is_active=true`.
-- Bot1 (service-token talab):
-  - `POST /api/v1/bot1/applicants/upsert`
-  - `POST /api/v1/bot1/admissions-2026/submit`
-  - `POST /api/v1/bot1/campus-tour/submit`
-  - `POST /api/v1/bot1/foundation/submit`
-  - `POST /api/v1/bot1/polito-academy/submit`
 - Bot2 (service-token talab):
   - `POST /api/v1/bot2/surveys/submit` (roster topilmasa program_id bo‘lsa auto-create)
   - `POST /api/v1/bot2/import-roster` (admin auth) – CSV/JSON bulk import.
@@ -258,17 +242,6 @@ docker-compose exec server python manage.py seed_mydata
 
 ---
 
-## Bot1 Service (aiogram)
-
-- Joylashuv: `bot1_service/src/bot1_service`
-- Oqim: `/start` -> til -> kontakt -> ism/familiya -> gender/hudud/birthdate -> asosiy menu.
-- Bo‘limlar: Campus Tour, Admissions 2026, Foundation Year, Polito Academy, Profile, Arizalarim, Sozlamalar.
-- Katalog keshi: `catalog_cache` region/track/direction/subjectlarni DRF’dan oladi, dashboard JWT bilan.
-- API klient: `api.py` – service token header, dashboard login (Bearer), katalog GET trailing slash.
-- Saqlash: `store.py` JSON (data/bot1_store.json), profil va arizalar (meta bilan).
-- Inline kalendar: `calendar.py` (minimal yil = hozirgi yil - 17).
-- Arizalarim: oxirgi 5 arizani formatda ko‘rsatadi (admissions track/direction, polito subject, campus org+vaqt, foundation).
-
 ## Bot2 Service (aiogram)
 
 - Joylashuv: `bot2_service/src/bot2_service`
@@ -284,7 +257,6 @@ docker-compose exec server python manage.py seed_mydata
 
 - `db`: postgres:15, port 5432 (host mapping configurable).
 - `server`: build `./server`, command `entrypoint.sh` (migrate, collectstatic, gunicorn with longer timeouts).
-- `bot1`: build `./bot1_service`, command `python -m bot1_service.main`.
 - `bot2`: build `./bot2_service`, command `python -m bot2_service.main`.
 
 Portlar:
@@ -295,28 +267,21 @@ Portlar:
 
 - `server/.env`:
   - `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,server,0.0.0.0`
-  - `SERVICE_TOKEN_BOT1_HASH`, `SERVICE_TOKEN_BOT2_HASH` (sha256)
-- `bot1_service/.env`:
+  - `SERVICE_TOKEN_BOT2_HASH` (sha256)
+- `bot2_service/.env`:
   - `BOT_TOKEN`, `SERVER_BASE_URL=http://server:8000/api/v1`, `SERVICE_TOKEN=<raw>`, `DASHBOARD_EMAIL/PASSWORD`, `DEFAULT_LANGUAGE`, `CATALOG_CACHE_TTL`
-- `bot2_service/.env`: xuddi shunday, Bot2 tokeni va service tokeni.
 
 ## Arxitektura tavsiflari
 
-- **Ma’lumot oqimi**: bot -> api.py -> server DRF -> DB; bot1 local store, bot2 state orqali.
+- **Ma’lumot oqimi**: bot -> api.py -> server DRF -> DB; bot2 state orqali.
 - **Service Auth**: `X-SERVICE-TOKEN` + server hash tekshiruv (`common.auth.verify_service_token`).
 - **Dashboard Auth**: katalog/program GET uchun `/auth/login` Bearer token.
 - **Idempotensiya**:
-  - Bot1: applicant+model bo‘yicha get_or_create + partial update.
   - Bot2: roster+campaign bo‘yicha update-or-create.
 
 ## Model detallari (maydonlar)
 
 - `CatalogItem`: `id (UUID)`, `type`, `code`, `metadata{name_uz,name_ru,name_en,...}`, `is_active`.
-- `Bot1Applicant`: `telegram_user_id`, `telegram_chat_id`, `username`, `first_name`, `last_name`, `phone`, `email`, `region(FK)`, `created_at`.
-- `Admissions2026Application`: `applicant FK`, `direction FK`, `track FK`, `status`, `answers JSON`, `submitted_at`.
-- `CampusTourRequest`: `applicant FK`, `preferred_date`, `status`, `answers JSON`, `submitted_at`.
-- `FoundationRequest`: `applicant FK`, `status`, `answers JSON`, `submitted_at`.
-- `PolitoAcademyRequest`: `applicant FK`, `subject FK`, `status`, `answers JSON`, `submitted_at`.
 - `StudentRoster`: `student_external_id`, `program FK`, `course_year (1-4)`, `roster_campaign`, `is_active`, `metadata`.
 - `Bot2Student`: `student_external_id`, `roster FK`, `telegram_user_id`, `username`, `first_name`, `last_name`, `gender`, `phone`, `region FK`.
 - `Bot2SurveyResponse`: `student FK`, `roster FK`, `program FK`, `course_year`, `survey_campaign`, `employment_status/company/role`, `suggestions`, `consents JSON`, `answers JSON`, `submitted_at`.
@@ -332,7 +297,7 @@ Portlar:
 ## Qo‘llab-quvvatlovchi skriptlar
 
 - `server/entrypoint.sh`: migrate, collectstatic, gunicorn (timeout 120s).
-- `bot1_service/main.py`, `bot2_service/main.py`: botlarni ishga tushiradi.
+- `bot2_service/main.py`: botni ishga tushiradi.
 
 ## Tez-tez uchraydigan muammolar
 
@@ -340,74 +305,6 @@ Portlar:
 - Service token mos emas: server hash va bot raw token bir xil bo‘lsin.
 - DisallowedHost: `DJANGO_ALLOWED_HOSTS` ga `server` va `0.0.0.0` qo‘shilganini tekshiring.
 - Bot2 duplicate survey: endi update-or-create; baribir xato bo‘lsa, campaign nomini o‘zgartiring.
-
-## Bot1 Service
-
-### Funksiyalar
-
-Bot1 - asosiy ariza qabul qilish boti:
-
-1. **Campus Tour** - Universitet kampusini ko'rish uchun ariza
-
-   - Tashkilot, lavozim, telefon, sana, vaqt
-
-2. **Qabul 2026** - Talabaga qabul arizasi
-
-   - Track tanlash (Italian/Uzbek)
-   - Yo'nalish tanlash (8 ta variant)
-   - Hudud
-   - Ikkinchi telefon
-
-3. **Foundation Year** - Tayyorlov kursi uchun ariza
-
-   - Qo'shimcha telefon
-
-4. **Polito Academy** - Akademiya uchun ariza
-   - Fan tanlash
-   - Ball kiritish (0-100)
-
-### Keyboard Tizimi
-
-**ReplyKeyboardMarkup** ishlatiladi (to'liq navigatsiya):
-
-```python
-# Asosiy menyu
-[Campus Tour] [Qabul 2026]
-[Foundation Year] [Polito Academy]
-[Profil] [Arizalarim]
-[Sozlamalar]
-
-# Navigatsiya
-[◀️ Ortga] [🏠 Bosh sahifa]
-
-# Tasdiqlash
-[✅ Ha] [❌ Yo'q]
-```
-
-### State Management (FSM)
-
-```python
-class AdmissionsState(StatesGroup):
-    track = State()          # Track tanlash
-    direction = State()      # Yo'nalish
-    region = State()         # Hudud
-    second_phone = State()   # Telefon
-    confirm = State()        # Tasdiqlash
-```
-
-### API Client
-
-```python
-class CrmApiClient:
-    async def login_dashboard(self) -> bool
-    async def get_catalog_items(self, item_type: str) -> list[dict]
-    async def submit_admissions(self, payload: dict) -> ApiResult
-    async def submit_campus_tour(self, payload: dict) -> ApiResult
-    async def submit_foundation(self, payload: dict) -> ApiResult
-    async def submit_polito_academy(self, payload: dict) -> ApiResult
-```
-
----
 
 ## Bot2 Service
 
@@ -458,16 +355,6 @@ GET  /items/{id}/    # Detail
 PATCH /items/{id}/   # Update (admin only)
 ```
 
-### Bot1 (`/api/v1/bot1/`)
-
-```
-POST /applicants/upsert              # Create/update applicant
-POST /campus-tour/submit             # Submit campus tour
-POST /foundation/submit              # Submit foundation
-POST /polito-academy/submit          # Submit polito academy
-POST /admissions-2026/submit         # Submit admissions
-```
-
 ### Bot2 (`/api/v1/bot2/`)
 
 ```
@@ -505,18 +392,18 @@ Authorization: Bearer <access_token>
 
 ### 2. Service Token Authentication (Bots)
 
-Botlar uchun SHA256 hash token:
+Bot uchun SHA256 hash token:
 
 ```python
 # .env
-BOT1_SERVICE_TOKEN_RAW=raw-bot1-service-token
-BOT1_SERVICE_TOKEN_HASH=sha256(raw-bot1-service-token)
+BOT2_SERVICE_TOKEN_RAW=raw-bot2-service-token
+BOT2_SERVICE_TOKEN_HASH=sha256(raw-bot2-service-token)
 ```
 
 So'rovda:
 
 ```
-X-SERVICE-TOKEN: raw-bot1-service-token
+X-SERVICE-TOKEN: raw-bot2-service-token
 ```
 
 Server tekshiradi:
@@ -600,9 +487,6 @@ docker-compose exec server pytest --cov=server --cov-report=html
 ### Manual Testing
 
 ```bash
-# Bot1 ni test qilish
-# Telegram da @turin_register_bot ga /start yuboring
-
 # Bot2 ni test qilish
 # Telegram da bot2 ga /start yuboring
 
@@ -624,7 +508,6 @@ docker-compose up -d
 
 # Loglarni ko'rish
 docker-compose logs -f server
-docker-compose logs -f bot1
 docker-compose logs -f bot2
 
 # Database migration
@@ -673,22 +556,11 @@ POSTGRES_PORT=5432
 CORS_ALLOWED_ORIGINS=http://localhost:3000
 
 # Service Tokens
-BOT1_SERVICE_TOKEN_HASH=sha256_hash_here
 BOT2_SERVICE_TOKEN_HASH=sha256_hash_here
 
 # Admin
 DJANGO_SUPERUSER_EMAIL=admin@ttpu.uz
 DJANGO_SUPERUSER_PASSWORD=admin123
-```
-
-### Bot1 (.env)
-
-```bash
-BOT_TOKEN=your_telegram_bot_token
-SERVER_BASE_URL=http://server:8000/api/v1
-SERVICE_TOKEN=raw-bot1-service-token
-DASHBOARD_EMAIL=admin@ttpu.uz
-DASHBOARD_PASSWORD=admin123
 ```
 
 ### Bot2 (.env)
@@ -733,7 +605,7 @@ logger.info(f"Payload: {payload}")  # Debug
 
 ```bash
 # Bot loglarini ko'rish
-docker-compose logs -f bot1
+docker-compose logs -f bot2
 
 # Polling active ekanini tekshirish
 # Log da "Start polling" bo'lishi kerak
@@ -797,7 +669,7 @@ docker-compose exec server python manage.py migrate
 
 ### Bot Flow
 
-1. **State** (`bot1_service/states.py`)
+1. **State** (`bot2_service/states.py`)
 
 ```python
 class MyFlowState(StatesGroup):
@@ -806,7 +678,7 @@ class MyFlowState(StatesGroup):
     confirm = State()
 ```
 
-2. **Handler** (`bot1_service/handlers.py`)
+2. **Handler** (`bot2_service/handlers.py`)
 
 ```python
 @router.message(F.text == "My Feature")
@@ -815,7 +687,7 @@ async def start_flow(message: Message, state: FSMContext):
     await message.answer("Step 1", reply_markup=my_keyboard())
 ```
 
-3. **API Client** (`bot1_service/api.py`)
+3. **API Client** (`bot2_service/api.py`)
 
 ```python
 async def submit_my_feature(self, payload: dict) -> ApiResult:
@@ -827,7 +699,7 @@ async def submit_my_feature(self, payload: dict) -> ApiResult:
 ## Project Statistics
 
 - **Kod qatorlari:** ~15,000+
-- **Django apps:** 8 ta
+- **Django apps:** 7 ta
 - **API endpoints:** 25+
 - **Bot states:** 15+
 - **Database tables:** 20+
