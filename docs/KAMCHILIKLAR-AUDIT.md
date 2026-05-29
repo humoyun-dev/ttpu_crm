@@ -24,10 +24,15 @@
 | M-14 | DEPLOYMENT docs bot1 unitlari | ✅ DEPLOYMENT.md + PM2 docs + docs/11 tozalandi |
 | L-17 / L-18 | bot1 dead config / req.txt | ✅ `.env.example` va `req.txt` dan bot1 olib tashlandi |
 | — | **(Auditdan tashqari, verifikatsiyada topildi)** `common/0002_drop_bot1_tables` SQLite'da `DROP ... CASCADE` bilan `migrate` ni buzar edi | ✅ vendor-aware qilindi (SQLite + Postgres) |
-| H-11, H-12, H-13, H-10, M-10, L-24, L-25, L-26, L-27 | Dashboard fixlari | 🔄 shu sessiyada bajarilmoqda |
-| M-2, M-5, M-8, M-15, M-16–M-20, L-1–L-16, L-19–L-23, L-28, L-29 | Qolgan o'rta/past masalalar | ⏳ tavsiya etilgan keyingi qadamlar (hali tuzatilmagan) |
+| H-10, H-11, H-12, H-13, M-10, L-24, L-25, L-26, L-27 | Dashboard fixlari | ✅ server-side pagination, proxy cookie, save error-check, error UI, viewer write-gating, kosmetik |
+| M-20 | Bot2Student/Survey viewset audit logging | ✅ qo'shildi (+ Bot2Student create endi 405, avval 500 edi) |
+| L-3, L-5, L-7, L-8, L-12, L-13, L-14 | Backend hardening | ✅ narrow except+log, submit throttle, secure defaults (DEBUG off), SECRET_KEY fail-fast, atomik logout, AuditLog retention buyrug'i, dup indekslar |
+| L-28 | Dead code | ✅ IsAdminCatalogWriter dedup, ishlatilmagan import/state/method'lar olib tashlandi |
+| M-16, M-17, M-18, M-19, M-20 | Test gaplar | ✅ 53 yangi test (ServiceToken DB, JWT refresh+revoked, import_roster, 5 analytics endpoint, audit) |
+| — | Stale docs (SERVICE_TOKEN_QOLLANMA, PROJECT_DOCUMENTATION) | ✅ bot1 izlari tozalandi |
+| M-2, M-5, M-8, M-15, L-1, L-2, L-4, L-6, L-9, L-10, L-11, L-15, L-16, L-19–L-23, L-29 | Qolgan masalalar | ⏳ tavsiya etilgan keyingi qadamlar (hali tuzatilmagan) |
 
-**Backend testlari:** barcha **31 pytest test o'tdi** (data-integrity o'zgarishlaridan keyin).
+**Backend testlari:** **84 pytest test o'tdi** (31 eski + 53 yangi), 0 fail. Dashboard: `next build` toza. Fresh SQLite `migrate` ishlaydi.
 
 ### C-1 bo'yicha foydalanuvchi bajarishi shart bo'lgan amallar
 1. Telegram tokenini **BotFather** orqali revoke qiling (`/revoke`) va yangisini oling.
