@@ -193,7 +193,12 @@ async def set_first_name(message: Message, state: FSMContext):
     """Save first name and ask for last name."""
     data = await state.get_data()
     lang = data.get("language", "uz")
-    await state.update_data(first_name=message.text.strip() if message.text else "")
+    first_name = message.text.strip() if message.text else ""
+    if not first_name:
+        # Non-text input (sticker/photo) would otherwise save an empty name.
+        await _send_and_save(message, get_text("ask_first", lang), state, reply_markup=NO_KB)
+        return
+    await state.update_data(first_name=first_name)
     await state.set_state(SurveyState.waiting_last_name)
     await _send_and_save(message, get_text("ask_last", lang), state, reply_markup=NO_KB)
 
@@ -204,7 +209,11 @@ async def set_last_name(message: Message, state: FSMContext):
     """Save last name and ask for gender."""
     data = await state.get_data()
     lang = data.get("language", "uz")
-    await state.update_data(last_name=message.text.strip() if message.text else "")
+    last_name = message.text.strip() if message.text else ""
+    if not last_name:
+        await _send_and_save(message, get_text("ask_last", lang), state, reply_markup=NO_KB)
+        return
+    await state.update_data(last_name=last_name)
     await state.set_state(SurveyState.waiting_gender)
     await _send_and_save(message, get_text("ask_gender", lang), state, reply_markup=gender_keyboard(lang))
 

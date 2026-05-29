@@ -1,6 +1,5 @@
 import uuid
 
-from django.db.models import Max
 from rest_framework import serializers
 
 from catalog.models import CatalogItem, CatalogRelation
@@ -35,16 +34,17 @@ def _validate_program_metadata(metadata: dict):
 
 def _auto_generate_code(item_type: str) -> str:
     prefix = (item_type or "item").upper()
-    result = CatalogItem.objects.filter(
+    # Compute the max numeric suffix in Python: a string Max() would rank
+    # "PROGRAM-99" above "PROGRAM-100", colliding once codes pass 999.
+    codes = CatalogItem.objects.filter(
         type=item_type, code__startswith=f"{prefix}-"
-    ).aggregate(max_code=Max("code"))
-    max_code = result["max_code"]
+    ).values_list("code", flat=True)
     max_num = 0
-    if max_code:
+    for code in codes:
         try:
-            max_num = int(max_code.split("-")[-1])
+            max_num = max(max_num, int(code.split("-")[-1]))
         except (ValueError, IndexError):
-            pass
+            continue
     return f"{prefix}-{max_num + 1:03d}"
 
 

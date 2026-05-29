@@ -105,6 +105,9 @@ if os.getenv("USE_SQLITE", "1") == "1":
     DATABASES["default"] = {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
+        # Wait up to 20s for a lock instead of immediately raising
+        # "database is locked" under concurrent survey submits.
+        "OPTIONS": {"timeout": 20},
     }
 
 AUTH_PASSWORD_VALIDATORS = [

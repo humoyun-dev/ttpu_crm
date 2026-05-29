@@ -22,8 +22,12 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
         is_active = self.request.query_params.get("is_active")
         if item_type:
             qs = qs.filter(type=item_type)
-        if is_active in ("true", "false"):
-            qs = qs.filter(is_active=is_active == "true")
+        if is_active is not None:
+            normalized = is_active.strip().lower()
+            if normalized in ("true", "1", "yes", "on"):
+                qs = qs.filter(is_active=True)
+            elif normalized in ("false", "0", "no", "off"):
+                qs = qs.filter(is_active=False)
         return qs
 
     def create(self, request, *args, **kwargs):
