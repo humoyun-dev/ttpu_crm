@@ -21,19 +21,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { TableLoading } from "@/components/loading";
 import { ErrorDisplay } from "@/components/error-display";
+import { PaginationBar } from "@/components/ui/pagination-bar";
 import { formatCourseYearLabel } from "@/lib/utils";
 import { bot2Api, StudentRoster } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSearch } from "@/lib/hooks/use-search";
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Users,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Search, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -46,8 +39,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
 export default function StudentsPage() {
   const router = useRouter();
@@ -59,20 +59,19 @@ export default function StudentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const { searchTerm, debouncedSearch, setSearch } = useSearch();
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-
-  const [reloadKey, setReloadKey] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
   useEffect(() => {
     let ignore = false;
     const params: Record<string, string> = {
       page: String(page),
-      page_size: String(PAGE_SIZE),
+      page_size: String(pageSize),
       ordering: "student_external_id",
     };
     if (debouncedSearch) params.search = debouncedSearch;
@@ -97,15 +96,8 @@ export default function StudentsPage() {
       }
       setLoading(false);
     })();
-    return () => {
-      ignore = true;
-    };
-  }, [page, debouncedSearch, reloadKey]);
-
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
-    setPage(1);
-  };
+    return () => { ignore = true; };
+  }, [page, pageSize, debouncedSearch, reloadKey]);
 
   const confirmDelete = async () => {
     if (!deletingId) return;
@@ -123,127 +115,130 @@ export default function StudentsPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Talabalar</h2>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold">Talabalar</h1>
+          <p className="text-sm text-muted-foreground">
             Jami {totalCount} ta talaba ro&apos;yxatga olingan
           </p>
         </div>
-        {isAdmin && (
-          <Button onClick={() => router.push("/dashboard/students/new")}>
-            <Plus className="h-4 w-4 mr-2" />
-            Talaba qo&apos;shish
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={reload}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Yangilash
           </Button>
-        )}
+          {isAdmin && (
+            <Button size="sm" onClick={() => router.push("/dashboard/students/new")}>
+              <Plus className="mr-2 h-4 w-4" />
+              Qo&apos;shish
+            </Button>
+          )}
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Users className="h-4 w-4" />
                 Talabalar ro&apos;yxati
               </CardTitle>
-              <CardDescription>
-                Barcha ro&apos;yxatga olingan talabalar ma&apos;lumotlari
+              <CardDescription className="text-xs">
+                Barcha ro&apos;yxatga olingan talabalar
               </CardDescription>
             </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <div className="relative w-full sm:w-60">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Talaba ID bo'yicha qidirish..."
+                placeholder="ID bo'yicha qidirish..."
                 value={searchTerm}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-8"
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="h-9 pl-8 text-sm"
               />
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+
+        <CardContent className="p-0">
           {loading ? (
-            <TableLoading />
+            <div className="p-6"><TableLoading /></div>
           ) : error ? (
-            <ErrorDisplay message={error} onRetry={reload} />
+            <div className="p-6"><ErrorDisplay message={error} onRetry={reload} /></div>
           ) : (
             <>
-              <div className="rounded-md border">
+              <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Yo&apos;nalish</TableHead>
-                      <TableHead className="text-center">Kurs</TableHead>
-                      <TableHead className="text-center">Kampaniya</TableHead>
-                      <TableHead className="text-center">Holat</TableHead>
-                      <TableHead className="text-right">Amallar</TableHead>
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableHead className="pl-4 text-xs">Student ID</TableHead>
+                      <TableHead className="text-xs">Yo&apos;nalish</TableHead>
+                      <TableHead className="text-center text-xs">Kurs</TableHead>
+                      <TableHead className="text-center text-xs">Kampaniya</TableHead>
+                      <TableHead className="text-center text-xs">Holat</TableHead>
+                      {isAdmin && <TableHead className="w-16 text-xs" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rosters.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8">
+                        <TableCell colSpan={6} className="py-16 text-center text-muted-foreground">
                           Ma&apos;lumot topilmadi
                         </TableCell>
                       </TableRow>
                     ) : (
                       rosters.map((roster) => (
                         <TableRow key={roster.id}>
-                          <TableCell className="font-medium">
+                          <TableCell className="pl-4 font-mono text-sm font-medium">
                             {roster.student_external_id}
                           </TableCell>
-                          <TableCell>
-                            {roster.program_details?.name || roster.program}
+                          <TableCell className="max-w-[200px] truncate text-sm">
+                            {roster.program_details?.name_uz ||
+                              roster.program_details?.name ||
+                              roster.program}
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline">
+                            <Badge variant="outline" className="text-xs">
                               {formatCourseYearLabel(roster.course_year)}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="secondary">
+                            <Badge variant="secondary" className="text-xs">
                               {roster.roster_campaign}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            {roster.is_active ? (
-                              <Badge variant="default">Aktiv</Badge>
-                            ) : (
-                              <Badge variant="destructive">Aktiv emas</Badge>
-                            )}
+                            <Badge
+                              variant={roster.is_active ? "default" : "destructive"}
+                              className="text-xs"
+                            >
+                              {roster.is_active ? "Aktiv" : "Noaktiv"}
+                            </Badge>
                           </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {isAdmin ? (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      router.push(
-                                        `/dashboard/students/${roster.id}`,
-                                      )
-                                    }
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setDeletingId(roster.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  —
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
+                          {isAdmin && (
+                            <TableCell>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => router.push(`/dashboard/students/${roster.id}`)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => setDeletingId(roster.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))
                     )}
@@ -251,52 +246,28 @@ export default function StudentsPage() {
                 </Table>
               </div>
 
-              {totalCount > 0 && (
-                <div className="flex items-center justify-between pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    {(page - 1) * PAGE_SIZE + 1}–
-                    {Math.min(page * PAGE_SIZE, totalCount)} / {totalCount}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page <= 1}
-                    >
-                      <ChevronLeft className="h-4 w-4 mr-1" />
-                      Oldingi
-                    </Button>
-                    <span className="text-sm">
-                      {page} / {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page >= totalPages}
-                    >
-                      Keyingi
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
+              {totalCount > pageSize && (
+                <PaginationBar
+                  page={page}
+                  totalPages={totalPages}
+                  totalCount={totalCount}
+                  pageSize={pageSize}
+                  pageSizeOptions={PAGE_SIZE_OPTIONS}
+                  onPageChange={setPage}
+                  onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+                />
               )}
             </>
           )}
         </CardContent>
       </Card>
 
-      <AlertDialog
-        open={!!deletingId}
-        onOpenChange={(open) => !open && setDeletingId(null)}
-      >
+      <AlertDialog open={!!deletingId} onOpenChange={(o) => !o && setDeletingId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>O&apos;chirishni tasdiqlang</AlertDialogTitle>
             <AlertDialogDescription>
-              Rostdan ham bu talabani o&apos;chirmoqchimisiz? Bu amalni qaytarib
-              bo&apos;lmaydi.
+              Rostdan ham bu talabani o&apos;chirmoqchimisiz?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

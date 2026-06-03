@@ -59,6 +59,7 @@ import { formatCourseYearLabel, cn } from "@/lib/utils";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { EMPLOYMENT_LABELS, GENDER_LABELS } from "@/lib/constants";
+import { PaginationBar } from "@/components/ui/pagination-bar";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 const FETCH_ALL_PAGE_SIZE = 500;
@@ -511,34 +512,32 @@ export default function SurveysPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle className="text-base sm:text-lg">
-                So&apos;rovnomalar ro&apos;yxati
-              </CardTitle>
-              <CardDescription>Jami: {totalCount} ta javob</CardDescription>
+              <CardTitle className="text-base">So&apos;rovnomalar ro&apos;yxati</CardTitle>
+              <CardDescription className="text-xs">Jami: {totalCount} ta javob</CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="ID yoki username bo'yicha qidirish..."
+                placeholder="ID yoki username bo'yicha..."
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-8"
+                className="h-9 pl-8 text-sm"
               />
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {loading ? (
-            <TableLoading />
+            <div className="p-6"><TableLoading /></div>
           ) : error ? (
-            <ErrorDisplay message={error} onRetry={fetchPage} />
+            <div className="p-6"><ErrorDisplay message={error} onRetry={fetchPage} /></div>
           ) : (
             <>
-              <div className="rounded-md border overflow-x-auto">
+              <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -728,87 +727,16 @@ export default function SurveysPage() {
                 </Table>
               </div>
 
-              {/* Pagination */}
-              {totalCount > 0 && (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span className="hidden sm:inline">
-                      {(currentPage - 1) * pageSize + 1}–
-                      {Math.min(currentPage * pageSize, totalCount)} /{" "}
-                      {totalCount}
-                    </span>
-                    <span className="sm:hidden text-xs">
-                      {currentPage} / {totalPages} sahifa
-                    </span>
-                    <Select
-                      value={String(pageSize)}
-                      onValueChange={(v) => {
-                        setPageSize(Number(v));
-                        setCurrentPage(1);
-                      }}
-                    >
-                      <SelectTrigger className="h-8 w-[70px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PAGE_SIZE_OPTIONS.map((size) => (
-                          <SelectItem key={size} value={String(size)}>
-                            {size}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setCurrentPage(1)}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronsLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-
-                    <span className="hidden sm:flex items-center gap-1 px-2 text-sm">
-                      Sahifa{" "}
-                      <strong>
-                        {currentPage} / {totalPages}
-                      </strong>
-                    </span>
-
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() =>
-                        setCurrentPage((p) => Math.min(totalPages, p + 1))
-                      }
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setCurrentPage(totalPages)}
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronsRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+              {totalCount > pageSize && (
+                <PaginationBar
+                  page={currentPage}
+                  totalPages={totalPages}
+                  totalCount={totalCount}
+                  pageSize={pageSize}
+                  pageSizeOptions={PAGE_SIZE_OPTIONS}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                />
               )}
             </>
           )}

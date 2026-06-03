@@ -26,16 +26,9 @@ import { Input } from "@/components/ui/input";
 import { analyticsApi, bot2Api, ProgramEnrollment } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSearch } from "@/lib/hooks/use-search";
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Users,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Search, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { PaginationBar } from "@/components/ui/pagination-bar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -147,149 +140,122 @@ export default function EnrollmentsPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Talabalar soni</h2>
-          <p className="text-muted-foreground">
-            {totalCount} ta yozuv, jami {stats.totalStudents} ta talaba,{" "}
-            {stats.totalResponded} ta ishtirokchi ({stats.coverage.toFixed(1)}%
-            qamrov)
+          <h1 className="text-2xl font-bold">Talabalar soni</h1>
+          <p className="text-sm text-muted-foreground">
+            {stats.totalStudents} talaba · {stats.totalResponded} ishtirok ({stats.coverage.toFixed(1)}% qamrov)
           </p>
         </div>
-        {isAdmin && (
-          <Button onClick={() => router.push("/dashboard/enrollments/new")}>
-            <Plus className="h-4 w-4 mr-2" />
-            Yangi yozuv
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={reload}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Yangilash
           </Button>
-        )}
+          {isAdmin && (
+            <Button size="sm" onClick={() => router.push("/dashboard/enrollments/new")}>
+              <Plus className="mr-2 h-4 w-4" />
+              Qo&apos;shish
+            </Button>
+          )}
+        </div>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Program/Kurs bo&apos;yicha
-            </CardTitle>
-            <CardDescription>
-              Har bir kurs va yo&apos;nalish bo&apos;yicha umumiy talabalar soni
-            </CardDescription>
-          </div>
-          <div className="relative w-full md:max-w-sm">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Qidirish..."
-              className="pl-8"
-            />
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Users className="h-4 w-4" />
+                Program/Kurs bo&apos;yicha
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Jami {totalCount} ta yozuv
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:w-60">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Qidirish..."
+                className="h-9 pl-8 text-sm"
+              />
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {loading ? (
-            <TableLoading />
+            <div className="p-6"><TableLoading /></div>
           ) : error ? (
-            <ErrorDisplay message={error} onRetry={reload} />
+            <div className="p-6"><ErrorDisplay message={error} onRetry={reload} /></div>
           ) : (
             <>
-              <div className="rounded-md border">
+              <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Yo&apos;nalish</TableHead>
-                      <TableHead className="text-center">Kurs</TableHead>
-                      <TableHead className="text-center">Talabalar</TableHead>
-                      <TableHead className="text-center">
-                        Ishtirok etdi
-                      </TableHead>
-                      <TableHead className="text-center">Qamrov</TableHead>
-                      <TableHead className="text-center">O&apos;quv yili</TableHead>
-                      <TableHead className="text-center">Kampaniya</TableHead>
-                      <TableHead className="text-center">Holat</TableHead>
-                      <TableHead className="text-right">Amallar</TableHead>
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableHead className="pl-4 text-xs">Yo&apos;nalish</TableHead>
+                      <TableHead className="text-center text-xs">Kurs</TableHead>
+                      <TableHead className="text-center text-xs">Talabalar</TableHead>
+                      <TableHead className="text-center text-xs">Ishtirok</TableHead>
+                      <TableHead className="text-center text-xs">Qamrov</TableHead>
+                      <TableHead className="text-center text-xs">O&apos;quv yili</TableHead>
+                      <TableHead className="text-center text-xs">Kampaniya</TableHead>
+                      <TableHead className="text-center text-xs">Holat</TableHead>
+                      {isAdmin && <TableHead className="w-16 text-xs" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-8">
+                        <TableCell colSpan={9} className="py-16 text-center text-muted-foreground">
                           Ma&apos;lumot topilmadi
                         </TableCell>
                       </TableRow>
                     ) : (
                       items.map((it) => (
                         <TableRow key={it.id}>
-                          <TableCell className="font-medium">
-                            {it.program_details?.name ?? it.program}
+                          <TableCell className="pl-4 text-sm font-medium">
+                            {(it.program_details as any)?.name_uz || it.program_details?.name || it.program}
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline">
-                              {formatCourseYearLabel(it.course_year)}
-                            </Badge>
+                            <Badge variant="outline" className="text-xs">{formatCourseYearLabel(it.course_year)}</Badge>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="secondary">{it.student_count}</Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="secondary">
-                              {it.responded_count ?? 0}
-                            </Badge>
-                          </TableCell>
+                          <TableCell className="text-center tabular-nums text-sm">{it.student_count}</TableCell>
+                          <TableCell className="text-center tabular-nums text-sm">{it.responded_count ?? 0}</TableCell>
                           <TableCell className="text-center">
                             <Badge
-                              variant={
-                                (it.coverage_percent ?? 0) >= 50
-                                  ? "default"
-                                  : "outline"
-                              }
+                              variant={(it.coverage_percent ?? 0) >= 50 ? "default" : "outline"}
+                              className="text-xs"
                             >
                               {(it.coverage_percent ?? 0).toFixed(1)}%
                             </Badge>
                           </TableCell>
+                          <TableCell className="text-center text-xs text-muted-foreground">{it.academic_year}</TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline">{it.academic_year}</Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="secondary">{it.campaign}</Badge>
+                            <Badge variant="secondary" className="text-xs">{it.campaign}</Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            {it.is_active ? (
-                              <Badge variant="default">Aktiv</Badge>
-                            ) : (
-                              <Badge variant="destructive">Aktiv emas</Badge>
-                            )}
+                            <Badge variant={it.is_active ? "default" : "destructive"} className="text-xs">
+                              {it.is_active ? "Aktiv" : "Noaktiv"}
+                            </Badge>
                           </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {isAdmin ? (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      router.push(
-                                        `/dashboard/enrollments/${it.id}`,
-                                      )
-                                    }
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setDeletingId(it.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  —
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
+                          {isAdmin && (
+                            <TableCell>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="icon" className="h-7 w-7"
+                                  onClick={() => router.push(`/dashboard/enrollments/${it.id}`)}>
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7"
+                                  onClick={() => setDeletingId(it.id)}>
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))
                     )}
@@ -297,36 +263,14 @@ export default function EnrollmentsPage() {
                 </Table>
               </div>
 
-              {totalCount > 0 && (
-                <div className="flex items-center justify-between pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    {(page - 1) * PAGE_SIZE + 1}–
-                    {Math.min(page * PAGE_SIZE, totalCount)} / {totalCount}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page <= 1}
-                    >
-                      <ChevronLeft className="h-4 w-4 mr-1" />
-                      Oldingi
-                    </Button>
-                    <span className="text-sm">
-                      {page} / {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page >= totalPages}
-                    >
-                      Keyingi
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
+              {totalCount > PAGE_SIZE && (
+                <PaginationBar
+                  page={page}
+                  totalPages={totalPages}
+                  totalCount={totalCount}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setPage}
+                />
               )}
             </>
           )}
