@@ -342,13 +342,15 @@ export default function CatalogPage() {
           resetForm(v as CatalogType);
         }}
       >
-        <TabsList className="grid w-full grid-cols-6">
-          {CATALOG_TYPES_INFO.map((type) => (
-            <TabsTrigger key={type.value} value={type.value}>
-              {type.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList className="inline-flex h-10 w-max min-w-full gap-1">
+            {CATALOG_TYPES_INFO.map((type) => (
+              <TabsTrigger key={type.value} value={type.value} className="whitespace-nowrap px-4">
+                {type.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         <TabsContent value={activeTab} className="mt-6">
           <Card>
@@ -377,76 +379,75 @@ export default function CatalogPage() {
               ) : error ? (
                 <ErrorDisplay message={error} onRetry={fetchData} />
               ) : (
-                <div className="rounded-md border">
+                <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>🇺🇿 O&apos;zbekcha</TableHead>
-                        <TableHead>🇷🇺 Ruscha</TableHead>
-                        <TableHead>🇬🇧 Inglizcha</TableHead>
-                        <TableHead>Meta</TableHead>
-                        <TableHead>Yaratilgan</TableHead>
-                        <TableHead className="w-[80px]">Amal</TableHead>
+                      <TableRow className="bg-muted/40">
+                        <TableHead className="w-[30%] min-w-[160px]">🇺🇿 O&apos;zbekcha</TableHead>
+                        <TableHead className="w-[28%] min-w-[140px]">🇷🇺 Ruscha</TableHead>
+                        <TableHead className="w-[28%] min-w-[140px]">🇬🇧 Inglizcha</TableHead>
+                        <TableHead className="w-[80px]">Meta</TableHead>
+                        <TableHead className="w-[100px]">Sana</TableHead>
+                        <TableHead className="w-[60px]" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredItems.length === 0 ? (
                         <TableRow>
-                          <TableCell
-                            colSpan={6}
-                            className="text-center text-muted-foreground"
-                          >
-                            Ma'lumot topilmadi
+                          <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                            <div className="flex flex-col items-center gap-2">
+                              <Search className="h-8 w-8 opacity-20" />
+                              <span>Ma&apos;lumot topilmadi</span>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ) : (
                         filteredItems.map((item) => (
-                          <TableRow key={item.id}>
+                          <TableRow key={item.id} className="group">
                             <TableCell className="font-medium">
-                              {item.name_uz || item.name || "-"}
+                              <span className="line-clamp-2">{item.name_uz || item.name || "—"}</span>
                             </TableCell>
-                            <TableCell>{item.name_ru || "-"}</TableCell>
-                            <TableCell>{item.name_en || "-"}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              <span className="line-clamp-2">{item.name_ru || "—"}</span>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              <span className="line-clamp-2">{item.name_en || "—"}</span>
+                            </TableCell>
                             <TableCell>
-                              {item.metadata &&
-                              Object.keys(item.metadata).length > 0 ? (
-                                <Badge variant="outline">
-                                  {Object.keys(item.metadata).length} ta maydon
+                              {item.metadata && Object.keys(item.metadata).length > 0 ? (
+                                <Badge variant="secondary" className="text-xs">
+                                  {Object.keys(item.metadata).length}
                                 </Badge>
                               ) : (
-                                "-"
+                                <span className="text-muted-foreground">—</span>
                               )}
                             </TableCell>
-                            <TableCell>{formatDate(item.created_at)}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                              {formatDate(item.created_at)}
+                            </TableCell>
                             <TableCell>
                               {isAdmin ? (
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
                                       <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      onClick={() => openEditDialog(item)}
-                                    >
+                                    <DropdownMenuItem onClick={() => openEditDialog(item)}>
                                       <Edit className="mr-2 h-4 w-4" />
                                       Tahrirlash
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onClick={() => openDeleteDialog(item)}
-                                      className="text-red-600"
+                                      className="text-red-600 focus:text-red-700"
                                     >
                                       <Trash2 className="mr-2 h-4 w-4" />
                                       O'chirish
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  —
-                                </span>
-                              )}
+                              ) : null}
                             </TableCell>
                           </TableRow>
                         ))
@@ -459,6 +460,7 @@ export default function CatalogPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
 
       {/* Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
