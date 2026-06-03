@@ -342,119 +342,120 @@ export default function CatalogPage() {
           resetForm(v as CatalogType);
         }}
       >
-        <div className="overflow-x-auto">
-          <TabsList className="inline-flex h-10 w-max min-w-full gap-1">
-            {CATALOG_TYPES_INFO.map((type) => (
-              <TabsTrigger key={type.value} value={type.value} className="whitespace-nowrap px-4">
-                {type.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
+        <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
+          {CATALOG_TYPES_INFO.map((type) => (
+            <TabsTrigger key={type.value} value={type.value} className="rounded-md px-3 py-1.5 text-sm">
+              {type.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-        <TabsContent value={activeTab} className="mt-6">
+        <TabsContent value={activeTab} className="mt-4">
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>{currentTypeInfo.label}</CardTitle>
-                  <CardDescription>
-                    {currentTypeInfo.description} • Jami: {items.length} ta
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex-1">
+                  <CardTitle className="text-base">{currentTypeInfo.label}</CardTitle>
+                  <CardDescription className="text-xs">
+                    {currentTypeInfo.description} · {items.length} ta
                   </CardDescription>
                 </div>
-                <div className="relative w-64">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <div className="relative w-full sm:w-56">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     placeholder="Qidirish..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8"
+                    className="pl-8 h-9 text-sm"
                   />
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {loading ? (
-                <TableLoading />
+                <div className="p-6"><TableLoading /></div>
               ) : error ? (
-                <ErrorDisplay message={error} onRetry={fetchData} />
-              ) : (
-                <div className="overflow-x-auto rounded-lg border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/40">
-                        <TableHead className="w-[30%] min-w-[160px]">🇺🇿 O&apos;zbekcha</TableHead>
-                        <TableHead className="w-[28%] min-w-[140px]">🇷🇺 Ruscha</TableHead>
-                        <TableHead className="w-[28%] min-w-[140px]">🇬🇧 Inglizcha</TableHead>
-                        <TableHead className="w-[80px]">Meta</TableHead>
-                        <TableHead className="w-[100px]">Sana</TableHead>
-                        <TableHead className="w-[60px]" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredItems.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
-                            <div className="flex flex-col items-center gap-2">
-                              <Search className="h-8 w-8 opacity-20" />
-                              <span>Ma&apos;lumot topilmadi</span>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredItems.map((item) => (
-                          <TableRow key={item.id} className="group">
-                            <TableCell className="font-medium">
-                              <span className="line-clamp-2">{item.name_uz || item.name || "—"}</span>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              <span className="line-clamp-2">{item.name_ru || "—"}</span>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              <span className="line-clamp-2">{item.name_en || "—"}</span>
-                            </TableCell>
-                            <TableCell>
-                              {item.metadata && Object.keys(item.metadata).length > 0 ? (
-                                <Badge variant="secondary" className="text-xs">
-                                  {Object.keys(item.metadata).length}
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                              {formatDate(item.created_at)}
-                            </TableCell>
-                            <TableCell>
-                              {isAdmin ? (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => openEditDialog(item)}>
-                                      <Edit className="mr-2 h-4 w-4" />
-                                      Tahrirlash
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => openDeleteDialog(item)}
-                                      className="text-red-600 focus:text-red-700"
-                                    >
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      O'chirish
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              ) : null}
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
+                <div className="p-6"><ErrorDisplay message={error} onRetry={fetchData} /></div>
+              ) : filteredItems.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+                  <Search className="h-8 w-8 opacity-20" />
+                  <p className="text-sm">Ma&apos;lumot topilmadi</p>
                 </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableHead className="pl-4 text-xs font-semibold">#</TableHead>
+                      <TableHead className="text-xs font-semibold">Nomlar</TableHead>
+                      <TableHead className="text-xs font-semibold">Sana</TableHead>
+                      {isAdmin && <TableHead className="w-10" />}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredItems.map((item, idx) => (
+                      <TableRow key={item.id} className="group align-top">
+                        <TableCell className="pl-4 text-xs text-muted-foreground tabular-nums">
+                          {idx + 1}
+                        </TableCell>
+                        <TableCell>
+                          <p className="font-medium text-sm leading-snug">
+                            {item.name_uz || item.name || "—"}
+                          </p>
+                          {item.name_ru && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              🇷🇺 {item.name_ru}
+                            </p>
+                          )}
+                          {item.name_en && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              🇬🇧 {item.name_en}
+                            </p>
+                          )}
+                          {item.metadata && Object.keys(item.metadata).length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {Object.entries(item.metadata).slice(0, 3).map(([k, v]) => (
+                                <Badge key={k} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                                  {k}: {String(v)}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {formatDate(item.created_at)}
+                        </TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEditDialog(item)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Tahrirlash
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => openDeleteDialog(item)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  O&apos;chirish
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>
