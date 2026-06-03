@@ -105,6 +105,9 @@ class Command(BaseCommand):
                 code=track["code"],
                 defaults={
                     "name": track["name"],
+                    "name_uz": track["name_uz"],
+                    "name_ru": track["name_ru"],
+                    "name_en": track["name_en"],
                     "is_active": True,
                     "sort_order": idx,
                     "metadata": {
@@ -123,6 +126,9 @@ class Command(BaseCommand):
                 code=subject["code"],
                 defaults={
                     "name": subject["name"],
+                    "name_uz": subject["name_uz"],
+                    "name_ru": subject["name_ru"],
+                    "name_en": subject["name_en"],
                     "is_active": True,
                     "sort_order": idx,
                     "metadata": {

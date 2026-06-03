@@ -204,6 +204,9 @@ class Command(BaseCommand):
                 code=direction["code"],
                 defaults={
                     "name": direction["name_en"],
+                    "name_uz": direction["name_uz"],
+                    "name_ru": direction["name_ru"],
+                    "name_en": direction["name_en"],
                     "is_active": True,
                     "sort_order": idx,
                     "metadata": {
@@ -223,6 +226,9 @@ class Command(BaseCommand):
                 code=region["code"],
                 defaults={
                     "name": region["name_en"],
+                    "name_uz": region["name_uz"],
+                    "name_ru": region["name_ru"],
+                    "name_en": region["name_en"],
                     "is_active": True,
                     "sort_order": idx,
                     "metadata": {
