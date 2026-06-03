@@ -1,7 +1,7 @@
 import random
 from datetime import timedelta
 
-from django.core.management import BaseCommand, call_command
+from django.core.management import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
@@ -77,7 +77,6 @@ class Command(BaseCommand):
         config = SCALE_CONFIG[scale]
 
         with transaction.atomic():
-            call_command("seed_programs")
             region_items = self._seed_catalog_type(CatalogItem.ItemType.REGION, REGIONS, rng, upsert)
             programs = list(CatalogItem.objects.filter(type=CatalogItem.ItemType.PROGRAM, is_active=True))
 

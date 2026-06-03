@@ -2,7 +2,7 @@ import multiprocessing
 import os
 
 # Bind can be overridden with GUNICORN_BIND env
-bind = os.getenv("GUNICORN_BIND", "127.0.0.1:8000")
+bind = os.getenv("GUNICORN_BIND", "0.0.0.0:8000")
 
 workers = int(os.getenv("GUNICORN_WORKERS", str(multiprocessing.cpu_count() * 2 + 1)))
 worker_class = os.getenv("GUNICORN_WORKER_CLASS", "gthread")
