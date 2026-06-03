@@ -438,37 +438,24 @@ async def pick_lang_russian(call: CallbackQuery, state: FSMContext):
 
 @router.message(SurveyState.waiting_english_level)
 async def set_english_level(message: Message, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("language", "uz")
     await state.update_data(english_level=message.text.strip() if message.text else "")
-    if not data.get("russian_level_done"):
-        await state.update_data(russian_level_done=False)
-        await state.set_state(SurveyState.waiting_russian_level)
-        await _send_and_save(message, get_text("ask_russian_level", lang), state, reply_markup=NO_KB)
-    else:
-        await _delete_previous_messages(message.chat.id, state, message.bot)
-        try:
-            await message.delete()
-        except Exception:
-            pass
-        await _final_submit(message, state)
+    await _delete_previous_messages(message.chat.id, state, message.bot)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    await _final_submit(message, state)
 
 
 @router.message(SurveyState.waiting_russian_level)
 async def set_russian_level(message: Message, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("language", "uz")
-    await state.update_data(russian_level=message.text.strip() if message.text else "", russian_level_done=True)
-    if not data.get("english_level"):
-        await state.set_state(SurveyState.waiting_english_level)
-        await _send_and_save(message, get_text("ask_english_level", lang), state, reply_markup=NO_KB)
-    else:
-        await _delete_previous_messages(message.chat.id, state, message.bot)
-        try:
-            await message.delete()
-        except Exception:
-            pass
-        await _final_submit(message, state)
+    await state.update_data(russian_level=message.text.strip() if message.text else "")
+    await _delete_previous_messages(message.chat.id, state, message.bot)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    await _final_submit(message, state)
 
 
 # ==================== Fallback: unmatched messages ====================

@@ -3,6 +3,22 @@
 from django.db import migrations, models
 
 
+def drop_constraints_safe(apps, schema_editor):
+    """Drop catalog code constraints if they exist (idempotent for any DB state)."""
+    conn = schema_editor.connection
+    names = [
+        "catalog_item_type_code_unique_with_nulls",
+        "catalog_item_type_code_unique_nonnull",
+    ]
+    with conn.cursor() as cursor:
+        if conn.vendor == "postgresql":
+            for name in names:
+                cursor.execute(
+                    f"ALTER TABLE catalog_catalogitem DROP CONSTRAINT IF EXISTS {name};"
+                )
+        # SQLite does not support DROP CONSTRAINT; Django tracks state only.
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,16 +26,30 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveConstraint(
-            model_name='catalogitem',
-            name='catalog_item_type_code_unique_with_nulls',
-        ),
-        migrations.RemoveConstraint(
-            model_name='catalogitem',
-            name='catalog_item_type_code_unique_nonnull',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(drop_constraints_safe, migrations.RunPython.noop),
+            ],
+            state_operations=[
+                migrations.RemoveConstraint(
+                    model_name='catalogitem',
+                    name='catalog_item_type_code_unique_with_nulls',
+                ),
+                migrations.RemoveConstraint(
+                    model_name='catalogitem',
+                    name='catalog_item_type_code_unique_nonnull',
+                ),
+            ],
         ),
         migrations.AddConstraint(
             model_name='catalogitem',
-            constraint=models.UniqueConstraint(condition=models.Q(models.Q(('code__isnull', True), _negated=True), models.Q(('code', ''), _negated=True)), fields=('type', 'code'), name='catalog_item_type_code_unique_nonnull'),
+            constraint=models.UniqueConstraint(
+                condition=models.Q(
+                    models.Q(('code__isnull', True), _negated=True),
+                    models.Q(('code', ''), _negated=True),
+                ),
+                fields=('type', 'code'),
+                name='catalog_item_type_code_unique_nonnull',
+            ),
         ),
     ]
