@@ -79,6 +79,14 @@ def yes_no_keyboard(prefix: str, lang: str = "uz") -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
+def lang_select_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=get_text("lang_english", lang), callback_data="lang:english")
+    kb.button(text=get_text("lang_russian", lang), callback_data="lang:russian")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
 def channels_keyboard() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for channel in CHANNELS:

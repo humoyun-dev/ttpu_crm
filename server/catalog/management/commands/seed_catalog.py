@@ -172,6 +172,13 @@ REGIONS = [
         "name_en": "Republic of Karakalpakstan",
         "code": "REG-KARAKALPAK",
     },
+    {
+        "id": 15,
+        "name_uz": "Chet ellik",
+        "name_ru": "Иностранец",
+        "name_en": "Foreigner",
+        "code": "REG-FOREIGN",
+    },
 ]
 
 
