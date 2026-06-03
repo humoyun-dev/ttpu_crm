@@ -38,6 +38,11 @@ export const LABEL_TRANSLATIONS: Record<string, string> = {
   suggestion: "Taklif",
   complaint: "Shikoyat",
   question: "Savol",
+  english_level: "Ingliz tili darajasi",
+  russian_level: "Rus tili darajasi",
+  region_label: "Viloyat (bot)",
+  program_label: "Yo'nalish (bot)",
+  course_year: "Kurs (bot)",
 };
 
 export function courseYearLabel(year: number | null | undefined): string {
