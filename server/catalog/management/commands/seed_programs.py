@@ -8,7 +8,9 @@ PROGRAMS = [
     # Bachelor - Italian
     {
         "code": "B-IT-COMPE",
-        "name": "INFORMATION TECHNOLOGIES AND PROGRAMMING IN INDUSTRY (COMPUTER ENGINEERING)",
+        "name_uz": "Sanoatda axborot texnologiyalari va dasturlash (Kompyuter muhandisligi)",
+        "name_ru": "Информационные технологии и программирование в промышленности (Компьютерная инженерия)",
+        "name_en": "Information Technologies and Programming in Industry (Computer Engineering)",
         "level": "bachelor",
         "track": "italian",
         "language": "Italian/English",
@@ -16,7 +18,9 @@ PROGRAMS = [
     },
     {
         "code": "B-IT-ME",
-        "name": "MECHANICAL ENGINEERING",
+        "name_uz": "Mexanika muhandisligi",
+        "name_ru": "Машиностроительная инженерия",
+        "name_en": "Mechanical Engineering",
         "level": "bachelor",
         "track": "italian",
         "language": "Italian/English",
@@ -24,7 +28,9 @@ PROGRAMS = [
     },
     {
         "code": "B-IT-IMT",
-        "name": "INDUSTRIAL MANUFACTURING TECHNOLOGIES",
+        "name_uz": "Sanoat ishlab chiqarish texnologiyalari",
+        "name_ru": "Промышленные производственные технологии",
+        "name_en": "Industrial Manufacturing Technologies",
         "level": "bachelor",
         "track": "italian",
         "language": "Italian/English",
@@ -32,7 +38,9 @@ PROGRAMS = [
     },
     {
         "code": "B-IT-ICEA",
-        "name": "INDUSTRIAL AND CIVIL ENGINEERING AND ARCHITECTURE",
+        "name_uz": "Sanoat va fuqarolik muhandisligi va arxitektura",
+        "name_ru": "Промышленная и гражданская инженерия и архитектура",
+        "name_en": "Industrial and Civil Engineering and Architecture",
         "level": "bachelor",
         "track": "italian",
         "language": "Italian/English",
@@ -40,7 +48,9 @@ PROGRAMS = [
     },
     {
         "code": "B-IT-AE",
-        "name": "AUTOMOTIVE ENGINEERING",
+        "name_uz": "Avtomobil muhandisligi",
+        "name_ru": "Автомобильная инженерия",
+        "name_en": "Automotive Engineering",
         "level": "bachelor",
         "track": "italian",
         "language": "Italian/English",
@@ -48,7 +58,9 @@ PROGRAMS = [
     },
     {
         "code": "B-IT-AS",
-        "name": "AEROSPACE ENGINEERING",
+        "name_uz": "Aerokosmik muhandislik",
+        "name_ru": "Авиакосмическая инженерия",
+        "name_en": "Aerospace Engineering",
         "level": "bachelor",
         "track": "italian",
         "language": "Italian/English",
@@ -57,7 +69,9 @@ PROGRAMS = [
     # Bachelor - Uzbek
     {
         "code": "B-UZ-SE",
-        "name": "SOFTWARE ENGINEERING",
+        "name_uz": "Dasturiy ta'minot muhandisligi",
+        "name_ru": "Программная инженерия",
+        "name_en": "Software Engineering",
         "level": "bachelor",
         "track": "uzbek",
         "language": "Uzbek/English",
@@ -65,7 +79,9 @@ PROGRAMS = [
     },
     {
         "code": "B-UZ-AD",
-        "name": "ARCHITECTURE & DESIGN",
+        "name_uz": "Arxitektura va dizayn",
+        "name_ru": "Архитектура и дизайн",
+        "name_en": "Architecture & Design",
         "level": "bachelor",
         "track": "uzbek",
         "language": "Uzbek/English",
@@ -73,7 +89,9 @@ PROGRAMS = [
     },
     {
         "code": "B-UZ-BM",
-        "name": "BUSINESS MANAGEMENT",
+        "name_uz": "Biznes menejment",
+        "name_ru": "Бизнес-менеджмент",
+        "name_en": "Business Management",
         "level": "bachelor",
         "track": "uzbek",
         "language": "Uzbek/English",
@@ -82,7 +100,9 @@ PROGRAMS = [
     # Master
     {
         "code": "M-MECH",
-        "name": "MECHATRONIC ENGINEERING",
+        "name_uz": "Mexatronika muhandisligi",
+        "name_ru": "Мехатронная инженерия",
+        "name_en": "Mechatronic Engineering",
         "level": "master",
         "track": "n/a",
         "language": "English",
@@ -90,7 +110,9 @@ PROGRAMS = [
     },
     {
         "code": "M-ICE",
-        "name": "INFORMATION AND COMMUNICATION ENGINEERING",
+        "name_uz": "Axborot va kommunikatsiya muhandisligi",
+        "name_ru": "Информационная и коммуникационная инженерия",
+        "name_en": "Information and Communication Engineering",
         "level": "master",
         "track": "n/a",
         "language": "English",
@@ -98,7 +120,9 @@ PROGRAMS = [
     },
     {
         "code": "M-RCHM",
-        "name": "RESTORATION AND CONSERVATION OF HISTORICAL MONUMENTS",
+        "name_uz": "Tarixiy yodgorliklarni tiklash va muhofaza qilish",
+        "name_ru": "Реставрация и сохранение исторических памятников",
+        "name_en": "Restoration and Conservation of Historical Monuments",
         "level": "master",
         "track": "n/a",
         "language": "English",
@@ -106,7 +130,9 @@ PROGRAMS = [
     },
     {
         "code": "M-MBA",
-        "name": "MASTER OF BUSINESS ADMINISTRATION (MBA)",
+        "name_uz": "Biznes boshqaruvi magistri (MBA)",
+        "name_ru": "Магистр делового администрирования (MBA)",
+        "name_en": "Master of Business Administration (MBA)",
         "level": "master",
         "track": "n/a",
         "language": "English",
@@ -131,7 +157,10 @@ class Command(BaseCommand):
                 type=CatalogItem.ItemType.PROGRAM,
                 code=program["code"],
                 defaults={
-                    "name": program["name"],
+                    "name": program["name_en"],
+                    "name_uz": program["name_uz"],
+                    "name_ru": program["name_ru"],
+                    "name_en": program["name_en"],
                     "is_active": True,
                     "sort_order": sort_map[program["code"]],
                     "metadata": {
