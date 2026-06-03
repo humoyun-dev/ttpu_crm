@@ -130,9 +130,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-56 shrink-0 border-r bg-card lg:flex lg:flex-col">
+    <div className="flex h-screen overflow-hidden">
+      {/* Desktop sidebar — fixed height, never grows */}
+      <aside className="hidden h-full w-56 shrink-0 flex-col border-r bg-card lg:flex">
         <SidebarContent />
       </aside>
 
@@ -143,10 +143,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </SheetContent>
       </Sheet>
 
-      {/* Main area */}
-      <div className="flex min-w-0 flex-1 flex-col bg-muted/30">
+      {/* Main area — scrolls independently */}
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-muted/30">
         {/* Top bar */}
-        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b bg-card px-4">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="lg:hidden">
@@ -163,7 +163,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Page content */}
+        {/* Scrollable content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {children}
         </main>
