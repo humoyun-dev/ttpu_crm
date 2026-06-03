@@ -28,6 +28,7 @@ from bot2_service.keyboards import (
     contact_keyboard,
     gender_keyboard,
     language_keyboard,
+    lang_select_keyboard,
     programs_keyboard,
     course_year_keyboard,
     regions_keyboard,
@@ -405,18 +406,69 @@ async def pick_share(call: CallbackQuery, state: FSMContext):
     await call.answer()
 
 
-# ==================== Suggestions -> Final Submission ====================
+# ==================== Suggestions -> Language Proficiency ====================
 @router.message(SurveyState.waiting_suggestions)
 async def set_suggestions(message: Message, state: FSMContext):
-    """Save suggestions and complete the survey."""
+    """Save suggestions and ask for language proficiency."""
+    data = await state.get_data()
+    lang = data.get("language", "uz")
     await state.update_data(suggestions=message.text.strip() if message.text else "")
-    # Delete previous messages before final submit
-    await _delete_previous_messages(message.chat.id, state, message.bot)
-    try:
-        await message.delete()
-    except Exception:
-        pass
-    await _final_submit(message, state)
+    await state.set_state(SurveyState.waiting_lang_select)
+    await _send_and_save(message, get_text("ask_lang_select", lang), state, reply_markup=lang_select_keyboard(lang))
+
+
+# ==================== Language Select -> Level Input ====================
+@router.callback_query(F.data == "lang:english", SurveyState.waiting_lang_select)
+async def pick_lang_english(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    await state.set_state(SurveyState.waiting_english_level)
+    await _send_and_save_callback(call, get_text("ask_english_level", lang), state, reply_markup=NO_KB)
+    await call.answer()
+
+
+@router.callback_query(F.data == "lang:russian", SurveyState.waiting_lang_select)
+async def pick_lang_russian(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    await state.set_state(SurveyState.waiting_russian_level)
+    await _send_and_save_callback(call, get_text("ask_russian_level", lang), state, reply_markup=NO_KB)
+    await call.answer()
+
+
+@router.message(SurveyState.waiting_english_level)
+async def set_english_level(message: Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    await state.update_data(english_level=message.text.strip() if message.text else "")
+    if not data.get("russian_level_done"):
+        await state.update_data(russian_level_done=False)
+        await state.set_state(SurveyState.waiting_russian_level)
+        await _send_and_save(message, get_text("ask_russian_level", lang), state, reply_markup=NO_KB)
+    else:
+        await _delete_previous_messages(message.chat.id, state, message.bot)
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        await _final_submit(message, state)
+
+
+@router.message(SurveyState.waiting_russian_level)
+async def set_russian_level(message: Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    await state.update_data(russian_level=message.text.strip() if message.text else "", russian_level_done=True)
+    if not data.get("english_level"):
+        await state.set_state(SurveyState.waiting_english_level)
+        await _send_and_save(message, get_text("ask_english_level", lang), state, reply_markup=NO_KB)
+    else:
+        await _delete_previous_messages(message.chat.id, state, message.bot)
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        await _final_submit(message, state)
 
 
 # ==================== Fallback: unmatched messages ====================
@@ -476,6 +528,8 @@ async def _final_submit(message: Message, state: FSMContext, show_thanks_only: b
             "region_label": data.get("region_label"),
             "program_label": data.get("program_label"),
             "course_year": data.get("course_year"),
+            "english_level": data.get("english_level", ""),
+            "russian_level": data.get("russian_level", ""),
         },
     }
     

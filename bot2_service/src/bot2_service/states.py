@@ -17,3 +17,6 @@ class SurveyState(StatesGroup):
     waiting_help = State()
     waiting_share_consent = State()
     waiting_suggestions = State()
+    waiting_lang_select = State()
+    waiting_english_level = State()
+    waiting_russian_level = State()
