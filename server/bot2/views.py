@@ -1,15 +1,16 @@
 import csv
 import io
+import logging
 from typing import List
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, F
 from django.http import HttpRequest
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -20,7 +21,10 @@ from catalog.models import CatalogItem
 from common.auth import verify_service_token
 from common.exceptions import APIError, build_error_response
 from common.permissions import IsAdminUserRole, IsViewerOrAdminReadOnly
+from common.throttles import SurveySubmitThrottle
 from common.time import parse_iso_datetime
+
+logger = logging.getLogger(__name__)
 
 
 class Bot2StudentRosterViewSet(viewsets.ModelViewSet):
@@ -75,6 +79,10 @@ class Bot2StudentViewSet(viewsets.ModelViewSet):
     queryset = Bot2Student.objects.select_related("roster", "region")
     serializer_class = None
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
+    # Bot2Students are created by the Telegram bot (submit_survey), never via the
+    # admin API: roster is a required FK but read-only in the serializer, so a
+    # direct POST would 500. Disallow create (405); read/update/delete remain.
+    http_method_names = ["get", "head", "options", "patch", "put", "delete"]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["gender", "region"]
     search_fields = ["student_external_id", "username", "first_name", "last_name"]
@@ -84,6 +92,30 @@ class Bot2StudentViewSet(viewsets.ModelViewSet):
         from bot2.serializers import Bot2StudentSerializer
 
         return Bot2StudentSerializer
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="create",
+            entity=instance, request=self.request,
+            after_data={"student_external_id": instance.student_external_id},
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="update",
+            entity=instance, request=self.request,
+            after_data={"student_external_id": instance.student_external_id},
+        )
+
+    def perform_destroy(self, instance):
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="delete",
+            entity=instance, request=self.request,
+            after_data={"student_external_id": instance.student_external_id},
+        )
+        instance.delete()
 
 
 class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
@@ -109,6 +141,30 @@ class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
         from bot2.serializers import Bot2SurveyResponseSerializer
 
         return Bot2SurveyResponseSerializer
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="create",
+            entity=instance, request=self.request,
+            after_data={"student": str(instance.student_id), "survey_campaign": instance.survey_campaign},
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="update",
+            entity=instance, request=self.request,
+            after_data={"student": str(instance.student_id), "survey_campaign": instance.survey_campaign},
+        )
+
+    def perform_destroy(self, instance):
+        log_audit(
+            actor_type="user", actor_user=self.request.user, action="delete",
+            entity=instance, request=self.request,
+            after_data={"student": str(instance.student_id), "survey_campaign": instance.survey_campaign},
+        )
+        instance.delete()
 
 
 class ProgramEnrollmentViewSet(viewsets.ModelViewSet):
@@ -228,6 +284,7 @@ def import_roster(request):
 
 @api_view(["POST"])
 @permission_classes([])
+@throttle_classes([SurveySubmitThrottle])
 @transaction.atomic
 def submit_survey(request):
     verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")
@@ -245,12 +302,13 @@ def submit_survey(request):
         return build_error_response("INVALID_COURSE_YEAR", "course_year must be between 1 and 5.", status.HTTP_400_BAD_REQUEST)
 
     roster = StudentRoster.objects.filter(student_external_id=student_external_id).first()
+    program = None
     if not roster:
         # Auto-create roster if program_id is provided
         program_id = request.data.get("program_id")
         if not program_id:
             return build_error_response("ROSTER_NOT_FOUND", "Student roster not found and program_id not provided.", status.HTTP_400_BAD_REQUEST)
-        
+
         # Accept both PROGRAM and DIRECTION types
         program = CatalogItem.objects.filter(
             id=program_id
@@ -259,19 +317,10 @@ def submit_survey(request):
         ).first()
         if not program:
             return build_error_response("INVALID_PROGRAM", "program_id must reference a program or direction catalog item.", status.HTTP_400_BAD_REQUEST)
-        
-        # Create roster with provided course_year (default 1)
-        roster = StudentRoster.objects.create(
-            student_external_id=student_external_id,
-            program=program,
-            course_year=course_year,
-            roster_campaign="bot2_auto",
-            is_active=True,
-        )
     else:
         # Existing roster is source of truth for program/course_year.
         course_year = roster.course_year
-    
+
     campaign = request.data.get("survey_campaign") or "default"
     region_id = request.data.get("region_id")
     if region_id:
@@ -282,63 +331,89 @@ def submit_survey(request):
         region = None
 
     telegram_user_id = request.data.get("telegram_user_id")
-    
-    try:
-        # First, check if student exists by telegram_user_id (to handle student_external_id changes)
-        existing_student = None
-        if telegram_user_id:
-            existing_student = Bot2Student.objects.filter(telegram_user_id=telegram_user_id).first()
-        
-        if existing_student:
-            # Update existing student (even if student_external_id changed)
-            existing_student.student_external_id = student_external_id
-            existing_student.roster = roster
-            existing_student.username = request.data.get("username", "") or ""
-            existing_student.first_name = request.data.get("first_name", "") or ""
-            existing_student.last_name = request.data.get("last_name", "") or ""
-            existing_student.gender = request.data.get("gender") or Bot2Student.Gender.UNSPECIFIED
-            existing_student.phone = request.data.get("phone", "") or ""
-            existing_student.region = region
-            existing_student.save()
-            student = existing_student
-        else:
-            # Try to find by student_external_id or create new
-            student, _ = Bot2Student.objects.update_or_create(
-                student_external_id=student_external_id,
-                defaults={
-                    "roster": roster,
-                    "telegram_user_id": telegram_user_id,
-                    "username": request.data.get("username", "") or "",
-                    "first_name": request.data.get("first_name", "") or "",
-                    "last_name": request.data.get("last_name", "") or "",
-                    "gender": request.data.get("gender") or Bot2Student.Gender.UNSPECIFIED,
-                    "phone": request.data.get("phone", "") or "",
-                    "region": region,
-                },
-            )
 
-        # Upsert survey by (student, campaign) to keep submissions idempotent.
-        payload = {
-            "roster": roster,
-            "program": roster.program,
-            "course_year": course_year,
-            "employment_status": request.data.get("employment_status", "") or "",
-            "employment_company": request.data.get("employment_company", "") or "",
-            "employment_role": request.data.get("employment_role", "") or "",
-            "suggestions": request.data.get("suggestions", "") or "",
-            "consents": request.data.get("consents", {}) or {},
-            "answers": request.data.get("answers", {}) or {},
-            "submitted_at": timezone.now(),
-        }
-        survey, _ = Bot2SurveyResponse.objects.update_or_create(
-            student=student,
-            survey_campaign=campaign,
-            defaults=payload,
-        )
+    try:
+        # Inner savepoint: a DB integrity error here rolls back only these writes
+        # instead of poisoning the outer @transaction.atomic (which would turn a
+        # clean conflict into an opaque 500 on commit).
+        with transaction.atomic():
+            if roster is None:
+                # Create roster with provided course_year (default 1)
+                roster = StudentRoster.objects.create(
+                    student_external_id=student_external_id,
+                    program=program,
+                    course_year=course_year,
+                    roster_campaign="bot2_auto",
+                    is_active=True,
+                )
+
+            # First, check if student exists by telegram_user_id (to handle student_external_id changes)
+            existing_student = None
+            if telegram_user_id:
+                existing_student = Bot2Student.objects.filter(telegram_user_id=telegram_user_id).first()
+
+            if existing_student:
+                # Update existing student (even if student_external_id changed)
+                existing_student.student_external_id = student_external_id
+                existing_student.roster = roster
+                existing_student.username = request.data.get("username", "") or ""
+                existing_student.first_name = request.data.get("first_name", "") or ""
+                existing_student.last_name = request.data.get("last_name", "") or ""
+                existing_student.gender = request.data.get("gender") or Bot2Student.Gender.UNSPECIFIED
+                existing_student.phone = request.data.get("phone", "") or ""
+                existing_student.region = region
+                existing_student.save()
+                student = existing_student
+            else:
+                # Try to find by student_external_id or create new
+                student, _ = Bot2Student.objects.update_or_create(
+                    student_external_id=student_external_id,
+                    defaults={
+                        "roster": roster,
+                        "telegram_user_id": telegram_user_id,
+                        "username": request.data.get("username", "") or "",
+                        "first_name": request.data.get("first_name", "") or "",
+                        "last_name": request.data.get("last_name", "") or "",
+                        "gender": request.data.get("gender") or Bot2Student.Gender.UNSPECIFIED,
+                        "phone": request.data.get("phone", "") or "",
+                        "region": region,
+                    },
+                )
+
+            # Upsert survey by (student, campaign) to keep submissions idempotent.
+            payload = {
+                "roster": roster,
+                "program": roster.program,
+                "course_year": course_year,
+                "employment_status": request.data.get("employment_status", "") or "",
+                "employment_company": request.data.get("employment_company", "") or "",
+                "employment_role": request.data.get("employment_role", "") or "",
+                "suggestions": request.data.get("suggestions", "") or "",
+                "consents": request.data.get("consents", {}) or {},
+                "answers": request.data.get("answers", {}) or {},
+                "submitted_at": timezone.now(),
+            }
+            survey, _ = Bot2SurveyResponse.objects.update_or_create(
+                student=student,
+                survey_campaign=campaign,
+                defaults=payload,
+            )
     except ValidationError as exc:
         return build_error_response("VALIDATION_ERROR", exc.messages, status.HTTP_400_BAD_REQUEST)
-    except Exception as exc:  # pragma: no cover - unexpected
-        return build_error_response("SERVER_ERROR", str(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except IntegrityError:
+        logger.warning("submit_survey integrity conflict for student_external_id=%s", student_external_id)
+        return build_error_response(
+            "CONFLICT",
+            "A conflicting submission already exists for this student; please retry.",
+            status.HTTP_409_CONFLICT,
+        )
+    except Exception:  # pragma: no cover - unexpected
+        logger.exception("submit_survey unexpected error for student_external_id=%s", student_external_id)
+        return build_error_response(
+            "SERVER_ERROR",
+            "An internal error occurred while saving the survey.",
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
     log_audit(
         actor_type="service",

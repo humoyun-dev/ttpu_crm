@@ -103,20 +103,7 @@ npm run start -- -p 3000 -H 127.0.0.1
 
 ---
 
-## 4) Bot1/Bot2 run
-
-### 4.1. Bot1
-
-```bash
-cd /opt/ttpu_crm/bot1_service
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-python -m bot1_service.main
-```
-
-### 4.2. Bot2
+## 4) Bot2 run
 
 ```bash
 cd /opt/ttpu_crm/bot2_service
@@ -180,27 +167,7 @@ Environment=NODE_ENV=production
 WantedBy=multi-user.target
 ```
 
-### 5.3 ttpu-bot1.service
-
-```ini
-[Unit]
-Description=TTPU Bot1 Service
-After=network.target
-
-[Service]
-User=www-data
-Group=www-data
-WorkingDirectory=/opt/ttpu_crm/bot1_service
-Environment=PATH=/opt/ttpu_crm/bot1_service/.venv/bin
-ExecStart=/opt/ttpu_crm/bot1_service/.venv/bin/python -m bot1_service.main
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 5.4 ttpu-bot2.service
+### 5.3 ttpu-bot2.service
 
 ```ini
 [Unit]
@@ -224,8 +191,8 @@ Enable:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now ttpu-server ttpu-dashboard ttpu-bot1 ttpu-bot2
-sudo systemctl status ttpu-server ttpu-dashboard ttpu-bot1 ttpu-bot2
+sudo systemctl enable --now ttpu-server ttpu-dashboard ttpu-bot2
+sudo systemctl status ttpu-server ttpu-dashboard ttpu-bot2
 ```
 
 ---
@@ -301,7 +268,6 @@ sudo certbot --nginx -d api.example.uz -d crm.example.uz
 # service loglar
 journalctl -u ttpu-server -f
 journalctl -u ttpu-dashboard -f
-journalctl -u ttpu-bot1 -f
 journalctl -u ttpu-bot2 -f
 
 # API health (misol)

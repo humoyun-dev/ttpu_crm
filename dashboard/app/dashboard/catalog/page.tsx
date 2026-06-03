@@ -65,6 +65,7 @@ import {
   formatDate,
 } from "@/lib/api";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
 import {
   Select,
   SelectContent,
@@ -84,6 +85,8 @@ interface CatalogFormData {
 }
 
 export default function CatalogPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [activeTab, setActiveTab] = useState<CatalogType>("program");
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -323,10 +326,12 @@ export default function CatalogPage() {
             <RefreshCw className="mr-2 h-4 w-4" />
             Yangilash
           </Button>
-          <Button onClick={() => setCreateDialogOpen(true)} size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            Yangi qo'shish
-          </Button>
+          {isAdmin && (
+            <Button onClick={() => setCreateDialogOpen(true)} size="sm">
+              <Plus className="mr-2 h-4 w-4" />
+              Yangi qo'shish
+            </Button>
+          )}
         </div>
       </div>
 
@@ -414,28 +419,34 @@ export default function CatalogPage() {
                             </TableCell>
                             <TableCell>{formatDate(item.created_at)}</TableCell>
                             <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={() => openEditDialog(item)}
-                                  >
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Tahrirlash
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => openDeleteDialog(item)}
-                                    className="text-red-600"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    O'chirish
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              {isAdmin ? (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => openEditDialog(item)}
+                                    >
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Tahrirlash
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => openDeleteDialog(item)}
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      O'chirish
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  —
+                                </span>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))

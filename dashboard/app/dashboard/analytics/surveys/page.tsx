@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { ErrorDisplay } from "@/components/error-display";
 import { analyticsApi } from "@/lib/api";
 import {
   TrendingUp,
@@ -57,6 +58,7 @@ interface ProgramDetail {
 export default function AnalyticsPage() {
   const [data, setData] = useState<CourseYearData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [programDetails, setProgramDetails] = useState<ProgramDetail[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -88,6 +90,7 @@ export default function AnalyticsPage() {
   // Load coverage data
   const loadCoverage = useCallback((academicYear?: string) => {
     setLoading(true);
+    setError(null);
     setSelectedYear(null);
     setProgramDetails([]);
 
@@ -95,11 +98,22 @@ export default function AnalyticsPage() {
     analyticsApi
       .getCourseYearCoverage(opts)
       .then((response) => {
+        if (response.error) {
+          setError(
+            Array.isArray(response.error.message)
+              ? response.error.message.join(", ")
+              : response.error.message,
+          );
+          return;
+        }
         if (response.data) {
           setData(response.data);
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        setError("Ma'lumotni yuklab bo'lmadi. Iltimos, qayta urinib ko'ring.");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -169,7 +183,7 @@ export default function AnalyticsPage() {
               <SelectContent>
                 {academicYears.map((year) => (
                   <SelectItem key={year} value={year}>
-                    {year}-yil
+                    {year} o&apos;quv yili
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -234,6 +248,11 @@ export default function AnalyticsPage() {
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
+      ) : error ? (
+        <ErrorDisplay
+          message={error}
+          onRetry={() => loadCoverage(selectedAcademicYear || undefined)}
+        />
       ) : (
         <>
           {/* Course year cards */}

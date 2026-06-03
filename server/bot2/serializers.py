@@ -64,4 +64,6 @@ class ProgramEnrollmentSerializer(serializers.ModelSerializer):
         responded = getattr(obj, "responded_count", 0) or 0
         if not total:
             return 0.0
-        return round(responded * 100.0 / total, 2)
+        # Clamp to 100: responded counts real surveys while student_count is a
+        # manually-maintained denominator, so off-roster responders could exceed it.
+        return round(min(responded * 100.0 / total, 100.0), 2)

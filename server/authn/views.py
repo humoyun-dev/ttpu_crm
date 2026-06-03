@@ -1,6 +1,8 @@
+import logging
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -13,6 +15,8 @@ from authn.serializers import LoginSerializer, UserSerializer
 from authn.models import RevokedToken
 from common.exceptions import APIError, build_error_response
 from common.throttles import LoginRateThrottle
+
+logger = logging.getLogger(__name__)
 
 
 def _set_cookie(response: Response, name: str, value: str, expires: timedelta):
@@ -97,20 +101,23 @@ class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        raw_refresh = request.COOKIES.get(settings.REFRESH_COOKIE_NAME)
-        if raw_refresh:
-            try:
-                token = RefreshToken(raw_refresh)
-                RevokedToken.revoke(token, RevokedToken.TokenType.REFRESH)
-            except Exception:
-                pass
-        raw_access = request.COOKIES.get(settings.ACCESS_COOKIE_NAME)
-        if raw_access:
-            try:
-                access = AccessToken(raw_access)
-                RevokedToken.revoke(access, RevokedToken.TokenType.ACCESS)
-            except Exception:
-                pass
+        # Revoke both tokens atomically so a crash mid-way can't leave the
+        # security-critical refresh token revoked but the access token live (or vice versa).
+        with transaction.atomic():
+            raw_refresh = request.COOKIES.get(settings.REFRESH_COOKIE_NAME)
+            if raw_refresh:
+                try:
+                    token = RefreshToken(raw_refresh)
+                    RevokedToken.revoke(token, RevokedToken.TokenType.REFRESH)
+                except Exception as exc:
+                    logger.warning("Logout: could not revoke refresh token: %s", exc)
+            raw_access = request.COOKIES.get(settings.ACCESS_COOKIE_NAME)
+            if raw_access:
+                try:
+                    access = AccessToken(raw_access)
+                    RevokedToken.revoke(access, RevokedToken.TokenType.ACCESS)
+                except Exception as exc:
+                    logger.warning("Logout: could not revoke access token: %s", exc)
 
         response = Response({"success": True})
         _clear_cookie(response, settings.ACCESS_COOKIE_NAME)

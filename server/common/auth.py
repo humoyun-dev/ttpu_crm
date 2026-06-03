@@ -1,14 +1,18 @@
 import hashlib
 import hmac
+import logging
 from typing import Optional
 
 from django.conf import settings
+from django.db import OperationalError, ProgrammingError
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import exceptions
 
 from common.exceptions import APIError
 from common.models import ServiceToken
+
+logger = logging.getLogger(__name__)
 
 
 def _hashed(token: str) -> str:
@@ -40,9 +44,10 @@ def verify_service_token(raw_token: Optional[str], service_name: Optional[str] =
     try:
         if _verify_db_token(incoming_hash, service_name):
             return
-    except Exception:
-        # DB might be unavailable (e.g., during tests); fall back to settings tokens.
-        pass
+    except (OperationalError, ProgrammingError) as exc:
+        # DB unavailable / not migrated yet — log and fall back to settings tokens.
+        # (Narrowed from a bare `except` so genuine bugs aren't silently swallowed.)
+        logger.warning("ServiceToken DB lookup failed; falling back to settings tokens: %s", exc)
 
     hashes = []
     if service_name:

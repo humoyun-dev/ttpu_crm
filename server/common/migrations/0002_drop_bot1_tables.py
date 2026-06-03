@@ -1,5 +1,30 @@
 from django.db import migrations
 
+BOT1_TABLES = [
+    "bot1_admissions2026application",
+    "bot1_campustourrequest",
+    "bot1_foundationrequest",
+    "bot1_politoacademyrequest",
+    "bot1_bot1applicant",
+]
+
+
+def drop_bot1_tables(apps, schema_editor):
+    """Drop the legacy bot1 tables.
+
+    Uses vendor-aware SQL: PostgreSQL supports ``DROP TABLE ... CASCADE`` while
+    SQLite (the default dev/test backend) does not even parse the CASCADE
+    keyword — the original raw SQL broke ``migrate`` entirely on SQLite.
+    """
+    conn = schema_editor.connection
+    with conn.cursor() as cursor:
+        for table in BOT1_TABLES:
+            if conn.vendor == "postgresql":
+                cursor.execute(f'DROP TABLE IF EXISTS "{table}" CASCADE;')
+            else:
+                cursor.execute(f'DROP TABLE IF EXISTS "{table}";')
+        cursor.execute("DELETE FROM django_migrations WHERE app = 'bot1';")
+
 
 class Migration(migrations.Migration):
     dependencies = [
@@ -7,15 +32,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql="""
-                DROP TABLE IF EXISTS bot1_admissions2026application CASCADE;
-                DROP TABLE IF EXISTS bot1_campustourrequest CASCADE;
-                DROP TABLE IF EXISTS bot1_foundationrequest CASCADE;
-                DROP TABLE IF EXISTS bot1_politoacademyrequest CASCADE;
-                DROP TABLE IF EXISTS bot1_bot1applicant CASCADE;
-                DELETE FROM django_migrations WHERE app = 'bot1';
-            """,
-            reverse_sql=migrations.RunSQL.noop,
-        ),
+        migrations.RunPython(drop_bot1_tables, migrations.RunPython.noop),
     ]
