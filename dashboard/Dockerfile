@@ -6,7 +6,7 @@ RUN npm ci
 COPY . .
 # NEXT_PUBLIC_* values are inlined into the client bundle at build time, so the
 # public-facing API URL must be supplied here (override via build arg in prod).
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_API_URL=http://localhost:9006
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN npm run build
 
