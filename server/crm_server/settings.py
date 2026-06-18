@@ -53,6 +53,9 @@ INSTALLED_APPS = [
     "bot2",
     "audit",
     "analytics",
+    "employers",
+    "crm",
+    "documents",
 ]
 
 MIDDLEWARE = [
@@ -154,6 +157,8 @@ REST_FRAMEWORK = {
         "anon": "100/day",
         "login": "10/minute",
         "survey_submit": "1000/hour",
+        # Public employer access-link view (/l/{token}) — guards token spam.
+        "access_link": "120/hour",
     },
     "EXCEPTION_HANDLER": "common.exceptions.custom_exception_handler",
 }
@@ -191,6 +196,15 @@ CORS_ALLOW_HEADERS = list(default_headers) + ["x-service-token"]
 SERVICE_TOKENS = {
     "bot2": os.getenv("SERVICE_TOKEN_BOT2_HASH", ""),
 }
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+
+# AI document-analysis service (ai_gateway -> ai_service). Stub by default.
+AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://ai_service:8100")
+AI_SERVICE_TIMEOUT = int(os.getenv("AI_SERVICE_TIMEOUT", "30"))
+
+# Employer access-link default lifetime (days) for crm.AccessLink.
+ACCESS_LINK_TTL_DAYS = int(os.getenv("ACCESS_LINK_TTL_DAYS", "30"))
 
 # Cookie security defaults to ON in production (DEBUG off) so a forgotten env var
 # can't silently ship non-Secure auth cookies; override per-flag via env.

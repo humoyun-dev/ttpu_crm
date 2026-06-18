@@ -22,6 +22,7 @@ from analytics.views import (
     enrollments_overview,
     bot2_academic_years,
 )
+from crm.access import AccessLinkView
 
 
 def healthz(request):
@@ -42,9 +43,12 @@ urlpatterns = [
     path("superadmin/", admin.site.urls),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    # Public employer access-link — outside /api/v1/ (nginx must proxy /l/ to server)
+    path("l/<uuid:token>/", AccessLinkView.as_view(), name="access-link"),
     path("api/v1/", include([
         path("healthz", healthz, name="healthz"),
         path("", include(router.urls)),
+        # Auth
         path("auth/login", LoginView.as_view(), name="auth-login"),
         path("auth/refresh", RefreshView.as_view(), name="auth-refresh"),
         path("auth/logout", LogoutView.as_view(), name="auth-logout"),
@@ -59,5 +63,11 @@ urlpatterns = [
         path("analytics/bot2/program-details-by-year", bot2_program_details_by_year, name="analytics-bot2-program-year"),
         path("analytics/bot2/enrollments-overview", enrollments_overview, name="analytics-bot2-enrollments-overview"),
         path("analytics/bot2/academic-years", bot2_academic_years, name="analytics-bot2-academic-years"),
+        # Employers
+        path("", include("employers.urls")),
+        # CRM (leads, followups)
+        path("", include("crm.urls")),
+        # Documents + bot document upload
+        path("", include("documents.urls")),
     ])),
 ]

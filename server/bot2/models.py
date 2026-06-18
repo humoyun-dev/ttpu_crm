@@ -20,6 +20,7 @@ class StudentRoster(BaseModel):
         help_text="1-4 for active students, 5 for graduated"
     )
     is_active = models.BooleanField(default=True)
+    birth_date = models.DateField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
 
     class Meta:
@@ -69,6 +70,18 @@ class Bot2Student(BaseModel):
         max_length=32, choices=Gender.choices, default=Gender.UNSPECIFIED
     )
     phone = models.CharField(max_length=50, blank=True)
+    language = models.CharField(
+        max_length=2,
+        choices=[("uz", "Uzbek"), ("ru", "Russian")],
+        default="uz",
+    )
+    state = models.CharField(
+        max_length=64,
+        default="registered",
+        help_text="FSM state persisted to DB; bot resume on restart",
+    )
+    consent = models.BooleanField(default=False)
+    is_job_seeking = models.BooleanField(default=False)
     region = models.ForeignKey(
         CatalogItem,
         on_delete=models.SET_NULL,
@@ -112,6 +125,11 @@ class Bot2SurveyResponse(BaseModel):
         help_text="1-4 for active students, 5 for graduated"
     )
     survey_campaign = models.CharField(max_length=64, default="default")
+    source = models.CharField(
+        max_length=10,
+        choices=[("survey", "Survey"), ("lead", "Lead Placement")],
+        default="survey",
+    )
     employment_status = models.CharField(max_length=100, blank=True)
     employment_company = models.CharField(max_length=255, blank=True)
     employment_role = models.CharField(max_length=255, blank=True)
@@ -127,12 +145,7 @@ class Bot2SurveyResponse(BaseModel):
                 check=Q(course_year__gte=1) & Q(course_year__lte=5),
                 name="survey_course_year_between_1_and_5",
             ),
-            # Enforce one survey per (student, campaign) at the DB level so
-            # concurrent submits / bot retries cannot create duplicate rows.
-            models.UniqueConstraint(
-                fields=["student", "survey_campaign"],
-                name="uq_survey_student_campaign",
-            ),
+            # uq_survey_student_campaign removed (migration 0013) → append-only
         ]
         indexes = [
             models.Index(fields=["survey_campaign"]),

@@ -11,6 +11,8 @@ class CatalogItem(BaseModel):
         SUBJECT = "subject", "Subject"
         TRACK = "track", "Track"
         REGION = "region", "Region"
+        SKILL = "skill", "Skill"
+        INDUSTRY = "industry", "Industry"
         OTHER = "other", "Other"
 
     type = models.CharField(max_length=50, choices=ItemType.choices)
