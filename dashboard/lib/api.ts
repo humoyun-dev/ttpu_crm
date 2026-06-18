@@ -176,6 +176,7 @@ export interface StudentRoster {
   program_details?: CatalogItemNested;
   course_year: number;
   is_active: boolean;
+  birth_date: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
