@@ -73,7 +73,8 @@ services:
     build:
       context: ./dashboard
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:9006}
+        # Browser-accessible URL (Docker host port). Change for prod deployment.
+        NEXT_PUBLIC_API_URL: http://localhost:9006
     command: npm run start
     restart: unless-stopped
     ports:

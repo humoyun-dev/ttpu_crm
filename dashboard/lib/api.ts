@@ -1,6 +1,6 @@
 // API client for TTPU CRM Dashboard
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:9006";
 const AUTH_MARKER_COOKIE = "dashboard_auth";
 const AUTH_MARKER_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
