@@ -48,6 +48,8 @@ urlpatterns = [
     path("superadmin/", admin.site.urls),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    # Top-level healthz for Docker healthcheck (no auth, no prefix)
+    path("healthz", healthz, name="healthz-root"),
     # Public employer access-link — outside /api/v1/ (nginx must proxy /l/ to server)
     path("l/<uuid:token>/", AccessLinkView.as_view(), name="access-link"),
     path("api/v1/", include([
