@@ -15,7 +15,7 @@ _WEEK_RU  = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
 
 def birth_date_calendar(year: int, month: int, lang: str = "uz") -> InlineKeyboardMarkup:
-    """Inline calendar for selecting birth date (no future months)."""
+    """Inline calendar — year row on top, month row below, then day grid."""
     from datetime import date as _date
     today = _date.today()
     months = _MONTH_UZ if lang != "ru" else _MONTH_RU
@@ -23,23 +23,33 @@ def birth_date_calendar(year: int, month: int, lang: str = "uz") -> InlineKeyboa
 
     kb = InlineKeyboardBuilder()
 
-    # Row 1: prev / "Month YYYY" / next
-    prev_month, prev_year = (month - 1, year) if month > 1 else (12, year - 1)
-    next_month, next_year = (month + 1, year) if month < 12 else (1, year + 1)
-    can_go_next = (year, month) < (today.year, today.month)
-    can_go_prev = year > 1970 or (year == 1970 and month > 1)
+    # Row 1: year navigation  ◀ 2001 ▶
+    can_prev_year = year > 1970
+    can_next_year = year < today.year
+    kb.button(text="◀" if can_prev_year else " ",
+              callback_data=f"cal:{year-1}:{month:02d}" if can_prev_year else "cal_noop")
+    kb.button(text=str(year), callback_data="cal_noop")
+    kb.button(text="▶" if can_next_year else " ",
+              callback_data=f"cal:{year+1}:{month:02d}" if can_next_year else "cal_noop")
 
-    kb.button(text="◀" if can_go_prev else " ", callback_data=f"cal:{prev_year}:{prev_month:02d}" if can_go_prev else "cal_noop")
-    kb.button(text=f"{months[month-1]} {year}", callback_data="cal_noop")
-    kb.button(text="▶" if can_go_next else " ", callback_data=f"cal:{next_year}:{next_month:02d}" if can_go_next else "cal_noop")
-    kb.adjust(3)
+    # Row 2: month navigation  ◀ May ▶
+    prev_m = month - 1 if month > 1 else 12
+    prev_y_m = year if month > 1 else year - 1
+    next_m = month + 1 if month < 12 else 1
+    next_y_m = year if month < 12 else year + 1
+    can_prev_month = (prev_y_m, prev_m) >= (1970, 1)
+    can_next_month = (next_y_m, next_m) <= (today.year, today.month)
+    kb.button(text="◀" if can_prev_month else " ",
+              callback_data=f"cal:{prev_y_m}:{prev_m:02d}" if can_prev_month else "cal_noop")
+    kb.button(text=months[month - 1], callback_data="cal_noop")
+    kb.button(text="▶" if can_next_month else " ",
+              callback_data=f"cal:{next_y_m}:{next_m:02d}" if can_next_month else "cal_noop")
 
-    # Row 2: weekday headers
+    # Row 3: weekday headers
     for wd in week_days:
         kb.button(text=wd, callback_data="cal_noop")
-    kb.adjust(3, 7)
 
-    # Rows: days grid
+    # Day rows
     cal = calendar.monthcalendar(year, month)
     for week in cal:
         for day in week:
@@ -51,10 +61,9 @@ def birth_date_calendar(year: int, month: int, lang: str = "uz") -> InlineKeyboa
                     kb.button(text=" ", callback_data="cal_noop")
                 else:
                     kb.button(text=str(day), callback_data=f"cal_day:{year}-{month:02d}-{day:02d}")
-    # adjust: 3 (header), 7 (weekdays), then 7 per week row
-    adjustments = [3, 7] + [7] * len(cal)
-    kb.adjust(*adjustments)
 
+    # 3 (year) + 3 (month) + 7 (weekdays) + 7*weeks (days)
+    kb.adjust(3, 3, 7, *([7] * len(cal)))
     return kb.as_markup()
 
 
