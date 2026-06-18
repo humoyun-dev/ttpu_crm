@@ -1,11 +1,61 @@
 from __future__ import annotations
 
+import calendar
 from typing import Sequence
 
 from aiogram.types import InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot2_service.texts import CHANNELS, get_text
+
+_MONTH_UZ = ["Yan", "Fev", "Mar", "Apr", "May", "Iyn", "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek"]
+_MONTH_RU = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+_WEEK_UZ  = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
+_WEEK_RU  = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+
+
+def birth_date_calendar(year: int, month: int, lang: str = "uz") -> InlineKeyboardMarkup:
+    """Inline calendar for selecting birth date (no future months)."""
+    from datetime import date as _date
+    today = _date.today()
+    months = _MONTH_UZ if lang != "ru" else _MONTH_RU
+    week_days = _WEEK_UZ if lang != "ru" else _WEEK_RU
+
+    kb = InlineKeyboardBuilder()
+
+    # Row 1: prev / "Month YYYY" / next
+    prev_month, prev_year = (month - 1, year) if month > 1 else (12, year - 1)
+    next_month, next_year = (month + 1, year) if month < 12 else (1, year + 1)
+    can_go_next = (year, month) < (today.year, today.month)
+    can_go_prev = year > 1970 or (year == 1970 and month > 1)
+
+    kb.button(text="◀" if can_go_prev else " ", callback_data=f"cal:{prev_year}:{prev_month:02d}" if can_go_prev else "cal_noop")
+    kb.button(text=f"{months[month-1]} {year}", callback_data="cal_noop")
+    kb.button(text="▶" if can_go_next else " ", callback_data=f"cal:{next_year}:{next_month:02d}" if can_go_next else "cal_noop")
+    kb.adjust(3)
+
+    # Row 2: weekday headers
+    for wd in week_days:
+        kb.button(text=wd, callback_data="cal_noop")
+    kb.adjust(3, 7)
+
+    # Rows: days grid
+    cal = calendar.monthcalendar(year, month)
+    for week in cal:
+        for day in week:
+            if day == 0:
+                kb.button(text=" ", callback_data="cal_noop")
+            else:
+                d = _date(year, month, day)
+                if d > today:
+                    kb.button(text=" ", callback_data="cal_noop")
+                else:
+                    kb.button(text=str(day), callback_data=f"cal_day:{year}-{month:02d}-{day:02d}")
+    # adjust: 3 (header), 7 (weekdays), then 7 per week row
+    adjustments = [3, 7] + [7] * len(cal)
+    kb.adjust(*adjustments)
+
+    return kb.as_markup()
 
 
 def language_keyboard() -> InlineKeyboardMarkup:

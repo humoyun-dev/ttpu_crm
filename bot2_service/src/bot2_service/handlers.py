@@ -25,6 +25,7 @@ from bot2_service.api import CrmApiClient
 from bot2_service.catalog_cache import CatalogCache
 from bot2_service.config import settings
 from bot2_service.keyboards import (
+    birth_date_calendar,
     channels_keyboard,
     consent_keyboard,
     contact_keyboard,
@@ -164,10 +165,45 @@ async def set_student_id(message: Message, state: FSMContext):
         return
     await state.update_data(student_id=student_id)
     await state.set_state(BotState.waiting_birth_date)
-    await _reply(message, get_text("ask_birth_date", lang), state, reply_markup=NO_KB)
+    from datetime import date as _date
+    today = _date.today()
+    default_year = 2000
+    kb = birth_date_calendar(default_year, today.month, lang)
+    await _reply(message, get_text("ask_birth_date", lang), state, reply_markup=kb)
 
 
-# ── STEP 3: Birth Date → Verify ───────────────────────────────────────────────
+# ── STEP 3a: Birth Date — calendar navigation (no-op) ────────────────────────
+
+@router.callback_query(F.data == "cal_noop")
+async def cal_noop(call: CallbackQuery):
+    await call.answer()
+
+
+# ── STEP 3b: Birth Date — month navigation ────────────────────────────────────
+
+@router.callback_query(F.data.startswith("cal:"), BotState.waiting_birth_date)
+async def cal_navigate(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    _, year_str, month_str = call.data.split(":")
+    kb = birth_date_calendar(int(year_str), int(month_str), lang)
+    with suppress(Exception):
+        await call.message.edit_reply_markup(reply_markup=kb)
+    await call.answer()
+
+
+# ── STEP 3c: Birth Date — day selected from calendar ─────────────────────────
+
+@router.callback_query(F.data.startswith("cal_day:"), BotState.waiting_birth_date)
+async def cal_day_selected(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    iso_date = call.data.split("cal_day:")[1]   # YYYY-MM-DD
+    await call.answer()
+    await _process_birth_date(call.message, state, lang, iso_date)
+
+
+# ── STEP 3d: Birth Date — manual text input ───────────────────────────────────
 
 @router.message(BotState.waiting_birth_date)
 async def set_birth_date(message: Message, state: FSMContext):
@@ -175,9 +211,16 @@ async def set_birth_date(message: Message, state: FSMContext):
     lang = data.get("language", "uz")
     iso_date = _parse_birth_date(message.text or "")
     if not iso_date:
-        await _reply(message, get_text("birth_date_invalid", lang), state, reply_markup=NO_KB)
+        from datetime import date as _date
+        today = _date.today()
+        kb = birth_date_calendar(2000, today.month, lang)
+        await _reply(message, get_text("birth_date_invalid", lang), state, reply_markup=kb)
         return
+    await _process_birth_date(message, state, lang, iso_date)
 
+
+async def _process_birth_date(message: Message, state: FSMContext, lang: str, iso_date: str):
+    data = await state.get_data()
     student_id = data.get("student_id", "")
     result = await api_client.verify(student_id, iso_date)
 
