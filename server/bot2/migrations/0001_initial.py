@@ -194,7 +194,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="bot2surveyresponse",
             constraint=models.CheckConstraint(
-                check=models.Q(("course_year__gte", 1), ("course_year__lte", 4)),
+                condition=models.Q(("course_year__gte", 1), ("course_year__lte", 4)),
                 name="survey_course_year_between_1_and_4",
             ),
         ),

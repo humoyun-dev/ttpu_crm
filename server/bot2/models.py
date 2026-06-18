@@ -150,7 +150,7 @@ class Bot2SurveyResponse(BaseModel):
         ordering = ("-submitted_at", "-created_at")
         constraints = [
             models.CheckConstraint(
-                check=Q(course_year__gte=1) & Q(course_year__lte=5),
+                condition=Q(course_year__gte=1) & Q(course_year__lte=5),
                 name="survey_course_year_between_1_and_5",
             ),
             # uq_survey_student_campaign removed (migration 0013) → append-only

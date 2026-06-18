@@ -13,10 +13,11 @@ from .serializers import AccessLinkSerializer, FollowUpSerializer, LeadSerialize
 class LeadViewSet(viewsets.ModelViewSet):
     queryset = Lead.objects.select_related("employer", "created_by", "access_link").prefetch_related(
         "lead_students__student"
-    )
+    ).order_by("-created_at")
     serializer_class = LeadSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ["status", "employer"]
+    ordering_fields = ["created_at", "status"]
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -49,7 +50,8 @@ class LeadViewSet(viewsets.ModelViewSet):
 
 
 class FollowUpViewSet(viewsets.ModelViewSet):
-    queryset = FollowUp.objects.select_related("lead_student__student")
+    queryset = FollowUp.objects.select_related("lead_student__student").order_by("-created_at")
     serializer_class = FollowUpSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ["stage", "flagged_for_staff"]
+    ordering_fields = ["created_at", "stage"]
