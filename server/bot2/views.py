@@ -436,6 +436,35 @@ def bot_verify(request):
 
 @api_view(["POST"])
 @permission_classes([])
+def bot_followup_answer(request):
+    """
+    Record a student's response to a CRM followup message sent by the bot.
+    Called by the bot when a student taps yes/no on the followup inline keyboard.
+    """
+    verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")
+
+    followup_id = request.data.get("followup_id")
+    answer = request.data.get("answer")
+
+    if not followup_id or not answer:
+        return build_error_response("VALIDATION_ERROR", "followup_id and answer are required.", status.HTTP_400_BAD_REQUEST)
+
+    if answer not in ("yes", "no", "interviewed", "placed"):
+        return build_error_response("INVALID_ANSWER", "answer must be yes, no, interviewed, or placed.", status.HTTP_400_BAD_REQUEST)
+
+    try:
+        from crm.models import FollowUp
+        from crm.followup import record_answer
+        followup = FollowUp.objects.get(id=followup_id)
+        record_answer(followup, answer)
+        return Response({"ok": True})
+    except Exception:
+        # Avoid leaking model import errors for invalid UUIDs
+        return build_error_response("FOLLOWUP_NOT_FOUND", "Followup not found.", status.HTTP_404_NOT_FOUND)
+
+
+@api_view(["POST"])
+@permission_classes([])
 @transaction.atomic
 def bot_register(request):
     """

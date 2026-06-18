@@ -13,6 +13,10 @@ import {
   GraduationCap,
   BookOpen,
   ChevronRight,
+  Building2,
+  Briefcase,
+  FileText,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -37,6 +41,10 @@ const NAV = [
   { title: "Analitika · So'rovnoma", href: "/dashboard/analytics/surveys", icon: BarChart3 },
   { title: "Analitika · Soni", href: "/dashboard/analytics/enrollments", icon: BarChart3 },
   { title: "Katalog", href: "/dashboard/catalog", icon: FolderTree },
+  { title: "Ish beruvchilar", href: "/dashboard/employers", icon: Building2 },
+  { title: "Leadlar", href: "/dashboard/leads", icon: Briefcase },
+  { title: "Hujjatlar", href: "/dashboard/documents", icon: FileText },
+  { title: "Hisobotlar", href: "/dashboard/reports", icon: TrendingUp },
 ];
 
 function SidebarContent() {

@@ -9,8 +9,10 @@ import {
   Library,
   ArrowRight,
   TrendingUp,
+  Building2,
+  Briefcase,
 } from "lucide-react";
-import { bot2Api, catalogApi } from "@/lib/api";
+import { bot2Api, catalogApi, employerApi, leadApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 interface Stats {
@@ -18,6 +20,8 @@ interface Stats {
   students: number;
   enrollments: number;
   catalog: number;
+  employers: number;
+  leads: number;
 }
 
 const cards = [
@@ -61,27 +65,51 @@ const cards = [
     light: "bg-emerald-50 dark:bg-emerald-950/40",
     text: "text-emerald-600 dark:text-emerald-400",
   },
+  {
+    title: "Ish beruvchilar",
+    description: "Hamkor kompaniyalar",
+    key: "employers" as keyof Stats,
+    icon: Building2,
+    href: "/dashboard/employers",
+    accent: "bg-orange-500",
+    light: "bg-orange-50 dark:bg-orange-950/40",
+    text: "text-orange-600 dark:text-orange-400",
+  },
+  {
+    title: "Leadlar",
+    description: "Ish takliflari",
+    key: "leads" as keyof Stats,
+    icon: Briefcase,
+    href: "/dashboard/leads",
+    accent: "bg-pink-500",
+    light: "bg-pink-50 dark:bg-pink-950/40",
+    text: "text-pink-600 dark:text-pink-400",
+  },
 ];
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<Stats>({ surveys: 0, students: 0, enrollments: 0, catalog: 0 });
+  const [stats, setStats] = useState<Stats>({ surveys: 0, students: 0, enrollments: 0, catalog: 0, employers: 0, leads: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [surveys, students, enrollments, catalog] = await Promise.all([
+        const [surveys, students, enrollments, catalog, employers, leads] = await Promise.all([
           bot2Api.listSurveys({ page_size: "1" }),
           bot2Api.listStudents({ page_size: "1" }),
           bot2Api.listEnrollments({ page_size: "1" }),
           catalogApi.list(undefined, { page_size: "1", is_active: "true" }),
+          employerApi.list(),
+          leadApi.list(),
         ]);
         setStats({
           surveys: surveys.data?.count ?? 0,
           students: students.data?.count ?? 0,
           enrollments: enrollments.data?.count ?? 0,
           catalog: catalog.data?.count ?? 0,
+          employers: employers.data?.count ?? 0,
+          leads: leads.data?.count ?? 0,
         });
       } catch (e) {
         console.error(e);
@@ -118,7 +146,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => {
           const Icon = card.icon;
           const count = stats[card.key];
@@ -160,6 +188,9 @@ export default function DashboardPage() {
             { label: "Yangi so'rovnomalar", href: "/dashboard/surveys", sub: "Oxirgi kiritilgan javoblar" },
             { label: "Talabalar ro'yxati", href: "/dashboard/students", sub: "Barcha ro'yxatdagi talabalar" },
             { label: "Katalog boshqaruvi", href: "/dashboard/catalog", sub: "Yo'nalish va dasturlar" },
+            { label: "Ish beruvchilar", href: "/dashboard/employers", sub: "Hamkor kompaniyalar" },
+            { label: "Leadlar", href: "/dashboard/leads", sub: "Ish takliflari" },
+            { label: "Hisobotlar", href: "/dashboard/reports", sub: "Yo'nalish bo'yicha statistika" },
           ].map((link) => (
             <Link
               key={link.href}

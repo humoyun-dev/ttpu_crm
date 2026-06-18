@@ -678,3 +678,233 @@ export function getGenderLabel(gender: string): string {
   };
   return labels[gender] || gender;
 }
+
+// ── New types ──────────────────────────────────────────────────────────────
+
+export type MouStatus = "negotiating" | "signed" | "expired";
+export type LeadStatus = "created" | "sent" | "viewing" | "selected" | "closed";
+export type DocumentType = "CV" | "IELTS" | "CERT" | "OTHER";
+export type DocumentStatus = "pending" | "verified" | "flagged";
+export type FollowUpStage = "pending" | "contacted" | "interviewed" | "done";
+
+export interface Employer {
+  id: string;
+  name: string;
+  industry: string | null;
+  industry_name: string | null;
+  location: string;
+  logo: string | null;
+  description: string;
+  contact_name: string;
+  contact_phone: string;
+  contact_email: string;
+  mou_status: MouStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadStudent {
+  id: string;
+  lead: string;
+  student: string;
+  student_external_id: string;
+  student_name: string;
+  employer_interested: boolean;
+  forwarded: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccessLink {
+  id: string;
+  token: string;
+  expires_at: string;
+  revoked: boolean;
+  created_at: string;
+}
+
+export interface Lead {
+  id: string;
+  employer: string;
+  employer_name: string;
+  title: string;
+  status: LeadStatus;
+  notes: string;
+  created_by: string | null;
+  lead_students: LeadStudent[];
+  access_link: AccessLink | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Document {
+  id: string;
+  student: string;
+  student_external_id: string;
+  type: DocumentType;
+  status: DocumentStatus;
+  ai_result: Record<string, unknown> | null;
+  reviewed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudentsByDirectionRow {
+  program_id: string;
+  program_name: string;
+  total: number;
+  registered: number;
+  employed: number;
+  registered_pct: number;
+  employed_pct: number;
+}
+
+// ── Employer API ───────────────────────────────────────────────────────────
+
+export const employerApi = {
+  list: (params?: Record<string, string>) => {
+    const q = params ? `?${new URLSearchParams(params)}` : "";
+    return apiFetch<PaginatedResponse<Employer>>(`/api/v1/employers/${q}`);
+  },
+  get: (id: string) => apiFetch<Employer>(`/api/v1/employers/${id}/`),
+  create: (data: Partial<Employer>) =>
+    apiFetch<Employer>("/api/v1/employers/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: Partial<Employer>) =>
+    apiFetch<Employer>(`/api/v1/employers/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<void>(`/api/v1/employers/${id}/`, { method: "DELETE" }),
+};
+
+// ── Lead API ───────────────────────────────────────────────────────────────
+
+export const leadApi = {
+  list: (params?: Record<string, string>) => {
+    const q = params ? `?${new URLSearchParams(params)}` : "";
+    return apiFetch<PaginatedResponse<Lead>>(`/api/v1/leads/${q}`);
+  },
+  get: (id: string) => apiFetch<Lead>(`/api/v1/leads/${id}/`),
+  create: (data: Partial<Lead>) =>
+    apiFetch<Lead>("/api/v1/leads/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: Partial<Lead>) =>
+    apiFetch<Lead>(`/api/v1/leads/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  send: (id: string) =>
+    apiFetch<AccessLink>(`/api/v1/leads/${id}/send/`, { method: "POST" }),
+  addStudent: (leadId: string, studentExternalId: string) =>
+    apiFetch<LeadStudent>(`/api/v1/leads/${leadId}/students/`, {
+      method: "POST",
+      body: JSON.stringify({ student_external_id: studentExternalId }),
+    }),
+};
+
+// ── Document API ───────────────────────────────────────────────────────────
+
+export const documentApi = {
+  list: (params?: Record<string, string>) => {
+    const q = params ? `?${new URLSearchParams(params)}` : "";
+    return apiFetch<PaginatedResponse<Document>>(`/api/v1/documents/${q}`);
+  },
+  review: (id: string, status: DocumentStatus) =>
+    apiFetch<Document>(`/api/v1/documents/${id}/review/`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+};
+
+// ── Report API ─────────────────────────────────────────────────────────────
+
+export const reportApi = {
+  studentsByDirection: () =>
+    apiFetch<StudentsByDirectionRow[]>("/api/v1/analytics/students-by-direction"),
+  xlsxUrl: () =>
+    `${API_BASE}/api/v1/analytics/students-by-direction.xlsx`,
+};
+
+// ── Public access-link API (no auth) ──────────────────────────────────────
+
+export interface AccessLinkPublic {
+  employer_name: string;
+  lead_title: string;
+  lead_status: LeadStatus;
+  students: Array<{
+    id: string;
+    student_external_id: string;
+    first_name: string;
+    last_name: string;
+    gender: string;
+    documents: Array<{ type: DocumentType; status: DocumentStatus }>;
+    employer_interested: boolean;
+    forwarded: boolean;
+  }>;
+}
+
+export async function fetchAccessLink(token: string): Promise<ApiResponse<AccessLinkPublic>> {
+  try {
+    const res = await fetch(`${API_BASE}/l/${token}/`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { error: body.error || { code: "ERROR", message: res.statusText } };
+    }
+    return { data: body as AccessLinkPublic };
+  } catch (err) {
+    return { error: { code: "NETWORK_ERROR", message: err instanceof Error ? err.message : "Network error" } };
+  }
+}
+
+export async function submitAccessLinkInterest(token: string): Promise<ApiResponse<unknown>> {
+  try {
+    const res = await fetch(`${API_BASE}/l/${token}/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { error: body.error || { code: "ERROR", message: res.statusText } };
+    }
+    return { data: body };
+  } catch (err) {
+    return { error: { code: "NETWORK_ERROR", message: err instanceof Error ? err.message : "Network error" } };
+  }
+}
+
+// ── Label helpers ──────────────────────────────────────────────────────────
+
+export const MOU_STATUS_LABELS: Record<MouStatus, string> = {
+  negotiating: "Muzokaralar",
+  signed: "Imzolangan",
+  expired: "Muddati o'tgan",
+};
+
+export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+  created: "Yaratildi",
+  sent: "Yuborildi",
+  viewing: "Ko'rilmoqda",
+  selected: "Tanlandi",
+  closed: "Yopildi",
+};
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  CV: "CV",
+  IELTS: "IELTS",
+  CERT: "Sertifikat",
+  OTHER: "Boshqa",
+};
+
+export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
+  pending: "Kutilmoqda",
+  verified: "Tasdiqlangan",
+  flagged: "Belgilangan",
+};

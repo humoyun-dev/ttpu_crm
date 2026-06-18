@@ -73,8 +73,6 @@ services:
     build:
       context: ./dashboard
       args:
-        # Baked into the client bundle at build time.
-        # Browser connects to the server's published port on the host machine.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:9006}
     command: npm run start
     restart: unless-stopped
@@ -87,6 +85,28 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Runs CRM followup messages on a schedule (every 15 min).
+  # Uses the same server image — no extra build needed.
+  followup_cron:
+    build:
+      context: ./server
+    command: >
+      sh -c "while true; do
+        python manage.py process_followups;
+        sleep 900;
+      done"
+    restart: unless-stopped
+    env_file:
+      - ./server/.env
+    depends_on:
+      server:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
 
 volumes:
   postgres_data:

@@ -14,6 +14,7 @@ from bot2.views import (
     submit_survey,
     bot_verify,
     bot_register,
+    bot_followup_answer,
 )
 from catalog.views import CatalogItemViewSet, CatalogRelationViewSet, ProgramViewSet
 from analytics.views import (
@@ -62,6 +63,7 @@ urlpatterns = [
         path("bot2/surveys/submit", submit_survey, name="bot2-survey-submit"),
         path("bot/verify", bot_verify, name="bot-verify"),
         path("bot/register", bot_register, name="bot-register"),
+        path("bot/followup-answer", bot_followup_answer, name="bot-followup-answer"),
         # Analytics
         path("analytics/bot2/course-year-coverage", bot2_course_year_coverage, name="analytics-bot2-course"),
         path("analytics/bot2/program-coverage", bot2_program_coverage, name="analytics-bot2-program"),

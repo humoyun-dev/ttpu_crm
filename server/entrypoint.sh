@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-python manage.py migrate
+python manage.py migrate --fake-initial
 python manage.py collectstatic --noinput
 
 # Seed reference data and demo analytics only on a fresh database
