@@ -3,13 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,52 +53,64 @@ export default function LoginPage() {
   };
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl">TTPU CRM</CardTitle>
-        <CardDescription>Tizimga kirish uchun login va parolni kiriting</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Login</Label>
-            <Input
-              id="email"
-              type="text"
-              className="dark:text-white text-black"
-              placeholder="admin@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={loading}
-              autoComplete="username"
-            />
-          </div>
+    <div className="w-full max-w-sm">
+      {/* Mobile-only logo */}
+      <div className="mb-8 text-center lg:hidden">
+        <div
+          className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl text-lg font-black"
+          style={{ backgroundColor: "oklch(0.42 0.20 263)", color: "white" }}
+        >
+          T
+        </div>
+        <h1 className="text-xl font-black text-primary">TTPU</h1>
+        <p className="text-sm text-muted-foreground">Bandlik Markazi</p>
+      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Parol</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="********"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
-              autoComplete="current-password"
-            />
-          </div>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold tracking-tight">Tizimga kirish</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Email va parolingizni kiriting
+        </p>
+      </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Tekshirilmoqda...
-              </>
-            ) : (
-              "Kirish"
-            )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="text"
+            placeholder="admin@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
+            autoComplete="username"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="password">Parol</Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
+            autoComplete="current-password"
+          />
+        </div>
+
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Tekshirilmoqda...
+            </>
+          ) : (
+            "Kirish"
+          )}
+        </Button>
+      </form>
+    </div>
   );
 }

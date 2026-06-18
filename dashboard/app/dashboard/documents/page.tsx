@@ -157,7 +157,7 @@ export default function DocumentsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-amber-500 hover:text-amber-600"
+                            className="h-7 w-7 text-primary hover:text-primary/80"
                             onClick={() => handleReview(d.id, "flagged")}
                             title="Belgilash"
                           >
