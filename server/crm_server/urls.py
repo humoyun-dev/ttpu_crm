@@ -12,6 +12,8 @@ from bot2.views import (
     ProgramEnrollmentViewSet,
     import_roster,
     submit_survey,
+    bot_verify,
+    bot_register,
 )
 from catalog.views import CatalogItemViewSet, CatalogRelationViewSet, ProgramViewSet
 from analytics.views import (
@@ -21,6 +23,8 @@ from analytics.views import (
     bot2_program_details_by_year,
     enrollments_overview,
     bot2_academic_years,
+    students_by_direction,
+    students_by_direction_xlsx,
 )
 from crm.access import AccessLinkView
 
@@ -56,6 +60,8 @@ urlpatterns = [
         # Bot2
         path("admin/roster/import", import_roster, name="bot2-roster-import"),
         path("bot2/surveys/submit", submit_survey, name="bot2-survey-submit"),
+        path("bot/verify", bot_verify, name="bot-verify"),
+        path("bot/register", bot_register, name="bot-register"),
         # Analytics
         path("analytics/bot2/course-year-coverage", bot2_course_year_coverage, name="analytics-bot2-course"),
         path("analytics/bot2/program-coverage", bot2_program_coverage, name="analytics-bot2-program"),
@@ -63,6 +69,8 @@ urlpatterns = [
         path("analytics/bot2/program-details-by-year", bot2_program_details_by_year, name="analytics-bot2-program-year"),
         path("analytics/bot2/enrollments-overview", enrollments_overview, name="analytics-bot2-enrollments-overview"),
         path("analytics/bot2/academic-years", bot2_academic_years, name="analytics-bot2-academic-years"),
+        path("analytics/students-by-direction", students_by_direction, name="analytics-students-by-direction"),
+        path("analytics/students-by-direction.xlsx", students_by_direction_xlsx, name="analytics-students-by-direction-xlsx"),
         # Employers
         path("", include("employers.urls")),
         # CRM (leads, followups)

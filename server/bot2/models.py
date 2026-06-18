@@ -125,6 +125,14 @@ class Bot2SurveyResponse(BaseModel):
         help_text="1-4 for active students, 5 for graduated"
     )
     survey_campaign = models.CharField(max_length=64, default="default")
+    idempotency_key = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text="Bot-supplied dedup key (UUIDv4); prevents double-submit after constraint removal",
+    )
     source = models.CharField(
         max_length=10,
         choices=[("survey", "Survey"), ("lead", "Lead Placement")],

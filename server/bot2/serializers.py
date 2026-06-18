@@ -24,7 +24,7 @@ class Bot2StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bot2Student
         fields = "__all__"
-        read_only_fields = ("roster",)
+        read_only_fields = ("roster", "state")
 
 
 class Bot2SurveyResponseSerializer(serializers.ModelSerializer):
@@ -34,6 +34,9 @@ class Bot2SurveyResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bot2SurveyResponse
         fields = "__all__"
+        extra_kwargs = {
+            "idempotency_key": {"write_only": True},
+        }
 
     def get_student_details(self, obj):
         if obj.student:
@@ -52,11 +55,7 @@ class ProgramEnrollmentSerializer(serializers.ModelSerializer):
 
     def get_program_details(self, obj):
         if obj.program:
-            return {
-                "id": obj.program.id,
-                "name": obj.program.name,
-                "code": obj.program.code,
-            }
+            return {"id": obj.program.id, "name": obj.program.name, "code": obj.program.code}
         return None
 
     def get_coverage_percent(self, obj):
@@ -64,6 +63,4 @@ class ProgramEnrollmentSerializer(serializers.ModelSerializer):
         responded = getattr(obj, "responded_count", 0) or 0
         if not total:
             return 0.0
-        # Clamp to 100: responded counts real surveys while student_count is a
-        # manually-maintained denominator, so off-roster responders could exceed it.
         return round(min(responded * 100.0 / total, 100.0), 2)

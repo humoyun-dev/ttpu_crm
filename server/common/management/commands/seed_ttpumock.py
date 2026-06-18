@@ -79,12 +79,30 @@ class Command(BaseCommand):
         with transaction.atomic():
             region_items = self._seed_catalog_type(CatalogItem.ItemType.REGION, REGIONS, rng, upsert)
             programs = list(CatalogItem.objects.filter(type=CatalogItem.ItemType.PROGRAM, is_active=True))
+            if not programs:
+                programs = self._seed_fallback_programs()
 
             rosters = self._seed_roster(config, programs, rng, upsert)
             students = self._seed_students(config, rosters, region_items, rng, upsert)
             self._seed_surveys(config, students, rosters, rng, days, upsert)
 
         self.stdout.write(self.style.SUCCESS("TTPU mock data seeded."))
+
+    def _seed_fallback_programs(self):
+        """Minimal programs for standalone use (e.g. tests on fresh DB)."""
+        _FALLBACK_PROGRAMS = [
+            ("CS", "Computer Science"), ("ME", "Mechanical Engineering"),
+            ("CE", "Civil Engineering"), ("EE", "Electrical Engineering"),
+            ("IT", "Information Technology"),
+        ]
+        result = []
+        for idx, (code, name) in enumerate(_FALLBACK_PROGRAMS, start=1):
+            obj, _ = CatalogItem.objects.update_or_create(
+                type=CatalogItem.ItemType.PROGRAM, code=code,
+                defaults={"name": name, "is_active": True, "sort_order": idx, "metadata": {}},
+            )
+            result.append(obj)
+        return result
 
     def _seed_catalog_type(self, item_type, items, rng, upsert):
         created_items = []

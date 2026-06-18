@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class Bot2StudentRosterViewSet(viewsets.ModelViewSet):
     queryset = StudentRoster.objects.select_related("program")
-    serializer_class = None  # set dynamically
+    serializer_class = None
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["program", "course_year", "is_active", "roster_campaign"]
@@ -38,38 +38,28 @@ class Bot2StudentRosterViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         from bot2.serializers import StudentRosterSerializer
-
         return StudentRosterSerializer
 
     def perform_create(self, serializer):
         instance = serializer.save()
         log_audit(
-            actor_type="user",
-            actor_user=self.request.user,
-            action="create",
-            entity=instance,
-            request=self.request,
+            actor_type="user", actor_user=self.request.user, action="create",
+            entity=instance, request=self.request,
             after_data={"student_external_id": instance.student_external_id},
         )
 
     def perform_update(self, serializer):
         instance = serializer.save()
         log_audit(
-            actor_type="user",
-            actor_user=self.request.user,
-            action="update",
-            entity=instance,
-            request=self.request,
+            actor_type="user", actor_user=self.request.user, action="update",
+            entity=instance, request=self.request,
             after_data={"student_external_id": instance.student_external_id},
         )
 
     def perform_destroy(self, instance):
         log_audit(
-            actor_type="user",
-            actor_user=self.request.user,
-            action="delete",
-            entity=instance,
-            request=self.request,
+            actor_type="user", actor_user=self.request.user, action="delete",
+            entity=instance, request=self.request,
             after_data={"student_external_id": instance.student_external_id},
         )
         instance.delete()
@@ -79,9 +69,7 @@ class Bot2StudentViewSet(viewsets.ModelViewSet):
     queryset = Bot2Student.objects.select_related("roster", "region")
     serializer_class = None
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
-    # Bot2Students are created by the Telegram bot (submit_survey), never via the
-    # admin API: roster is a required FK but read-only in the serializer, so a
-    # direct POST would 500. Disallow create (405); read/update/delete remain.
+    # Students are created by the bot; direct POST would 500 (roster is read-only).
     http_method_names = ["get", "head", "options", "patch", "put", "delete"]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["gender", "region"]
@@ -90,7 +78,6 @@ class Bot2StudentViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         from bot2.serializers import Bot2StudentSerializer
-
         return Bot2StudentSerializer
 
     def perform_create(self, serializer):
@@ -123,7 +110,7 @@ class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
     serializer_class = None
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["program", "course_year", "survey_campaign"]
+    filterset_fields = ["program", "course_year", "survey_campaign", "source"]
     search_fields = ["student__student_external_id", "student__username"]
     ordering_fields = ["submitted_at", "created_at"]
 
@@ -139,7 +126,6 @@ class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         from bot2.serializers import Bot2SurveyResponseSerializer
-
         return Bot2SurveyResponseSerializer
 
     def perform_create(self, serializer):
@@ -188,50 +174,29 @@ class ProgramEnrollmentViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         from bot2.serializers import ProgramEnrollmentSerializer
-
         return ProgramEnrollmentSerializer
 
     def perform_create(self, serializer):
         instance = serializer.save()
         log_audit(
-            actor_type="user",
-            actor_user=self.request.user,
-            action="create",
-            entity=instance,
-            request=self.request,
-            after_data={
-                "program": str(instance.program),
-                "course_year": instance.course_year,
-                "student_count": instance.student_count,
-            },
+            actor_type="user", actor_user=self.request.user, action="create",
+            entity=instance, request=self.request,
+            after_data={"program": str(instance.program), "course_year": instance.course_year},
         )
 
     def perform_update(self, serializer):
         instance = serializer.save()
         log_audit(
-            actor_type="user",
-            actor_user=self.request.user,
-            action="update",
-            entity=instance,
-            request=self.request,
-            after_data={
-                "program": str(instance.program),
-                "course_year": instance.course_year,
-                "student_count": instance.student_count,
-            },
+            actor_type="user", actor_user=self.request.user, action="update",
+            entity=instance, request=self.request,
+            after_data={"program": str(instance.program), "course_year": instance.course_year},
         )
 
     def perform_destroy(self, instance):
         log_audit(
-            actor_type="user",
-            actor_user=self.request.user,
-            action="delete",
-            entity=instance,
-            request=self.request,
-            after_data={
-                "program": str(instance.program),
-                "course_year": instance.course_year,
-            },
+            actor_type="user", actor_user=self.request.user, action="delete",
+            entity=instance, request=self.request,
+            after_data={"program": str(instance.program), "course_year": instance.course_year},
         )
         instance.delete()
 
@@ -265,7 +230,7 @@ def import_roster(request):
             updated += int(not created_flag)
         except APIError as exc:
             errors.append({"row": idx, "error": exc.detail})
-        except Exception as exc:  # pragma: no cover - unexpected
+        except Exception as exc:
             errors.append({"row": idx, "error": str(exc)})
 
     log_audit(
@@ -287,12 +252,16 @@ def import_roster(request):
 @throttle_classes([SurveySubmitThrottle])
 @transaction.atomic
 def submit_survey(request):
+    """
+    Append-only survey submission. Each call creates a new Bot2SurveyResponse row.
+    Dedup via idempotency_key (bot-supplied UUIDv4): same key → return existing row.
+    """
     verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")
+
     student_external_id = request.data.get("student_external_id")
     if not student_external_id:
         return build_error_response("VALIDATION_ERROR", "student_external_id is required.", status.HTTP_400_BAD_REQUEST)
 
-    # course_year: optional, defaults to 1, must be 1..5
     course_year = request.data.get("course_year") or 1
     try:
         course_year = int(course_year)
@@ -301,15 +270,22 @@ def submit_survey(request):
     if course_year < 1 or course_year > 5:
         return build_error_response("INVALID_COURSE_YEAR", "course_year must be between 1 and 5.", status.HTTP_400_BAD_REQUEST)
 
+    idempotency_key = request.data.get("idempotency_key") or None
+    if idempotency_key:
+        existing = Bot2SurveyResponse.objects.filter(idempotency_key=idempotency_key).first()
+        if existing:
+            return Response(
+                {"ok": True, "response_id": str(existing.id), "idempotent": True,
+                 "roster": {"program_id": str(existing.program_id), "course_year": existing.course_year}},
+                status=status.HTTP_200_OK,
+            )
+
     roster = StudentRoster.objects.filter(student_external_id=student_external_id).first()
     program = None
     if not roster:
-        # Auto-create roster if program_id is provided
         program_id = request.data.get("program_id")
         if not program_id:
             return build_error_response("ROSTER_NOT_FOUND", "Student roster not found and program_id not provided.", status.HTTP_400_BAD_REQUEST)
-
-        # Accept both PROGRAM and DIRECTION types
         program = CatalogItem.objects.filter(
             id=program_id
         ).filter(
@@ -318,27 +294,21 @@ def submit_survey(request):
         if not program:
             return build_error_response("INVALID_PROGRAM", "program_id must reference a program or direction catalog item.", status.HTTP_400_BAD_REQUEST)
     else:
-        # Existing roster is source of truth for program/course_year.
         course_year = roster.course_year
 
     campaign = request.data.get("survey_campaign") or "default"
     region_id = request.data.get("region_id")
+    region = None
     if region_id:
         region = CatalogItem.objects.filter(id=region_id, type=CatalogItem.ItemType.REGION).first()
         if not region:
             return build_error_response("INVALID_REGION", "region_id must reference a region catalog item.", status.HTTP_400_BAD_REQUEST)
-    else:
-        region = None
 
     telegram_user_id = request.data.get("telegram_user_id")
 
     try:
-        # Inner savepoint: a DB integrity error here rolls back only these writes
-        # instead of poisoning the outer @transaction.atomic (which would turn a
-        # clean conflict into an opaque 500 on commit).
         with transaction.atomic():
             if roster is None:
-                # Create roster with provided course_year (default 1)
                 roster = StudentRoster.objects.create(
                     student_external_id=student_external_id,
                     program=program,
@@ -347,13 +317,11 @@ def submit_survey(request):
                     is_active=True,
                 )
 
-            # First, check if student exists by telegram_user_id (to handle student_external_id changes)
             existing_student = None
             if telegram_user_id:
                 existing_student = Bot2Student.objects.filter(telegram_user_id=telegram_user_id).first()
 
             if existing_student:
-                # Update existing student (even if student_external_id changed)
                 existing_student.student_external_id = student_external_id
                 existing_student.roster = roster
                 existing_student.username = request.data.get("username", "") or ""
@@ -365,7 +333,6 @@ def submit_survey(request):
                 existing_student.save()
                 student = existing_student
             else:
-                # Try to find by student_external_id or create new
                 student, _ = Bot2Student.objects.update_or_create(
                     student_external_id=student_external_id,
                     defaults={
@@ -380,40 +347,35 @@ def submit_survey(request):
                     },
                 )
 
-            # Upsert survey by (student, campaign) to keep submissions idempotent.
-            payload = {
-                "roster": roster,
-                "program": roster.program,
-                "course_year": course_year,
-                "employment_status": request.data.get("employment_status", "") or "",
-                "employment_company": request.data.get("employment_company", "") or "",
-                "employment_role": request.data.get("employment_role", "") or "",
-                "suggestions": request.data.get("suggestions", "") or "",
-                "consents": request.data.get("consents", {}) or {},
-                "answers": request.data.get("answers", {}) or {},
-                "submitted_at": timezone.now(),
-            }
-            survey, _ = Bot2SurveyResponse.objects.update_or_create(
+            # Append-only: always create a new survey row.
+            survey = Bot2SurveyResponse.objects.create(
                 student=student,
+                roster=roster,
+                program=roster.program,
+                course_year=course_year,
                 survey_campaign=campaign,
-                defaults=payload,
+                idempotency_key=idempotency_key,
+                source="survey",
+                employment_status=request.data.get("employment_status", "") or "",
+                employment_company=request.data.get("employment_company", "") or "",
+                employment_role=request.data.get("employment_role", "") or "",
+                suggestions=request.data.get("suggestions", "") or "",
+                consents=request.data.get("consents", {}) or {},
+                answers=request.data.get("answers", {}) or {},
+                submitted_at=timezone.now(),
             )
     except ValidationError as exc:
         return build_error_response("VALIDATION_ERROR", exc.messages, status.HTTP_400_BAD_REQUEST)
     except IntegrityError:
-        logger.warning("submit_survey integrity conflict for student_external_id=%s", student_external_id)
+        logger.warning("submit_survey integrity conflict for idempotency_key=%s", idempotency_key)
         return build_error_response(
             "CONFLICT",
-            "A conflicting submission already exists for this student; please retry.",
+            "Duplicate idempotency_key; submission already exists.",
             status.HTTP_409_CONFLICT,
         )
-    except Exception:  # pragma: no cover - unexpected
+    except Exception:
         logger.exception("submit_survey unexpected error for student_external_id=%s", student_external_id)
-        return build_error_response(
-            "SERVER_ERROR",
-            "An internal error occurred while saving the survey.",
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        return build_error_response("SERVER_ERROR", "An internal error occurred.", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     log_audit(
         actor_type="service",
@@ -431,3 +393,97 @@ def submit_survey(request):
         },
         status=status.HTTP_200_OK,
     )
+
+
+@api_view(["POST"])
+@permission_classes([])
+def bot_verify(request):
+    """
+    Faza D: Verify student_id + birth_date against StudentRoster.
+    Returns {match: bool, full_name?} if birth_date column is populated.
+    Falls back to student_external_id-only match if roster has no birth_date.
+    """
+    verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")
+
+    student_id = request.data.get("student_id") or request.data.get("student_external_id")
+    birth_date = request.data.get("birth_date")
+
+    if not student_id:
+        return build_error_response("VALIDATION_ERROR", "student_id is required.", status.HTTP_400_BAD_REQUEST)
+
+    roster = StudentRoster.objects.filter(student_external_id=student_id).first()
+    if not roster:
+        return Response({"match": False, "reason": "not_found"})
+
+    if roster.birth_date and birth_date:
+        match = str(roster.birth_date) == str(birth_date)
+    else:
+        # birth_date not yet populated in roster → accept student_id-only (legacy path)
+        match = True
+
+    if not match:
+        return Response({"match": False, "reason": "birth_date_mismatch"})
+
+    return Response({
+        "match": True,
+        "roster": {
+            "program_id": str(roster.program_id),
+            "program_name": roster.program.name if roster.program else None,
+            "course_year": roster.course_year,
+        },
+    })
+
+
+@api_view(["POST"])
+@permission_classes([])
+@transaction.atomic
+def bot_register(request):
+    """
+    Faza D: Create or update Bot2Student after verify success + consent.
+    Requires consent=true in payload; sets state="registered".
+    """
+    verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")
+
+    student_id = request.data.get("student_id") or request.data.get("student_external_id")
+    telegram_user_id = request.data.get("telegram_user_id")
+    consent = request.data.get("consent", False)
+
+    if not student_id:
+        return build_error_response("VALIDATION_ERROR", "student_id is required.", status.HTTP_400_BAD_REQUEST)
+    if not telegram_user_id:
+        return build_error_response("VALIDATION_ERROR", "telegram_user_id is required.", status.HTTP_400_BAD_REQUEST)
+    if not consent:
+        return build_error_response("CONSENT_REQUIRED", "consent must be true to register.", status.HTTP_400_BAD_REQUEST)
+
+    roster = StudentRoster.objects.filter(student_external_id=student_id).first()
+    if not roster:
+        return build_error_response("ROSTER_NOT_FOUND", "Student not found in roster.", status.HTTP_404_NOT_FOUND)
+
+    language = request.data.get("language", "uz")
+    if language not in ("uz", "ru"):
+        language = "uz"
+
+    try:
+        student, created = Bot2Student.objects.update_or_create(
+            student_external_id=student_id,
+            defaults={
+                "roster": roster,
+                "telegram_user_id": telegram_user_id,
+                "username": request.data.get("username", "") or "",
+                "first_name": request.data.get("first_name", "") or "",
+                "last_name": request.data.get("last_name", "") or "",
+                "language": language,
+                "consent": True,
+                "state": "registered",
+            },
+        )
+    except IntegrityError:
+        logger.warning("bot_register telegram_user_id conflict for student_id=%s", student_id)
+        return build_error_response("CONFLICT", "telegram_user_id is already linked to another student.", status.HTTP_409_CONFLICT)
+
+    return Response({
+        "ok": True,
+        "student_id": str(student.id),
+        "created": created,
+        "roster": {"program_id": str(roster.program_id), "course_year": roster.course_year},
+    }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
