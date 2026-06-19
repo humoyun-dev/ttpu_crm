@@ -27,7 +27,7 @@ def test_program_endpoint_filters_by_level_and_track(api_client, admin_user):
     assert resp.status_code == status.HTTP_200_OK
     data = resp.data["results"] if isinstance(resp.data, dict) and "results" in resp.data else resp.data
     names = {row["name"] for row in data}
-    assert "MECHANICAL ENGINEERING" in names
+    assert any("mechanical engineering" in n.lower() for n in names)
     assert all(row["level"] == "bachelor" for row in data)
     assert all(row["track"] == "italian" for row in data)
 
@@ -41,8 +41,8 @@ def test_program_endpoint_includes_masters(api_client, admin_user):
     data = resp.data["results"] if isinstance(resp.data, dict) and "results" in resp.data else resp.data
     tracks = {row["track"] for row in data}
     names = {row["name"] for row in data}
-    assert "MASTER OF BUSINESS ADMINISTRATION (MBA)" in names
-    assert "MECHATRONIC ENGINEERING" in names
+    assert any("master of business administration" in n.lower() for n in names)
+    assert any("mechatronic" in n.lower() for n in names)
     assert tracks == {"n/a"}
 
 

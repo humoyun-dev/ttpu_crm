@@ -190,11 +190,10 @@ class TestBot2SurveySubmission:
         assert survey.consents["share_with_employers"] is True
 
     @pytest.mark.django_db
-    def test_submit_survey_updates_existing_student(
+    def test_submit_survey_append_only(
         self, api_client, service_token, sample_direction, sample_region
     ):
-        """Test that submitting again updates existing records"""
-        # First submission
+        """Append-only: each submission creates a new row; student profile is upserted."""
         payload1 = {
             "student_external_id": "TEST-002",
             "telegram_user_id": 987654321,
@@ -211,7 +210,6 @@ class TestBot2SurveySubmission:
             HTTP_X_SERVICE_TOKEN=service_token,
         )
 
-        # Second submission with updated data
         payload2 = {
             "student_external_id": "TEST-002",
             "telegram_user_id": 987654321,
@@ -233,7 +231,7 @@ class TestBot2SurveySubmission:
 
         assert response.status_code == 200
 
-        # Verify only one student and survey exist (updated, not duplicated)
+        # Student profile is upserted (single record, latest data)
         assert Bot2Student.objects.filter(student_external_id="TEST-002").count() == 1
         assert StudentRoster.objects.filter(student_external_id="TEST-002").count() == 1
 
@@ -243,9 +241,12 @@ class TestBot2SurveySubmission:
         assert student.gender == "female"
         assert student.region == sample_region
 
-        survey = Bot2SurveyResponse.objects.get(student=student)
-        assert survey.employment_status == "employed"
-        assert survey.employment_company == "Updated Corp"
+        # Append-only: both submissions are preserved as separate rows
+        surveys = Bot2SurveyResponse.objects.filter(student=student).order_by("created_at")
+        assert surveys.count() == 2
+        latest = surveys.last()
+        assert latest.employment_status == "employed"
+        assert latest.employment_company == "Updated Corp"
 
     @pytest.mark.django_db
     def test_submit_survey_without_program_id_fails(self, api_client, service_token):

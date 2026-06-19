@@ -19,10 +19,111 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
 import { bot2Api, catalogApi, CatalogItem } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, CalendarIcon, X } from "lucide-react";
 import { toast } from "sonner";
+
+// DD.MM.YYYY → YYYY-MM-DD (store format)
+function displayToIso(val: string): string {
+  const m = val.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+
+// YYYY-MM-DD → DD.MM.YYYY (display)
+function isoToDisplay(val: string): string {
+  const m = val.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : val;
+}
+
+function DatePickerField({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string; // YYYY-MM-DD or ""
+  onChange: (iso: string) => void;
+  disabled?: boolean;
+}) {
+  const [text, setText] = useState(value ? isoToDisplay(value) : "");
+  const [open, setOpen] = useState(false);
+
+  // Keep text in sync when value changes externally (load)
+  useEffect(() => {
+    setText(value ? isoToDisplay(value) : "");
+  }, [value]);
+
+  const handleTextChange = (raw: string) => {
+    setText(raw);
+    // Accept as-you-type: DD.MM.YYYY
+    const iso = displayToIso(raw);
+    if (iso) onChange(iso);
+    else if (!raw) onChange("");
+  };
+
+  const handleCalendarSelect = (date: Date | undefined) => {
+    if (!date) return;
+    const iso = date.toISOString().slice(0, 10);
+    onChange(iso);
+    setText(isoToDisplay(iso));
+    setOpen(false);
+  };
+
+  const selectedDate = value
+    ? new Date(value + "T00:00:00")
+    : undefined;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Input
+            value={text}
+            onChange={(e) => handleTextChange(e.target.value)}
+            placeholder="KK.OO.YYYY"
+            maxLength={10}
+            disabled={disabled}
+            className="pr-8"
+          />
+          {value && !disabled && (
+            <button
+              type="button"
+              onClick={() => { onChange(""); setText(""); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          disabled={disabled}
+          onClick={() => setOpen((p) => !p)}
+          aria-label="Kalendarni ochish"
+        >
+          <CalendarIcon className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {open && (
+        <div className="rounded-xl border bg-card shadow-md w-fit">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={handleCalendarSelect}
+            captionLayout="dropdown"
+            fromYear={1970}
+            toYear={new Date().getFullYear()}
+            defaultMonth={selectedDate ?? new Date(2000, 0)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function StudentFormPage() {
   const router = useRouter();
@@ -42,6 +143,7 @@ export default function StudentFormPage() {
     program: "",
     course_year: 1,
     is_active: true,
+    birth_date: "",
   });
 
   useEffect(() => {
@@ -73,6 +175,7 @@ export default function StudentFormPage() {
           program: response.data.program,
           course_year: response.data.course_year,
           is_active: response.data.is_active,
+          birth_date: response.data.birth_date ?? "",
         });
       }
     } catch (error) {
@@ -92,9 +195,13 @@ export default function StudentFormPage() {
     }
 
     setSaving(true);
+    const payload = {
+      ...formData,
+      birth_date: formData.birth_date || null,
+    };
     const res = isNew
-      ? await bot2Api.createRoster(formData)
-      : await bot2Api.updateRoster(id, formData);
+      ? await bot2Api.createRoster(payload)
+      : await bot2Api.updateRoster(id, payload);
 
     if (res.error) {
       toast.error(
@@ -246,6 +353,18 @@ export default function StudentFormPage() {
                     <SelectItem value="false">Aktiv emas</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>
+                  Tug&apos;ilgan sana{" "}
+                  <span className="text-muted-foreground font-normal">(ixtiyoriy)</span>
+                </Label>
+                <DatePickerField
+                  value={formData.birth_date}
+                  onChange={(iso) => setFormData({ ...formData, birth_date: iso })}
+                  disabled={!isAdmin}
+                />
               </div>
             </div>
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -12,5 +12,5 @@ def parse_iso_datetime(value: str):
         except Exception:
             return None
     if timezone.is_naive(dt):
-        dt = timezone.make_aware(dt, timezone=timezone.utc)
+        dt = timezone.make_aware(dt, timezone=dt_timezone.utc)
     return dt

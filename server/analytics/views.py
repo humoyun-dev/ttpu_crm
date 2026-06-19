@@ -1,13 +1,15 @@
+import io
 from collections import defaultdict
 
 from django.db.models import Count, Q, Sum, F, Subquery, OuterRef
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from bot2.models import Bot2SurveyResponse, ProgramEnrollment, StudentRoster
+from bot2.models import Bot2Student, Bot2SurveyResponse, ProgramEnrollment, StudentRoster
 from common.exceptions import build_error_response
 from common.permissions import IsViewerOrAdminReadOnly
 from common.time import parse_iso_datetime
@@ -462,3 +464,138 @@ def bot2_academic_years(request):
         .order_by("-academic_year")
     )
     return Response(list(years))
+
+
+def _students_by_direction_data(campaign: str) -> list:
+    """
+    Faza F: Students grouped by direction/program.
+    - total: StudentRoster count per program
+    - registered: Bot2Student count (has telegram_user_id)
+    - employed: latest survey per student where employment_status looks like "employed"
+    """
+    # Roster totals per program
+    totals = (
+        StudentRoster.objects.filter(is_active=True, roster_campaign=campaign)
+        .values("program_id", "program__name", "program__name_uz", "program__name_ru")
+        .annotate(total=Count("id"))
+    )
+    total_map = {
+        row["program_id"]: {
+            "program_name": row["program__name"],
+            "program_name_uz": row["program__name_uz"],
+            "program_name_ru": row["program__name_ru"],
+            "total": row["total"],
+        }
+        for row in totals
+    }
+
+    # Registered students per program (has telegram_user_id — interacted with bot)
+    registered = (
+        Bot2Student.objects.filter(
+            roster__is_active=True,
+            roster__roster_campaign=campaign,
+            telegram_user_id__isnull=False,
+        )
+        .values("roster__program_id")
+        .annotate(count=Count("id"))
+    )
+    registered_map = {row["roster__program_id"]: row["count"] for row in registered}
+
+    # Employed: latest survey per student, check employment_status
+    latest_ids = (
+        Bot2SurveyResponse.objects
+        .filter(student_id=OuterRef("student_id"), submitted_at__isnull=False)
+        .order_by("-submitted_at", "-created_at")
+        .values("id")[:1]
+    )
+    employed_count = (
+        Bot2SurveyResponse.objects
+        .annotate(latest_id=Subquery(latest_ids))
+        .filter(id=F("latest_id"))
+        .filter(
+            Q(employment_status__icontains="ishlayapman")
+            | Q(employment_status__icontains="employed")
+            | Q(employment_status__icontains="ишлаяпман")
+        )
+        .values("program_id")
+        .annotate(count=Count("student_id", distinct=True))
+    )
+    employed_map = {row["program_id"]: row["count"] for row in employed_count}
+
+    result = []
+    for program_id, info in total_map.items():
+        result.append({
+            "program_id": program_id,
+            "program_name": info["program_name"],
+            "program_name_uz": info["program_name_uz"],
+            "program_name_ru": info["program_name_ru"],
+            "total": info["total"],
+            "registered": registered_map.get(program_id, 0),
+            "employed": employed_map.get(program_id, 0),
+        })
+
+    result.sort(key=lambda x: x["total"], reverse=True)
+    return result
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsViewerOrAdminReadOnly])
+def students_by_direction(request):
+    """GET /api/v1/analytics/students-by-direction — per-program totals."""
+    campaign = request.query_params.get("campaign", "default")
+    return Response(_students_by_direction_data(campaign))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsViewerOrAdminReadOnly])
+def students_by_direction_xlsx(request):
+    """GET /api/v1/analytics/students-by-direction.xlsx — openpyxl export."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+    except ImportError:
+        return Response({"detail": "openpyxl not installed."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    campaign = request.query_params.get("campaign", "default")
+    rows = _students_by_direction_data(campaign)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Students by Direction"
+
+    headers = ["Program", "Total", "Registered", "Employed", "Registered %", "Employed %"]
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(fill_type="solid", fgColor="1F4E79")
+
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    for row_idx, row in enumerate(rows, start=2):
+        total = row["total"] or 0
+        registered = row["registered"] or 0
+        employed = row["employed"] or 0
+        reg_pct = round(registered * 100.0 / total, 1) if total else 0.0
+        emp_pct = round(employed * 100.0 / total, 1) if total else 0.0
+
+        ws.cell(row=row_idx, column=1, value=row["program_name"])
+        ws.cell(row=row_idx, column=2, value=total)
+        ws.cell(row=row_idx, column=3, value=registered)
+        ws.cell(row=row_idx, column=4, value=employed)
+        ws.cell(row=row_idx, column=5, value=reg_pct)
+        ws.cell(row=row_idx, column=6, value=emp_pct)
+
+    ws.column_dimensions["A"].width = 40
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    response = HttpResponse(
+        buf.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="students-by-direction-{campaign}.xlsx"'
+    return response

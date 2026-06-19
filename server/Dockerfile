@@ -1,25 +1,18 @@
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    POETRY_VERSION=1.8.3
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
-
-RUN pip install "poetry==$POETRY_VERSION"
-
-COPY pyproject.toml /app/
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --no-root
+# psycopg2-binary is a prebuilt wheel — no compiler needed
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
 
 RUN chmod +x /app/entrypoint.sh
 
-# In containers bind to all interfaces so the published port is reachable.
-# (gunicorn.conf.py defaults to 127.0.0.1 for bare-metal-behind-nginx safety.)
 ENV GUNICORN_BIND=0.0.0.0:8000
 
 EXPOSE 8000

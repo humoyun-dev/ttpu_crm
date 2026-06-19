@@ -16,7 +16,11 @@ def drop_constraints_safe(apps, schema_editor):
                 cursor.execute(
                     f"ALTER TABLE catalog_catalogitem DROP CONSTRAINT IF EXISTS {name};"
                 )
-        # SQLite does not support DROP CONSTRAINT; Django tracks state only.
+        elif conn.vendor == "sqlite":
+            # SQLite uses partial indexes for UniqueConstraint(condition=…);
+            # DROP INDEX IF EXISTS removes them without erroring when absent.
+            for name in names:
+                cursor.execute(f"DROP INDEX IF EXISTS {name};")
 
 
 class Migration(migrations.Migration):
