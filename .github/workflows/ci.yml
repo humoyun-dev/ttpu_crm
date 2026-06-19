@@ -31,12 +31,13 @@ jobs:
       - name: Run tests
         env:
           USE_SQLITE: "1"
-          DJANGO_SECRET_KEY: "ci-test-secret-key"
+          DJANGO_SECRET_KEY: "ci-test-secret-key-that-is-long-enough-for-hmac-sha256"
           DJANGO_DEBUG: "false"
           SECURE_SSL_REDIRECT: "false"
           JWT_COOKIE_SECURE: "false"
           SESSION_COOKIE_SECURE: "false"
           CSRF_COOKIE_SECURE: "false"
+          SERVICE_TOKEN_BOT2_HASH: "b6c7927026637fe7a3b9986de3c8e8e93362253632915189cf59287cc0104f36"
         run: pytest tests/ -q --tb=short
 
   lint:
