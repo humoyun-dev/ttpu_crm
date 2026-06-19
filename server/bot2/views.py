@@ -516,3 +516,36 @@ def bot_register(request):
         "created": created,
         "roster": {"program_id": str(roster.program_id), "course_year": roster.course_year},
     }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([])
+def bot_catalog_items(request):
+    """
+    Bot uchun catalog itemlarini service token orqali qaytaradi.
+    Dashboard login talab qilmaydi.
+    GET /api/v1/bot/catalog/items?type=region
+    GET /api/v1/bot/catalog/items?type=direction
+    """
+    verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")
+
+    item_type = request.query_params.get("type")
+    allowed_types = {
+        CatalogItem.ItemType.REGION,
+        CatalogItem.ItemType.DIRECTION,
+        CatalogItem.ItemType.PROGRAM,
+    }
+    if not item_type or item_type not in allowed_types:
+        return build_error_response(
+            "INVALID_TYPE",
+            f"type query param required. Allowed: {', '.join(sorted(allowed_types))}",
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    items = (
+        CatalogItem.objects
+        .filter(type=item_type, is_active=True)
+        .order_by("sort_order", "name")
+        .values("id", "code", "name", "name_uz", "name_ru", "name_en", "metadata")
+    )
+    return Response({"results": list(items)})

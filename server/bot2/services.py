@@ -1,3 +1,5 @@
+import re
+from datetime import date
 from typing import Optional
 
 from django.db import transaction
@@ -6,6 +8,24 @@ from django.db.models import Q
 from bot2.models import StudentRoster
 from catalog.models import CatalogItem
 from common.exceptions import APIError
+
+_BIRTH_DATE_RE = re.compile(r"^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})$")
+
+
+def parse_birth_date(value) -> Optional[date]:
+    """Accept DD.MM.YYYY (or - / separators). Returns date or None."""
+    if not value:
+        return None
+    if isinstance(value, date):
+        return value
+    m = _BIRTH_DATE_RE.match(str(value).strip())
+    if not m:
+        return None
+    day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
 
 
 def get_program(program_id=None, program_code=None) -> Optional[CatalogItem]:
@@ -35,12 +55,14 @@ def parse_roster_payload(row: dict) -> dict:
         raise APIError(code="INVALID_COURSE_YEAR", detail="course_year must be between 1 and 5 (5 = graduated).")
 
     campaign = row.get("campaign") or "default"
+    birth_date = parse_birth_date(row.get("birth_date"))
     return {
         "student_external_id": student_external_id,
         "program": program,
         "course_year": course_year,
         "is_active": bool(row.get("is_active", True) not in [False, "false", "False", "0"]),
         "roster_campaign": campaign,
+        "birth_date": birth_date,
     }
 
 
@@ -51,6 +73,7 @@ def upsert_roster_row(data: dict) -> bool:
         "course_year": data["course_year"],
         "is_active": data.get("is_active", True),
         "roster_campaign": data.get("roster_campaign", "default"),
+        "birth_date": data.get("birth_date"),
     }
 
     existing = StudentRoster.objects.filter(student_external_id=data["student_external_id"]).first()
@@ -60,6 +83,10 @@ def upsert_roster_row(data: dict) -> bool:
             if getattr(existing, field) != value:
                 setattr(existing, field, value)
                 changed_fields.append(field)
+
+        if data.get("birth_date") and existing.birth_date != data["birth_date"]:
+            existing.birth_date = data["birth_date"]
+            changed_fields.append("birth_date")
 
         if changed_fields:
             existing.full_clean()

@@ -31,7 +31,6 @@ from bot2_service.keyboards import (
     contact_keyboard,
     document_type_keyboard,
     gender_keyboard,
-    lang_select_keyboard,
     language_keyboard,
     regions_keyboard,
     yes_no_keyboard,
@@ -58,33 +57,12 @@ def setup_dependencies(api: CrmApiClient, catalog_cache: CatalogCache):
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-async def _delete_previous(chat_id: int, state: FSMContext, bot: Bot):
-    try:
-        data = await state.get_data()
-        for key in ("last_bot_msg", "last_user_msg"):
-            if mid := data.get(key):
-                with suppress(Exception):
-                    await bot.delete_message(chat_id, mid)
-    except Exception as exc:
-        logger.debug("delete_previous: %s", exc)
-
-
-async def _reply(message: Message, text: str, state: FSMContext, reply_markup=None, *, delete_prev: bool = True):
-    bot = message.bot
-    if delete_prev:
-        await _delete_previous(message.chat.id, state, bot)
-    await state.update_data(last_user_msg=message.message_id)
-    sent = await message.answer(text, reply_markup=reply_markup)
-    await state.update_data(last_bot_msg=sent.message_id)
-    return sent
+async def _reply(message: Message, text: str, state: FSMContext, reply_markup=None, **_kwargs):
+    return await message.answer(text, reply_markup=reply_markup)
 
 
 async def _reply_cb(call: CallbackQuery, text: str, state: FSMContext, reply_markup=None):
-    with suppress(Exception):
-        await call.message.delete()
-    sent = await call.bot.send_message(call.message.chat.id, text, reply_markup=reply_markup)
-    await state.update_data(last_bot_msg=sent.message_id)
-    return sent
+    return await call.bot.send_message(call.message.chat.id, text, reply_markup=reply_markup)
 
 
 def _parse_birth_date(text: str) -> str | None:
@@ -107,8 +85,7 @@ def _parse_birth_date(text: str) -> str | None:
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(BotState.waiting_language)
-    sent = await message.answer(get_text("ask_language", "uz"), reply_markup=language_keyboard())
-    await state.update_data(last_bot_msg=sent.message_id)
+    await message.answer(get_text("ask_language", "uz"), reply_markup=language_keyboard())
 
 
 @router.message(Command("cancel"))
@@ -149,6 +126,8 @@ async def pick_language(call: CallbackQuery, state: FSMContext):
         lang = "uz"
     await state.update_data(language=lang)
     await state.set_state(BotState.waiting_student_id)
+    with suppress(Exception):
+        await call.message.edit_reply_markup(reply_markup=None)
     await _reply_cb(call, get_text("ask_student_id", lang), state, reply_markup=NO_KB)
     await call.answer()
 
@@ -199,6 +178,8 @@ async def cal_day_selected(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "uz")
     iso_date = call.data.split("cal_day:")[1]   # YYYY-MM-DD
+    with suppress(Exception):
+        await call.message.edit_reply_markup(reply_markup=None)
     await call.answer()
     await _process_birth_date(call.message, state, lang, iso_date)
 
@@ -255,10 +236,11 @@ async def handle_consent(call: CallbackQuery, state: FSMContext):
     lang = data.get("language", "uz")
     choice = call.data.split(":")[1]
 
+    with suppress(Exception):
+        await call.message.edit_reply_markup(reply_markup=None)
+
     if choice != "yes":
         await state.clear()
-        with suppress(Exception):
-            await call.message.delete()
         await call.bot.send_message(call.message.chat.id, get_text("consent_declined", lang), reply_markup=NO_KB)
         await call.answer()
         return
@@ -275,8 +257,6 @@ async def handle_consent(call: CallbackQuery, state: FSMContext):
 
     if not result.ok:
         logger.warning("register API error for student_id=%s: %s", data.get("student_id"), result.error)
-        with suppress(Exception):
-            await call.message.delete()
         await call.bot.send_message(call.message.chat.id, get_text("register_error", lang), reply_markup=NO_KB)
         await call.answer()
         return
@@ -302,8 +282,8 @@ async def set_contact(message: Message, state: FSMContext):
         telegram_user_id=message.from_user.id,
         username=message.from_user.username or "",
     )
-    await state.set_state(BotState.waiting_first_name)
-    await _reply(message, get_text("ask_first", lang), state, reply_markup=NO_KB)
+    await state.set_state(BotState.waiting_gender)
+    await _reply(message, get_text("ask_gender", lang), state, reply_markup=gender_keyboard(lang))
 
 
 @router.message(BotState.waiting_contact)
@@ -313,37 +293,7 @@ async def contact_fallback(message: Message, state: FSMContext):
     await _reply(message, get_text("ask_contact", lang), state, reply_markup=contact_keyboard(lang))
 
 
-# ── STEP 6: First Name ────────────────────────────────────────────────────────
-
-@router.message(BotState.waiting_first_name)
-async def set_first_name(message: Message, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("language", "uz")
-    first_name = (message.text or "").strip()
-    if not first_name:
-        await _reply(message, get_text("ask_first", lang), state, reply_markup=NO_KB)
-        return
-    await state.update_data(first_name=first_name)
-    await state.set_state(BotState.waiting_last_name)
-    await _reply(message, get_text("ask_last", lang), state, reply_markup=NO_KB)
-
-
-# ── STEP 7: Last Name ─────────────────────────────────────────────────────────
-
-@router.message(BotState.waiting_last_name)
-async def set_last_name(message: Message, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("language", "uz")
-    last_name = (message.text or "").strip()
-    if not last_name:
-        await _reply(message, get_text("ask_last", lang), state, reply_markup=NO_KB)
-        return
-    await state.update_data(last_name=last_name)
-    await state.set_state(BotState.waiting_gender)
-    await _reply(message, get_text("ask_gender", lang), state, reply_markup=gender_keyboard(lang))
-
-
-# ── STEP 8: Gender ────────────────────────────────────────────────────────────
+# ── STEP 6: Gender ────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("gender:"), BotState.waiting_gender)
 async def pick_gender(call: CallbackQuery, state: FSMContext):
@@ -351,6 +301,8 @@ async def pick_gender(call: CallbackQuery, state: FSMContext):
     lang = data.get("language", "uz")
     gender = call.data.split(":")[1]
     await state.update_data(gender=gender)
+    with suppress(Exception):
+        await call.message.edit_reply_markup(reply_markup=None)
     regions = await catalog.get_regions()
     await state.set_state(BotState.waiting_region)
     await _reply_cb(call, get_text("ask_region", lang), state, reply_markup=regions_keyboard(regions, lang))
@@ -363,6 +315,8 @@ async def pick_gender(call: CallbackQuery, state: FSMContext):
 async def pick_region(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "uz")
+    with suppress(Exception):
+        await call.message.edit_reply_markup(reply_markup=None)
     regions = await catalog.get_regions()
     region_key = call.data.split(":")[1]
     selected = next((r for r in regions if str(r.get("id")) == region_key), None)
@@ -390,6 +344,8 @@ async def pick_employment(call: CallbackQuery, state: FSMContext):
     lang = data.get("language", "uz")
     choice = call.data.split(":")[1]
     await state.update_data(employed=choice == "yes")
+    with suppress(Exception):
+        await call.message.edit_reply_markup(reply_markup=None)
     if choice == "yes":
         await state.set_state(BotState.waiting_company)
         await _reply_cb(call, get_text("ask_company", lang), state, reply_markup=NO_KB)
@@ -428,19 +384,17 @@ async def pick_help(call: CallbackQuery, state: FSMContext):
     choice = call.data.split(":")[1]
     await state.update_data(want_help=choice == "yes")
     with suppress(Exception):
-        await call.message.delete()
+        await call.message.edit_reply_markup(reply_markup=None)
     if choice == "yes":
         await state.set_state(BotState.waiting_share_consent)
-        sent = await call.bot.send_message(
+        await call.bot.send_message(
             call.message.chat.id, get_text("ask_share", lang), reply_markup=yes_no_keyboard("share", lang)
         )
-        await state.update_data(last_bot_msg=sent.message_id)
     else:
         await state.set_state(BotState.waiting_suggestions)
-        sent = await call.bot.send_message(
+        await call.bot.send_message(
             call.message.chat.id, get_text("ask_suggestions", lang), reply_markup=NO_KB
         )
-        await state.update_data(last_bot_msg=sent.message_id)
     await call.answer()
 
 
@@ -451,63 +405,23 @@ async def pick_share(call: CallbackQuery, state: FSMContext):
     choice = call.data.split(":")[1]
     await state.update_data(share_consent=choice == "yes")
     with suppress(Exception):
-        await call.message.delete()
+        await call.message.edit_reply_markup(reply_markup=None)
     if choice == "yes":
         await call.bot.send_message(
             call.message.chat.id, get_text("channels", lang), reply_markup=channels_keyboard()
         )
     await state.set_state(BotState.waiting_suggestions)
-    sent = await call.bot.send_message(
+    await call.bot.send_message(
         call.message.chat.id, get_text("ask_suggestions", lang), reply_markup=NO_KB
     )
-    await state.update_data(last_bot_msg=sent.message_id)
     await call.answer()
 
 
-# ── Suggestions → Language Proficiency ───────────────────────────────────────
+# ── Suggestions → Submit ──────────────────────────────────────────────────────
 
 @router.message(BotState.waiting_suggestions)
 async def set_suggestions(message: Message, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("language", "uz")
     await state.update_data(suggestions=(message.text or "").strip())
-    await state.set_state(BotState.waiting_lang_select)
-    await _reply(message, get_text("ask_lang_select", lang), state, reply_markup=lang_select_keyboard(lang))
-
-
-@router.callback_query(F.data == "lang:english", BotState.waiting_lang_select)
-async def pick_lang_english(call: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("language", "uz")
-    await state.set_state(BotState.waiting_english_level)
-    await _reply_cb(call, get_text("ask_english_level", lang), state, reply_markup=NO_KB)
-    await call.answer()
-
-
-@router.callback_query(F.data == "lang:russian", BotState.waiting_lang_select)
-async def pick_lang_russian(call: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("language", "uz")
-    await state.set_state(BotState.waiting_russian_level)
-    await _reply_cb(call, get_text("ask_russian_level", lang), state, reply_markup=NO_KB)
-    await call.answer()
-
-
-@router.message(BotState.waiting_english_level)
-async def set_english_level(message: Message, state: FSMContext):
-    await state.update_data(english_level=(message.text or "").strip())
-    await _delete_previous(message.chat.id, state, message.bot)
-    with suppress(Exception):
-        await message.delete()
-    await _final_submit(message, state)
-
-
-@router.message(BotState.waiting_russian_level)
-async def set_russian_level(message: Message, state: FSMContext):
-    await state.update_data(russian_level=(message.text or "").strip())
-    await _delete_previous(message.chat.id, state, message.bot)
-    with suppress(Exception):
-        await message.delete()
     await _final_submit(message, state)
 
 
@@ -546,7 +460,7 @@ async def handle_document_file(message: Message, state: FSMContext):
         filename = "photo.jpg"
         mime_type = "image/jpeg"
     else:
-        await _reply(message, get_text("doc_invalid_file", lang), state, reply_markup=NO_KB, delete_prev=False)
+        await message.answer(get_text("doc_invalid_file", lang), reply_markup=NO_KB)
         return
 
     try:
@@ -555,17 +469,17 @@ async def handle_document_file(message: Message, state: FSMContext):
         raw_bytes = file_bytes.read() if hasattr(file_bytes, "read") else bytes(file_bytes)
     except Exception as exc:
         logger.exception("Failed to download file: %s", exc)
-        await _reply(message, get_text("doc_upload_failed", lang), state, reply_markup=NO_KB, delete_prev=False)
+        await message.answer(get_text("doc_upload_failed", lang), reply_markup=NO_KB)
         return
 
     result = await api_client.upload_document(student_id, doc_type, raw_bytes, filename, mime_type)
 
     if result.ok:
         await state.set_state(None)
-        await _reply(message, get_text("doc_upload_success", lang), state, reply_markup=NO_KB, delete_prev=False)
+        await message.answer(get_text("doc_upload_success", lang), reply_markup=NO_KB)
     else:
         logger.warning("upload_document failed for student_id=%s: %s", student_id, result.error)
-        await _reply(message, get_text("doc_upload_failed", lang), state, reply_markup=NO_KB, delete_prev=False)
+        await message.answer(get_text("doc_upload_failed", lang), reply_markup=NO_KB)
 
 
 # ── FollowUp Answer (stateless inline callback) ───────────────────────────────
@@ -621,8 +535,6 @@ async def _final_submit(message: Message, state: FSMContext):
         "telegram_user_id": data.get("telegram_user_id"),
         "username": data.get("username", "") or "",
         "phone": data.get("phone", "") or "",
-        "first_name": data.get("first_name", "") or "",
-        "last_name": data.get("last_name", "") or "",
         "gender": data.get("gender") or "unspecified",
         "region_id": data.get("region_id"),
         "region_code": data.get("region_code"),
@@ -641,8 +553,6 @@ async def _final_submit(message: Message, state: FSMContext):
             "region_label": data.get("region_label"),
             "program_label": data.get("program_name", ""),
             "course_year": data.get("course_year"),
-            "english_level": data.get("english_level", ""),
-            "russian_level": data.get("russian_level", ""),
         },
     }
 

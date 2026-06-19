@@ -77,39 +77,27 @@ class CrmApiClient:
         return True
 
     async def _get_catalog(self, item_type: str) -> list[dict]:
-        if not await self.login_dashboard():
+        headers = {"X-SERVICE-TOKEN": self.service_token}
+        try:
+            resp = await self.client.get(
+                "/bot/catalog/items",
+                params={"type": item_type},
+                headers=headers,
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.exception("%s catalog fetch error: %s", item_type, exc)
             return []
 
-        for attempt in (1, 2):
-            try:
-                resp = await self.client.get(
-                    "/catalog/items/",
-                    params={"type": item_type, "is_active": "true"},
-                    headers=self._auth_headers(),
-                )
-            except Exception as exc:  # pragma: no cover
-                logger.exception("%s fetch error: %s", item_type, exc)
-                return []
-
-            if resp.status_code == 401 and attempt == 1:
-                logger.info("%s GET 401 - relogin and retry", item_type)
-                self._logged_in = False
-                self._auth_token = None
-                if await self.login_dashboard():
-                    continue
-
-            if resp.status_code != 200:
-                logger.warning("%s GET failed: %s %s", item_type, resp.status_code, resp.text)
-                return []
-
-            data = resp.json()
-            if isinstance(data, dict):
-                items = data.get("results", [])
-                return items if isinstance(items, list) else []
-            if isinstance(data, list):
-                return data
+        if resp.status_code != 200:
+            logger.warning("%s catalog GET failed: %s %s", item_type, resp.status_code, resp.text)
             return []
 
+        data = resp.json()
+        if isinstance(data, dict):
+            items = data.get("results", [])
+            return items if isinstance(items, list) else []
+        if isinstance(data, list):
+            return data
         return []
 
     async def get_catalog_items(self, item_type: str) -> list[dict]:

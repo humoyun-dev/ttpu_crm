@@ -10,8 +10,6 @@ class BotState(StatesGroup):
 
     # Survey
     waiting_contact = State()
-    waiting_first_name = State()
-    waiting_last_name = State()
     waiting_gender = State()
     waiting_region = State()
     waiting_employment = State()
@@ -20,9 +18,6 @@ class BotState(StatesGroup):
     waiting_help = State()
     waiting_share_consent = State()
     waiting_suggestions = State()
-    waiting_lang_select = State()
-    waiting_english_level = State()
-    waiting_russian_level = State()
 
     # Document upload
     waiting_document_type = State()
