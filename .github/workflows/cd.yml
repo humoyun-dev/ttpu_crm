@@ -39,9 +39,10 @@ jobs:
 
       - name: build dashboard
         run: |
+          export PATH="/home/giga/.nvm/versions/node/v22.22.0/bin:$PATH"
           cd /home/giga/ttpu_crm/dashboard
-          /home/giga/.nvm/versions/node/v22.22.0/bin/npm ci --prefer-offline --silent
-          /home/giga/.nvm/versions/node/v22.22.0/bin/npm run build
+          npm ci --prefer-offline --silent
+          npm run build
 
       - name: restart dashboard
         run: sudo supervisorctl restart ttpu-dashboard
