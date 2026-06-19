@@ -32,22 +32,22 @@ jobs:
             $DEPLOY/server/venv/bin/python manage.py migrate --noinput
             $DEPLOY/server/venv/bin/python manage.py collectstatic --noinput
 
-            echo "==> restart gunicorn (PM2)"
-            pm2 restart ttpu-server
+            echo "==> restart gunicorn (supervisord)"
+            sudo supervisorctl restart ttpu_crm
 
             echo "==> pip install (bot2)"
             $DEPLOY/bot2_service/.venv/bin/pip install -e $DEPLOY/bot2_service -q
 
-            echo "==> restart bot2 (PM2)"
-            pm2 restart ttpu-bot2
+            echo "==> restart bot2 (supervisord)"
+            sudo supervisorctl restart ttpu-bot2
 
             echo "==> build dashboard"
             cd $DEPLOY/dashboard
-            npm ci --prefer-offline --silent
-            npm run build
+            /home/giga/.nvm/versions/node/v22.22.0/bin/npm ci --prefer-offline --silent
+            /home/giga/.nvm/versions/node/v22.22.0/bin/npm run build
 
-            echo "==> restart dashboard (PM2)"
-            pm2 restart ttpu-dashboard
+            echo "==> restart dashboard (supervisord)"
+            sudo supervisorctl restart ttpu-dashboard
 
             echo "==> health check"
             sleep 3
