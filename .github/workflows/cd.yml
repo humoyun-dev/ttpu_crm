@@ -18,25 +18,39 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
-            cd ${{ secrets.DEPLOY_PATH }}
+            DEPLOY=${{ secrets.DEPLOY_PATH }}
+            cd $DEPLOY
 
             echo "==> git pull"
             git pull origin main
 
-            echo "==> docker compose build (only changed services)"
-            docker compose build server bot2 dashboard
+            echo "==> pip install (server)"
+            $DEPLOY/server/venv/bin/pip install -r $DEPLOY/server/requirements.txt -q
 
-            echo "==> docker compose up"
-            docker compose up -d --remove-orphans
+            echo "==> django migrate + collectstatic"
+            cd $DEPLOY/server
+            $DEPLOY/server/venv/bin/python manage.py migrate --noinput
+            $DEPLOY/server/venv/bin/python manage.py collectstatic --noinput
 
-            echo "==> django migrations"
-            docker compose exec -T server python manage.py migrate --noinput
+            echo "==> restart gunicorn (PM2)"
+            pm2 restart ttpu-server
 
-            echo "==> collect static"
-            docker compose exec -T server python manage.py collectstatic --noinput
+            echo "==> pip install (bot2)"
+            $DEPLOY/bot2_service/.venv/bin/pip install -e $DEPLOY/bot2_service -q
+
+            echo "==> restart bot2 (PM2)"
+            pm2 restart ttpu-bot2
+
+            echo "==> build dashboard"
+            cd $DEPLOY/dashboard
+            npm ci --prefer-offline --silent
+            npm run build
+
+            echo "==> restart dashboard (PM2)"
+            pm2 restart ttpu-dashboard
 
             echo "==> health check"
-            sleep 5
+            sleep 3
             curl -sf http://localhost:9006/healthz || (echo "Health check failed!" && exit 1)
 
             echo "==> Deploy complete"
