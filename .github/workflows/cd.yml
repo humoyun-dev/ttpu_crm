@@ -10,47 +10,44 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -e
-            DEPLOY=${{ secrets.DEPLOY_PATH }}
-            cd $DEPLOY
+      - name: git pull
+        run: |
+          cd /home/giga/ttpu_crm
+          git pull origin main
 
-            echo "==> git pull"
-            git pull origin main
+      - name: pip install (server)
+        run: |
+          /home/giga/ttpu_crm/server/venv/bin/pip install \
+            -r /home/giga/ttpu_crm/server/requirements.txt -q
 
-            echo "==> pip install (server)"
-            $DEPLOY/server/venv/bin/pip install -r $DEPLOY/server/requirements.txt -q
+      - name: django migrate + collectstatic
+        run: |
+          cd /home/giga/ttpu_crm/server
+          /home/giga/ttpu_crm/server/venv/bin/python manage.py migrate --noinput
+          /home/giga/ttpu_crm/server/venv/bin/python manage.py collectstatic --noinput
 
-            echo "==> django migrate + collectstatic"
-            cd $DEPLOY/server
-            $DEPLOY/server/venv/bin/python manage.py migrate --noinput
-            $DEPLOY/server/venv/bin/python manage.py collectstatic --noinput
+      - name: restart gunicorn
+        run: sudo supervisorctl restart ttpu_crm
 
-            echo "==> restart gunicorn (supervisord)"
-            sudo supervisorctl restart ttpu_crm
+      - name: pip install (bot2)
+        run: |
+          /home/giga/ttpu_crm/bot2_service/.venv/bin/pip install \
+            -e /home/giga/ttpu_crm/bot2_service -q
 
-            echo "==> pip install (bot2)"
-            $DEPLOY/bot2_service/.venv/bin/pip install -e $DEPLOY/bot2_service -q
+      - name: restart bot2
+        run: sudo supervisorctl restart ttpu-bot2
 
-            echo "==> restart bot2 (supervisord)"
-            sudo supervisorctl restart ttpu-bot2
+      - name: build dashboard
+        run: |
+          cd /home/giga/ttpu_crm/dashboard
+          /home/giga/.nvm/versions/node/v22.22.0/bin/npm ci --prefer-offline --silent
+          /home/giga/.nvm/versions/node/v22.22.0/bin/npm run build
 
-            echo "==> build dashboard"
-            cd $DEPLOY/dashboard
-            /home/giga/.nvm/versions/node/v22.22.0/bin/npm ci --prefer-offline --silent
-            /home/giga/.nvm/versions/node/v22.22.0/bin/npm run build
+      - name: restart dashboard
+        run: sudo supervisorctl restart ttpu-dashboard
 
-            echo "==> restart dashboard (supervisord)"
-            sudo supervisorctl restart ttpu-dashboard
-
-            echo "==> health check"
-            sleep 3
-            curl -sf http://localhost:9006/healthz || (echo "Health check failed!" && exit 1)
-
-            echo "==> Deploy complete"
+      - name: health check
+        run: |
+          sleep 3
+          curl -sf http://localhost:9006/healthz || (echo "Health check failed!" && exit 1)
+          echo "Deploy complete"
