@@ -1,10 +1,12 @@
 from django.db import IntegrityError
+from django.db.models import ProtectedError
 from rest_framework import filters, status, viewsets
 from rest_framework.response import Response
 
 from audit.utils import log_audit
 from catalog.models import CatalogItem, CatalogRelation
 from catalog.serializers import CatalogItemSerializer, CatalogRelationSerializer, ProgramSerializer
+from common.exceptions import APIError
 from common.permissions import IsAdminCatalogWriter, IsViewerOrAdminReadOnly
 
 
@@ -68,6 +70,14 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         before = CatalogItemSerializer(instance).data
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise APIError(
+                code="PROTECTED",
+                detail="Bu element boshqa yozuvlarda ishlatilmoqda — avval ularni o'chiring yoki o'zgartiring.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
         log_audit(
             actor_type="user",
             actor_user=self.request.user,
@@ -77,7 +87,6 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
             before_data=before,
             after_data={},
         )
-        instance.delete()
 
 
 class CatalogRelationViewSet(viewsets.ModelViewSet):

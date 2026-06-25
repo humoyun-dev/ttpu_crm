@@ -38,11 +38,13 @@ def record_answer(followup: FollowUp, answer: str) -> None:
         followup.next_send_at = _next_cadence(followup)
     else:
         if followup.attempts >= MAX_NO_ANSWERS:
+            # Decide outcome from the stage reached SO FAR, before marking DONE.
+            reached_interview = followup.stage == FollowUp.Stage.INTERVIEWED
             followup.stage = FollowUp.Stage.DONE
             followup.flagged_for_staff = True
             followup.outcome = (
                 FollowUp.Outcome.NO_INTERVIEW
-                if followup.stage == FollowUp.Stage.INTERVIEWED
+                if reached_interview
                 else FollowUp.Outcome.NO_CONTACT
             )
             followup.next_send_at = None

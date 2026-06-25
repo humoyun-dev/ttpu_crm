@@ -10,8 +10,9 @@ from bot2.models import StudentRoster
 print(StudentRoster.objects.count())
 " 2>/dev/null || echo "0")
 
-if [ "$STUDENT_COUNT" = "0" ]; then
-    echo "→ Empty database detected, seeding reference + demo data..."
+# Only auto-seed in DEBUG/dev — never inject demo data into a prod database.
+if [ "$STUDENT_COUNT" = "0" ] && { [ "$DJANGO_DEBUG" = "true" ] || [ "$DJANGO_DEBUG" = "True" ] || [ "$DJANGO_DEBUG" = "1" ]; }; then
+    echo "→ Empty dev database detected, seeding reference + demo data..."
     python manage.py seed_dev
     python manage.py seed_demo_analytics
 fi
