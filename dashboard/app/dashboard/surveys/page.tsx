@@ -7,17 +7,10 @@ import {
   Pencil,
   RefreshCw,
   Search,
-  ClipboardList,
-  XCircle,
-  Briefcase,
   Phone,
   MapPin,
   Download,
   CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
 } from "lucide-react";
 import {
   Table,
@@ -60,6 +53,7 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { EMPLOYMENT_LABELS, GENDER_LABELS } from "@/lib/constants";
 import { PaginationBar } from "@/components/ui/pagination-bar";
+import { PageHeader } from "@/components/page-header";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 const FETCH_ALL_PAGE_SIZE = 500;
@@ -102,6 +96,36 @@ function formatLocalDate(d: Date | null): string {
     month: "2-digit",
     day: "2-digit",
   });
+}
+
+/* Is `a` a more recent response than `b`? Latest submitted_at wins, falling
+   back to created_at, then id — mirrors the backend `_latest_responses_qs`
+   tiebreakers (-submitted_at, -created_at, -id). */
+function isNewerResponse(
+  a: Bot2SurveyResponse,
+  b: Bot2SurveyResponse,
+): boolean {
+  const ta = new Date(a.submitted_at || a.created_at).getTime();
+  const tb = new Date(b.submitted_at || b.created_at).getTime();
+  if (ta !== tb) return ta > tb;
+  return String(a.id) > String(b.id);
+}
+
+/* Keep only the latest response per unique student (by Student ID). A student
+   may submit the survey several times; stats and export should count each
+   student once, using their most recent submission. */
+function dedupeLatestByStudent(
+  list: Bot2SurveyResponse[],
+): Bot2SurveyResponse[] {
+  const byStudent = new Map<string, Bot2SurveyResponse>();
+  for (const s of list) {
+    const key = s.student_details?.student_external_id || s.student;
+    const existing = byStudent.get(key);
+    if (!existing || isNewerResponse(s, existing)) {
+      byStudent.set(key, s);
+    }
+  }
+  return Array.from(byStudent.values());
 }
 
 /* Fetch every survey by looping through all pages (page_size capped at 500). */
@@ -220,14 +244,15 @@ export default function SurveysPage() {
     setCurrentPage(1);
   };
 
-  /* ── whole-dataset stats ── */
-  const employedCount = allSurveys.filter(
+  /* ── whole-dataset stats (unique students only — latest response per ID) ── */
+  const uniqueSurveys = dedupeLatestByStudent(allSurveys);
+  const uniqueStudentsCount = uniqueSurveys.length;
+  const employedCount = uniqueSurveys.filter(
     (s) => s.employment_status === "employed",
   ).length;
-  const unemployedCount = allSurveys.filter(
+  const unemployedCount = uniqueSurveys.filter(
     (s) => s.employment_status === "unemployed",
   ).length;
-  const campaignsCount = new Set(allSurveys.map((s) => s.survey_campaign)).size;
 
   /* ── date-filtered surveys for export (from full dataset) ── */
   const exportSurveys = (() => {
@@ -241,13 +266,15 @@ export default function SurveysPage() {
       range = getDateRange(datePreset);
     }
 
-    return allSurveys.filter((s) => {
+    const inRange = allSurveys.filter((s) => {
       if (!range.from && !range.to) return true;
       const d = new Date(s.submitted_at || s.created_at);
       if (range.from && d < range.from) return false;
       if (range.to && d >= range.to) return false;
       return true;
     });
+    // Keep only the latest response per student within the selected range.
+    return dedupeLatestByStudent(inRange);
   })();
 
   /* ── export to Excel ── */
@@ -297,7 +324,6 @@ export default function SurveysPage() {
           "Yordam kerakmi?": consents.want_help ? "Ha" : "Yo'q",
           "Ma'lumot ulashish": consents.share_with_employers ? "Ha" : "Yo'q",
           Takliflar: survey.suggestions || "",
-          Kampaniya: survey.survey_campaign || "",
           Sana: formatDate(survey.submitted_at || survey.created_at, true),
         };
       });
@@ -339,74 +365,46 @@ export default function SurveysPage() {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold">So&apos;rovnomalar</h1>
-          <p className="text-sm text-muted-foreground">
-            Talabalar so&apos;rovnomalari natijalari
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Talabalar / So'rovnomalar"
+        title="So'rovnomalar"
+        description="Talabalar so'rovnomalari natijalari reesti."
+        actions={
+          <Button onClick={refresh} variant="outline" size="sm">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Yangilash
+          </Button>
+        }
+      />
+
+      {/* Reestr-uslubidagi statistika */}
+      <section className="grid grid-cols-2 overflow-hidden rounded-lg border border-border lg:grid-cols-4">
+        <div className="px-4 py-3.5">
+          <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+            {allLoaded ? uniqueStudentsCount.toLocaleString() : "…"}
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            Unikal talabalar
           </p>
         </div>
-        <Button onClick={refresh} variant="outline" size="sm">
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Yangilash
-        </Button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">
-              Jami javoblar
-            </CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">{totalCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">
-              Kampaniyalar
-            </CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">
-              {allLoaded ? campaignsCount : "…"}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">
-              Ishlamoqda
-            </CardTitle>
-            <Briefcase className="h-4 w-4 text-green-500 hidden sm:block" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">
-              {allLoaded ? employedCount : "…"}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">
-              Ishlamaydi
-            </CardTitle>
-            <XCircle className="h-4 w-4 text-yellow-500 hidden sm:block" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">
-              {allLoaded ? unemployedCount : "…"}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        <div className="border-l border-border px-4 py-3.5 max-lg:border-t">
+          <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-500">
+            {allLoaded ? employedCount.toLocaleString() : "…"}
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            Ishlamoqda
+          </p>
+        </div>
+        <div className="border-l border-border px-4 py-3.5 max-lg:border-t">
+          <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+            {allLoaded ? unemployedCount.toLocaleString() : "…"}
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            Ishlamaydi
+          </p>
+        </div>
+      </section>
 
       {/* Export section */}
       <Card>
@@ -419,7 +417,7 @@ export default function SurveysPage() {
         <CardContent>
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1 w-full sm:w-auto">
-              <label className="text-xs text-muted-foreground">
+              <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                 Vaqt oralig&apos;i
               </label>
               <Select
@@ -443,7 +441,9 @@ export default function SurveysPage() {
             {datePreset === "custom" && (
               <>
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Dan</label>
+                  <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Dan
+                  </label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -468,7 +468,9 @@ export default function SurveysPage() {
                   </Popover>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Gacha</label>
+                  <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Gacha
+                  </label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -502,11 +504,19 @@ export default function SurveysPage() {
               className="h-9 w-full sm:w-auto"
             >
               <Download className="mr-2 h-4 w-4" />
-              {exporting
-                ? "Yuklanmoqda..."
-                : !allLoaded
-                  ? "Yuklanmoqda..."
-                  : `Eksport (${exportSurveys.length})`}
+              {exporting ? (
+                "Yuklanmoqda..."
+              ) : !allLoaded ? (
+                "Yuklanmoqda..."
+              ) : (
+                <>
+                  Eksport (
+                  <span className="font-mono tabular-nums">
+                    {exportSurveys.length}
+                  </span>
+                  )
+                </>
+              )}
             </Button>
           </div>
         </CardContent>
@@ -517,7 +527,11 @@ export default function SurveysPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle className="text-base">So&apos;rovnomalar ro&apos;yxati</CardTitle>
-              <CardDescription className="text-xs">Jami: {totalCount} ta javob</CardDescription>
+              <CardDescription className="text-xs">
+                Jami:{" "}
+                <span className="font-mono tabular-nums">{totalCount}</span> ta
+                javob
+              </CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -570,9 +584,6 @@ export default function SurveysPage() {
                       <TableHead className="hidden xl:table-cell">
                         Yordam
                       </TableHead>
-                      <TableHead className="hidden md:table-cell">
-                        Kampaniya
-                      </TableHead>
                       <TableHead className="hidden xl:table-cell">
                         Takliflar
                       </TableHead>
@@ -611,14 +622,12 @@ export default function SurveysPage() {
                                 ? `${student.first_name} ${student.last_name}`
                                 : "-"}
                             </TableCell>
-                            <TableCell className="hidden xl:table-cell">
-                              <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                                {student?.student_external_id || "-"}
-                              </code>
+                            <TableCell className="hidden xl:table-cell font-mono text-xs tabular-nums text-muted-foreground">
+                              {student?.student_external_id || "-"}
                             </TableCell>
                             <TableCell className="whitespace-nowrap hidden lg:table-cell">
                               {student?.phone ? (
-                                <span className="flex items-center gap-1 text-xs">
+                                <span className="flex items-center gap-1 font-mono text-xs tabular-nums">
                                   <Phone className="h-3 w-3 text-muted-foreground" />
                                   {student.phone}
                                 </span>
@@ -644,7 +653,7 @@ export default function SurveysPage() {
                             <TableCell className="whitespace-nowrap text-xs hidden lg:table-cell">
                               {programName}
                             </TableCell>
-                            <TableCell className="hidden md:table-cell">
+                            <TableCell className="hidden md:table-cell font-mono text-xs tabular-nums">
                               {formatCourseYearLabel(survey.course_year)}
                             </TableCell>
                             <TableCell>
@@ -676,18 +685,13 @@ export default function SurveysPage() {
                                 "Yo'q"
                               )}
                             </TableCell>
-                            <TableCell className="hidden md:table-cell">
-                              <Badge variant="outline" className="text-xs">
-                                {survey.survey_campaign || "-"}
-                              </Badge>
-                            </TableCell>
                             <TableCell
                               className="max-w-50 truncate text-xs hidden xl:table-cell"
                               title={survey.suggestions || ""}
                             >
                               {survey.suggestions || "-"}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-xs">
+                            <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
                               {formatDate(
                                 survey.submitted_at || survey.created_at,
                               )}

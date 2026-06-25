@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { leadApi, Lead, LeadStatus, LEAD_STATUS_LABELS } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/page-header";
 
 const STATUS_BADGE: Record<LeadStatus, "default" | "secondary" | "destructive" | "outline"> = {
   created: "outline",
@@ -31,7 +32,7 @@ export default function LeadDetailPage() {
   const [studentId, setStudentId] = useState("");
   const [adding, setAdding] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await leadApi.get(id);
@@ -42,9 +43,9 @@ export default function LeadDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   const accessUrl = lead?.access_link
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/l/${lead.access_link.token}`
@@ -95,19 +96,24 @@ export default function LeadDetailPage() {
   const students = lead.lead_students ?? [];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/leads"><ArrowLeft className="h-4 w-4" /></Link>
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold">{lead.title}</h1>
-          <p className="text-sm text-muted-foreground">{lead.employer_name}</p>
-        </div>
-        <Badge variant={STATUS_BADGE[lead.status]}>
-          {LEAD_STATUS_LABELS[lead.status]}
-        </Badge>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-8">
+      <PageHeader
+        eyebrow="Boshqaruv / Leadlar"
+        title={lead.title}
+        description={lead.employer_name}
+        actions={
+          <>
+            <Badge variant={STATUS_BADGE[lead.status]} className="font-mono text-[11px] uppercase tracking-wider">
+              {LEAD_STATUS_LABELS[lead.status]}
+            </Badge>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/dashboard/leads">
+                <ArrowLeft className="mr-2 h-3.5 w-3.5" /> Orqaga
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
       {lead.notes && (
         <Card>
@@ -120,13 +126,15 @@ export default function LeadDetailPage() {
       {accessUrl && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Ish beruvchi havolasi</CardTitle>
+            <CardTitle className="text-base">Ish beruvchi havolasi</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <code className="flex-1 rounded bg-muted px-3 py-2 text-xs break-all">{accessUrl}</code>
+              <code className="flex-1 break-all rounded-md border border-border bg-muted px-3 py-2 font-mono text-xs">
+                {accessUrl}
+              </code>
               <Button variant="outline" size="icon" onClick={copyLink}>
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-4 w-4 text-accent-gold" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
           </CardContent>
@@ -134,10 +142,15 @@ export default function LeadDetailPage() {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base">Talabalar ({students.length})</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardTitle className="flex items-baseline gap-2 text-base">
+            Talabalar
+            <span className="font-mono text-sm font-semibold tabular-nums text-muted-foreground">
+              {students.length}
+            </span>
+          </CardTitle>
           <Button size="sm" onClick={() => setShowAdd(true)}>
-            <UserPlus className="mr-2 h-3.5 w-3.5" /> Qo'shish
+            <UserPlus className="mr-2 h-3.5 w-3.5" /> Qo&apos;shish
           </Button>
         </CardHeader>
         <CardContent className="p-0">
@@ -146,29 +159,29 @@ export default function LeadDetailPage() {
               <TableRow>
                 <TableHead>Student ID</TableHead>
                 <TableHead>Ismi</TableHead>
-                <TableHead>Qiziqish</TableHead>
-                <TableHead>Yo'naltirildi</TableHead>
+                <TableHead className="text-center">Qiziqish</TableHead>
+                <TableHead className="text-center">Yo&apos;naltirildi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {students.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                    Hali talaba qo'shilmagan
+                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                    Hali talaba qo&apos;shilmagan
                   </TableCell>
                 </TableRow>
               ) : (
                 students.map(s => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-mono text-sm">{s.student_external_id}</TableCell>
-                    <TableCell>{s.student_name || "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant={s.employer_interested ? "default" : "outline"} className="text-xs">
+                  <TableRow key={s.id} className="hover:bg-muted/40">
+                    <TableCell className="font-mono text-xs tabular-nums">{s.student_external_id}</TableCell>
+                    <TableCell className="text-sm">{s.student_name || "—"}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={s.employer_interested ? "default" : "outline"} className="text-[11px]">
                         {s.employer_interested ? "Ha" : "Yo'q"}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={s.forwarded ? "default" : "outline"} className="text-xs">
+                    <TableCell className="text-center">
+                      <Badge variant={s.forwarded ? "default" : "outline"} className="text-[11px]">
                         {s.forwarded ? "Ha" : "Yo'q"}
                       </Badge>
                     </TableCell>

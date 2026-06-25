@@ -62,30 +62,40 @@ export default function AccessLinkPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4">
-      <div className="w-full max-w-lg space-y-4">
-        <div className="flex items-center justify-center gap-2 py-4">
+      <div className="w-full max-w-lg space-y-5">
+        <div className="flex items-center justify-center gap-2.5 py-4">
           <Building2 className="h-6 w-6 text-primary" />
-          <span className="text-lg font-bold">TTPU Bandlik Markazi</span>
+          <span className="font-display text-lg font-semibold tracking-tight text-foreground">
+            TTPU Bandlik Markazi
+          </span>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>{data?.lead_title}</CardTitle>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Ish o&apos;rni taklifi
+            </p>
+            <CardTitle className="mt-1.5">{data?.lead_title}</CardTitle>
             <CardDescription>{data?.employer_name}</CardDescription>
+            <div className="relative mt-3 h-px w-full bg-border">
+              <span className="absolute left-0 top-0 h-px w-12 bg-accent-gold" />
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             {data?.students && data.students.length > 0 && (
               <div>
-                <p className="mb-3 text-sm font-medium">Nomzodlar ({data.students.length} ta):</p>
+                <p className="mb-3 font-mono text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Nomzodlar · <span className="tabular-nums">{data.students.length}</span> ta
+                </p>
                 <div className="space-y-2">
                   {data.students.map((s, i) => (
-                    <div key={i} className="rounded-md border bg-card px-3 py-3">
+                    <div key={i} className="rounded-md border border-border bg-card px-3 py-3 transition-colors hover:bg-muted/40">
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="text-sm font-medium">
                             {s.first_name} {s.last_name}
                           </p>
-                          <p className="text-xs text-muted-foreground">{s.student_external_id}</p>
+                          <p className="font-mono text-xs text-muted-foreground">{s.student_external_id}</p>
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {s.documents.map((doc, j) => (
@@ -102,9 +112,9 @@ export default function AccessLinkPage() {
             )}
 
             {submitted ? (
-              <div className="flex flex-col items-center gap-3 rounded-md bg-green-50 dark:bg-green-950/20 p-6">
-                <CheckCircle className="h-10 w-10 text-green-500" />
-                <p className="text-center font-medium text-green-700 dark:text-green-400">
+              <div className="flex flex-col items-center gap-3 rounded-md border border-emerald-600/20 bg-emerald-50 p-6 dark:bg-emerald-950/20">
+                <CheckCircle className="h-10 w-10 text-emerald-600 dark:text-emerald-500" />
+                <p className="text-center font-medium text-emerald-700 dark:text-emerald-400">
                   Javobingiz qabul qilindi!
                 </p>
                 <p className="text-center text-sm text-muted-foreground">
@@ -129,7 +139,7 @@ export default function AccessLinkPage() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs text-muted-foreground pb-4">
+        <p className="text-center font-mono text-[10px] uppercase tracking-wider text-muted-foreground pb-4">
           © TTPU Bandlik Markazi
         </p>
       </div>

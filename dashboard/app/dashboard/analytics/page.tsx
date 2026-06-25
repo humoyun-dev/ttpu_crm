@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Users, ArrowRight, BarChart3 } from "lucide-react";
+import { Users, ArrowUpRight, BarChart3 } from "lucide-react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
 
 const analyticsCategories = [
   {
@@ -16,63 +16,57 @@ const analyticsCategories = [
     description: "Talabalar so'rovnomasi va bandlik statistikasi",
     href: "/dashboard/analytics/surveys",
     icon: Users,
-    color: "text-pink-600 dark:text-pink-400",
-    bgColor: "bg-pink-50 dark:bg-pink-950",
   },
   {
     title: "Talabalar soni",
     description: "Umumiy talabalar soni va qamrov ko'rsatkichlari",
     href: "/dashboard/analytics/enrollments",
     icon: BarChart3,
-    color: "text-indigo-600 dark:text-indigo-400",
-    bgColor: "bg-indigo-50 dark:bg-indigo-950",
   },
 ];
 
 export default function AnalyticsPage() {
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center gap-3">
-        <BarChart3 className="h-8 w-8 text-primary" />
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Analitika</h2>
-          <p className="text-muted-foreground">
-            Statistika va tahlillar
-          </p>
-        </div>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Analitika"
+        title="Analitika"
+        description="Statistika va tahlillar bo'limlari reesti."
+      />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {analyticsCategories.map((category) => {
-          const Icon = category.icon;
-          return (
-            <Link key={category.href} href={category.href}>
-              <Card className="group cursor-pointer hover:shadow-lg transition-all duration-200 h-full">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div
-                      className={`p-3 rounded-lg ${category.bgColor} transition-transform group-hover:scale-110`}
-                    >
-                      <Icon className={`h-6 w-6 ${category.color}`} />
-                    </div>
-                    <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <CardTitle className="mt-4">{category.title}</CardTitle>
-                  <CardDescription>{category.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Batafsil ma&apos;lumot uchun bosing
+      {/* Institutional register: each section as a hairline-ruled row */}
+      <section className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="border-b border-border px-5 py-2.5">
+          <span className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Bo&apos;lim
+          </span>
+        </div>
+        <div>
+          {analyticsCategories.map((category) => {
+            const Icon = category.icon;
+            return (
+              <Link
+                key={category.href}
+                href={category.href}
+                className="group relative flex items-center gap-4 border-b border-border px-5 py-4 transition-colors last:border-b-0 hover:bg-muted/40"
+              >
+                <span className="absolute left-0 top-0 h-full w-0.5 bg-accent-gold opacity-0 transition-opacity group-hover:opacity-100" />
+                <Icon className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-display text-base font-medium leading-tight text-foreground">
+                    {category.title}
                   </p>
-                </CardContent>
-              </Card>
-            </Link>
-          );
-        })}
-      </div>
+                  <p className="text-xs text-muted-foreground">{category.description}</p>
+                </div>
+                <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/30 transition-colors group-hover:text-accent-gold" />
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>Analitika haqida</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -81,15 +75,15 @@ export default function AnalyticsPage() {
           </p>
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+              <span className="h-1.5 w-1.5 rounded-full bg-accent-gold" />
               Talabalar so&apos;rovnomasi va bandlik ma&apos;lumotlari
             </li>
             <li className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+              <span className="h-1.5 w-1.5 rounded-full bg-accent-gold" />
               Dasturlar bo&apos;yicha qamrov va ishtirok foizlari
             </li>
             <li className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+              <span className="h-1.5 w-1.5 rounded-full bg-accent-gold" />
               Kurs yillari bo&apos;yicha talabalar soni dinamikasi
             </li>
           </ul>

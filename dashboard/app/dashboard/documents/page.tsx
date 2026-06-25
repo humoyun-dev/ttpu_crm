@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Search, FileText, RefreshCw, CheckCircle, Flag } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader } from "@/components/page-header";
 
 const STATUS_BADGE: Record<DocumentStatus, "default" | "secondary" | "destructive" | "outline"> = {
   pending: "secondary",
@@ -57,16 +58,22 @@ export default function DocumentsPage() {
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Hujjatlar</h1>
-          <p className="text-sm text-muted-foreground">{documents.length} ta hujjat</p>
-        </div>
-        <Button variant="outline" size="icon" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Boshqaruv / Hujjatlar"
+        title="Hujjatlar"
+        description="Talabalar yuklagan hujjatlarni ko'rib chiqing va tasdiqlang."
+        actions={
+          <>
+            <span className="font-mono text-xs uppercase tracking-wide text-muted-foreground tabular-nums">
+              {documents.length} ta hujjat
+            </span>
+            <Button variant="outline" size="icon" onClick={load} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+          </>
+        }
+      />
 
       <Card>
         <CardHeader className="pb-3">
@@ -139,7 +146,7 @@ export default function DocumentsPage() {
                         {DOCUMENT_STATUS_LABELS[d.status]}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
+                    <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
                       {new Date(d.created_at).toLocaleDateString("uz-UZ")}
                     </TableCell>
                     <TableCell>

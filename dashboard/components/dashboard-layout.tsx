@@ -16,6 +16,7 @@ import {
   FileText,
   TrendingUp,
   LayoutDashboard,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -46,6 +47,7 @@ const NAV_SECTIONS = [
       { title: "So'rovnomalar", href: "/dashboard/surveys", icon: Users },
       { title: "Talabalar", href: "/dashboard/students", icon: GraduationCap },
       { title: "Ro'yxatga olish", href: "/dashboard/enrollments", icon: BookOpen },
+      { title: "Import", href: "/dashboard/import", icon: Upload },
     ],
   },
   {
@@ -86,35 +88,23 @@ function SidebarContent() {
   return (
     <div className="flex h-full flex-col">
       {/* Logo */}
-      <div
-        className="flex h-16 shrink-0 items-center gap-3 px-5"
-        style={{ borderBottom: "1px solid var(--sidebar-border)" }}
-      >
-        <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base font-black"
-          style={{ backgroundColor: "var(--sidebar-primary)", color: "white" }}
-        >
+      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border px-5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sidebar-primary font-display text-base font-bold text-white">
           T
         </div>
         <div className="leading-tight">
-          <p className="text-sm font-bold" style={{ color: "white" }}>TTPU</p>
-          <p
-            className="text-[10px] tracking-wide"
-            style={{ color: "var(--sidebar-foreground)", opacity: 0.5 }}
-          >
+          <p className="font-display text-sm font-semibold text-white">TTPU</p>
+          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-sidebar-foreground/50">
             Bandlik Markazi
           </p>
         </div>
       </div>
 
       {/* Nav sections */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
         {NAV_SECTIONS.map((section) => (
           <div key={section.label}>
-            <p
-              className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-widest"
-              style={{ color: "var(--sidebar-foreground)", opacity: 0.35 }}
-            >
+            <p className="mb-1.5 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/40">
               {section.label}
             </p>
             <div className="space-y-0.5">
@@ -128,37 +118,15 @@ function SidebarContent() {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-                    )}
-                    style={
+                      "group relative flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                       isActive
-                        ? {
-                            backgroundColor: "var(--sidebar-primary)",
-                            color: "var(--sidebar-primary-foreground)",
-                            fontWeight: 600,
-                          }
-                        : {
-                            color: "var(--sidebar-foreground)",
-                            opacity: 0.8,
-                          }
-                    }
-                    onMouseEnter={(e) => {
-                      if (!isActive) {
-                        const el = e.currentTarget as HTMLAnchorElement;
-                        el.style.backgroundColor = "var(--sidebar-accent)";
-                        el.style.color = "var(--sidebar-accent-foreground)";
-                        el.style.opacity = "1";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) {
-                        const el = e.currentTarget as HTMLAnchorElement;
-                        el.style.backgroundColor = "transparent";
-                        el.style.color = "var(--sidebar-foreground)";
-                        el.style.opacity = "0.8";
-                      }
-                    }}
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
                   >
+                    {isActive && (
+                      <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-accent-gold" />
+                    )}
                     <Icon className="h-4 w-4 shrink-0" />
                     <span className="truncate">{item.title}</span>
                   </Link>
@@ -170,41 +138,20 @@ function SidebarContent() {
       </nav>
 
       {/* User */}
-      <div
-        className="shrink-0 p-3"
-        style={{ borderTop: "1px solid var(--sidebar-border)" }}
-      >
+      <div className="shrink-0 border-t border-sidebar-border p-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
-              className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors"
-              style={{ color: "var(--sidebar-foreground)" }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "var(--sidebar-accent)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent";
-              }}
-            >
+            <button className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sidebar-foreground transition-colors hover:bg-sidebar-accent">
               <Avatar className="h-7 w-7 shrink-0">
-                <AvatarFallback
-                  className="text-xs font-bold"
-                  style={{
-                    backgroundColor: "oklch(0.76 0.165 76 / 25%)",
-                    color: "oklch(0.76 0.165 76)",
-                  }}
-                >
+                <AvatarFallback className="bg-accent-gold/20 font-mono text-xs font-semibold text-accent-gold">
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium leading-none" style={{ color: "white" }}>
+                <p className="truncate text-sm font-medium leading-none text-white">
                   {user?.email || "User"}
                 </p>
-                <p
-                  className="mt-0.5 text-xs capitalize"
-                  style={{ color: "var(--sidebar-foreground)", opacity: 0.5 }}
-                >
+                <p className="mt-0.5 font-mono text-[11px] uppercase tracking-wide text-sidebar-foreground/50">
                   {user?.role || "viewer"}
                 </p>
               </div>
@@ -269,16 +216,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </SheetTrigger>
           </Sheet>
           <div className="flex items-center gap-2 lg:hidden">
-            <span className="text-sm font-bold text-primary">TTPU</span>
-            <span className="text-sm text-muted-foreground">Bandlik Markazi</span>
+            <span className="font-display text-sm font-semibold text-primary">TTPU</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              Bandlik Markazi
+            </span>
           </div>
           <div className="ml-auto">
             <ThemeToggle />
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
-          {children}
+        <main className="flex-1 overflow-y-auto bg-background">
+          <div className="mx-auto w-full max-w-6xl p-4 md:p-6 lg:p-8">
+            {children}
+          </div>
         </main>
       </div>
     </div>

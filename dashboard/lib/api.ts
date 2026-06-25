@@ -75,18 +75,6 @@ export interface CatalogItem {
 
 export const CATALOG_TYPES_INFO: CatalogTypeInfo[] = [
   {
-    value: "program",
-    label: "Dasturlar",
-    description: "Ta'lim dasturlari",
-    requiresMetadata: true,
-    metadataFields: {
-      level: { required: true, type: "string" },
-      track: { required: true, type: "string" },
-      language: { required: true, type: "string" },
-      duration_years: { required: true, type: "number" },
-    },
-  },
-  {
     value: "direction",
     label: "Yo'nalishlar",
     description: "Ta'lim yo'nalishlari",
@@ -96,24 +84,6 @@ export const CATALOG_TYPES_INFO: CatalogTypeInfo[] = [
     value: "region",
     label: "Hududlar",
     description: "Viloyatlar va shaharlar",
-    requiresMetadata: false,
-  },
-  {
-    value: "track",
-    label: "Tarmoqlar",
-    description: "Yo'nalish tarmoqlari",
-    requiresMetadata: false,
-  },
-  {
-    value: "subject",
-    label: "Fanlar",
-    description: "O'quv fanlari",
-    requiresMetadata: false,
-  },
-  {
-    value: "other",
-    label: "Boshqa",
-    description: "Boshqa katalog elementlari",
     requiresMetadata: false,
   },
 ];
@@ -151,6 +121,16 @@ export interface Bot2SurveyResponse {
   updated_at: string;
 }
 
+export interface Bot2Document {
+  id: string;
+  doc_type: "cv" | "certificate";
+  original_filename: string;
+  mime_type: string;
+  file_size: number | null;
+  file_url: string;
+  created_at: string;
+}
+
 export interface Bot2Student {
   id: string;
   student_external_id: string;
@@ -171,10 +151,12 @@ export interface Bot2Student {
 export interface StudentRoster {
   id: string;
   student_external_id: string;
+  first_name: string;
+  last_name: string;
   roster_campaign: string;
-  program: string;
+  program: string | null;
   program_details?: CatalogItemNested;
-  course_year: number;
+  course_year: number | null;
   is_active: boolean;
   birth_date: string | null;
   metadata: Record<string, unknown>;
@@ -188,6 +170,7 @@ export interface ProgramEnrollment {
   program_details?: {
     id: string;
     name: string;
+    name_uz?: string;
     code: string | null;
   };
   course_year: number;
@@ -203,7 +186,7 @@ export interface ProgramEnrollment {
 }
 
 // Helper to get token
-function getToken(): string | null {
+export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("access_token");
 }
@@ -285,8 +268,12 @@ async function apiFetch<T>(
   retryOnAuthFailure = true,
 ): Promise<ApiResponse<T>> {
   const token = getToken();
+  // For FormData bodies, let the browser set Content-Type (with the multipart
+  // boundary). Setting it manually would break the multipart request.
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: HeadersInit = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
@@ -427,11 +414,10 @@ export const catalogApi = {
       name_ru?: string;
       name_en?: string;
       code?: string;
-      description?: string;
       meta?: Record<string, unknown>;
     },
   ) => {
-    const { meta, description, ...rest } = data;
+    const { meta, ...rest } = data;
     return apiFetch<CatalogItem>("/api/v1/catalog/items/", {
       method: "POST",
       body: JSON.stringify({ type, ...rest, metadata: meta }),
@@ -447,11 +433,10 @@ export const catalogApi = {
       name_ru?: string;
       name_en?: string;
       code?: string;
-      description?: string;
       meta?: Record<string, unknown>;
     },
   ) => {
-    const { meta, description, ...rest } = data;
+    const { meta, ...rest } = data;
     return apiFetch<CatalogItem>(`/api/v1/catalog/items/${id}/`, {
       method: "PATCH",
       body: JSON.stringify({ ...rest, metadata: meta }),
@@ -462,6 +447,35 @@ export const catalogApi = {
     apiFetch<void>(`/api/v1/catalog/items/${id}/`, {
       method: "DELETE",
     }),
+};
+
+// Roster import
+export interface RosterImportedStudent {
+  row: number;
+  student_external_id: string;
+  first_name: string;
+  last_name: string;
+  course_year: number | null;
+  program: string | null;
+  status: "created" | "updated";
+}
+
+export interface RosterImportResult {
+  created: number;
+  updated: number;
+  errors: { row: number; error: string }[];
+  students: RosterImportedStudent[];
+}
+
+export const rosterApi = {
+  import: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return apiFetch<RosterImportResult>("/api/v1/admin/roster/import", {
+      method: "POST",
+      body: form,
+    });
+  },
 };
 
 // Bot2 API
@@ -544,6 +558,14 @@ export const bot2Api = {
     apiFetch<void>(`/api/v1/bot2/enrollments/${id}/`, {
       method: "DELETE",
     }),
+
+  listDocuments: (params?: Record<string, string>) => {
+    const query = params ? `?${new URLSearchParams(params)}` : "";
+    return apiFetch<PaginatedResponse<Bot2Document>>(`/api/v1/bot2/documents/${query}`);
+  },
+
+  documentDownloadUrl: (docId: string) =>
+    `${API_BASE}/api/v1/bot2/documents/${docId}/download/`,
 };
 
 // Analytics API

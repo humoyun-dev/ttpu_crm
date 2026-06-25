@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/page-header";
 
 const STATUS_BADGE: Record<LeadStatus, "default" | "secondary" | "destructive" | "outline"> = {
   created: "outline",
@@ -83,25 +84,29 @@ export default function LeadsPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Leadlar</h1>
-          <p className="text-sm text-muted-foreground">{leads.length} ta lead</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Yangi lead
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Boshqaruv / Leadlar"
+        title="Leadlar"
+        description="Ish takliflari va ularning talabalarga yuborilish holati."
+        actions={
+          <>
+            <span className="mr-1 hidden font-mono text-xs uppercase tracking-wide text-muted-foreground sm:inline">
+              {leads.length} ta lead
+            </span>
+            <Button variant="outline" size="icon" onClick={load} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Yangi lead
+            </Button>
+          </>
+        }
+      />
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 border-b border-border pb-3">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Lead yoki kompaniya bo'yicha qidirish..."
@@ -118,9 +123,9 @@ export default function LeadsPage() {
                 <TableHead>Sarlavha</TableHead>
                 <TableHead>Kompaniya</TableHead>
                 <TableHead>Holat</TableHead>
-                <TableHead>Talabalar</TableHead>
+                <TableHead className="text-center">Talabalar</TableHead>
                 <TableHead>Sana</TableHead>
-                <TableHead></TableHead>
+                <TableHead className="text-right"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -137,7 +142,7 @@ export default function LeadsPage() {
                 </TableRow>
               ) : (
                 filtered.map(l => (
-                  <TableRow key={l.id}>
+                  <TableRow key={l.id} className="transition-colors hover:bg-muted/40">
                     <TableCell className="font-medium">{l.title}</TableCell>
                     <TableCell className="text-muted-foreground">{l.employer_name}</TableCell>
                     <TableCell>
@@ -145,12 +150,14 @@ export default function LeadsPage() {
                         {LEAD_STATUS_LABELS[l.status]}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{l.lead_students?.length ?? 0}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
+                    <TableCell className="text-center font-mono tabular-nums text-muted-foreground">
+                      {l.lead_students?.length ?? 0}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
                       {new Date(l.created_at).toLocaleDateString("uz-UZ")}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="sm" asChild>
                           <Link href={`/dashboard/leads/${l.id}`}>
                             <ExternalLink className="h-3.5 w-3.5" />

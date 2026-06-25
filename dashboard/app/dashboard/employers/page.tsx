@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader } from "@/components/page-header";
 
 const MOU_BADGE: Record<MouStatus, "default" | "secondary" | "destructive"> = {
   negotiating: "secondary",
@@ -66,21 +67,22 @@ export default function EmployersPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Ish beruvchilar</h1>
-          <p className="text-sm text-muted-foreground">{employers.length} ta kompaniya</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Qo'shish
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Boshqaruv / Ish beruvchilar"
+        title="Ish beruvchilar"
+        description={`Hamkor kompaniyalar reesti — ${employers.length} ta tashkilot.`}
+        actions={
+          <>
+            <Button variant="outline" size="icon" onClick={load} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Qo&apos;shish
+            </Button>
+          </>
+        }
+      />
 
       <Card>
         <CardHeader className="pb-3">
@@ -120,14 +122,19 @@ export default function EmployersPage() {
                 </TableRow>
               ) : (
                 filtered.map(e => (
-                  <TableRow key={e.id}>
-                    <TableCell className="font-medium">{e.name}</TableCell>
+                  <TableRow key={e.id} className="group hover:bg-muted/40">
+                    <TableCell className="font-medium">
+                      <span className="relative">
+                        <span className="absolute -left-4 top-1/2 hidden h-4 w-0.5 -translate-y-1/2 bg-accent-gold group-hover:block" />
+                        {e.name}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{e.industry_name || "—"}</TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        {e.contact_email && <div>{e.contact_email}</div>}
-                        {e.contact_phone && <div className="text-muted-foreground">{e.contact_phone}</div>}
-                        {!e.contact_email && !e.contact_phone && "—"}
+                        {e.contact_email && <div className="font-mono text-xs">{e.contact_email}</div>}
+                        {e.contact_phone && <div className="font-mono text-xs text-muted-foreground tabular-nums">{e.contact_phone}</div>}
+                        {!e.contact_email && !e.contact_phone && <span className="text-muted-foreground">—</span>}
                       </div>
                     </TableCell>
                     <TableCell>

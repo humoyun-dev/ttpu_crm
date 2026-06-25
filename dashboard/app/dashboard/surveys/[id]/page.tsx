@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, User, GraduationCap, Clock, CheckCircle, FileText,
   Phone, MapPin, MessageSquare, Pencil, Save, X, Briefcase,
-  Send, Languages, Calendar, Hash,
+  Send, Languages, Calendar, Hash, Download, File,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,12 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { PageLoading } from "@/components/loading";
 import { ErrorDisplay } from "@/components/error-display";
-import { Separator } from "@/components/ui/separator";
+import { PageHeader } from "@/components/page-header";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  bot2Api, catalogApi, Bot2SurveyResponse, Bot2Student, CatalogItem, formatDate,
+  bot2Api, catalogApi, Bot2SurveyResponse, Bot2Student, Bot2Document, CatalogItem, formatDate,
 } from "@/lib/api";
 import { formatUzPhone } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -66,6 +66,7 @@ export default function SurveyDetailPage() {
 
   const [survey, setSurvey] = useState<Bot2SurveyResponse | null>(null);
   const [student, setStudent] = useState<Bot2Student | null>(null);
+  const [documents, setDocuments] = useState<Bot2Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(isAdmin && searchParams.get("edit") === "true");
@@ -86,12 +87,19 @@ export default function SurveyDetailPage() {
       if (!surveyRes.data) throw new Error("So'rovnoma topilmadi");
       setSurvey(surveyRes.data);
       populateSurveyForm(surveyRes.data);
+      let resolvedStudent: Bot2Student | null = null;
       if (surveyRes.data.student_details) {
-        setStudent(surveyRes.data.student_details);
-        populateStudentForm(surveyRes.data.student_details);
+        resolvedStudent = surveyRes.data.student_details;
+        setStudent(resolvedStudent);
+        populateStudentForm(resolvedStudent);
       } else if (surveyRes.data.student) {
         const studentRes = await bot2Api.getStudent(surveyRes.data.student);
-        if (studentRes.data) { setStudent(studentRes.data); populateStudentForm(studentRes.data); }
+        if (studentRes.data) { resolvedStudent = studentRes.data; setStudent(resolvedStudent); populateStudentForm(resolvedStudent); }
+      }
+      // Load documents for this student
+      if (resolvedStudent) {
+        const docsRes = await bot2Api.listDocuments({ student: resolvedStudent.id });
+        if (docsRes.data?.results) setDocuments(docsRes.data.results);
       }
       const regionsRes = await catalogApi.list("region");
       if (regionsRes.data?.results) setRegions(regionsRes.data.results);
@@ -150,9 +158,13 @@ export default function SurveyDetailPage() {
 
   const englishLevel = answers.english_level as string;
   const russianLevel = answers.russian_level as string;
-  const otherAnswers = Object.entries(answers).filter(([k]) => !["english_level", "russian_level", "region_label", "program_label", "course_year"].includes(k));
+  const otherAnswers = Object.entries(answers).filter(([k]) => !["english_level", "russian_level", "region_label", "program_label", "course_year", "cv_doc_id", "cert_doc_id", "known_langs"].includes(k));
 
   const isEmployed = survey.employment_status === "employed";
+
+  const studentFullName = student
+    ? [student.first_name, student.last_name].filter(Boolean).join(" ").trim()
+    : "";
 
   const RATING_KEYS = new Set(["dormitory","transport","food","library","sports","wifi","cleanliness","security","teachers","materials","schedule","facilities"]);
   const isRating = (key: string, value: string | number) => {
@@ -164,8 +176,8 @@ export default function SurveyDetailPage() {
     if (isNaN(num)) return <span>{String(value)}</span>;
     return (
       <div className="flex items-center gap-0.5">
-        {[1,2,3,4,5].map(s => <span key={s} className={num >= s ? "text-yellow-400" : "text-muted-foreground/30"}>★</span>)}
-        <span className="ml-1 text-xs text-muted-foreground">({num}/5)</span>
+        {[1,2,3,4,5].map(s => <span key={s} className={num >= s ? "text-accent-gold" : "text-muted-foreground/30"}>★</span>)}
+        <span className="ml-1 font-mono text-xs tabular-nums text-muted-foreground">({num}/5)</span>
       </div>
     );
   };
@@ -174,44 +186,45 @@ export default function SurveyDetailPage() {
     <div className="space-y-5 max-w-5xl mx-auto">
 
       {/* ── Header ── */}
-      <div className="flex items-start gap-3">
-        <Button variant="ghost" size="icon" className="mt-0.5 shrink-0" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-bold truncate">
-            {student ? `${student.first_name} ${student.last_name}` : "So'rovnoma"}
-          </h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Hash className="h-3 w-3" />{String(survey.id).slice(0, 8)}
-            </span>
-            <Badge variant="outline" className="text-xs">{survey.survey_campaign || "default"}</Badge>
-            {survey.submitted_at && (
-              <span className="flex items-center gap-1">
-                <Send className="h-3 w-3" />
-                {formatDate(survey.submitted_at, true)}
-              </span>
-            )}
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="flex shrink-0 gap-2">
-            {editing ? (
-              <>
-                <Button variant="outline" size="sm" onClick={() => { if (survey) populateSurveyForm(survey); if (student) populateStudentForm(student); setEditing(false); }} disabled={saving}>
-                  <X className="mr-1 h-3.5 w-3.5" />Bekor
+      <PageHeader
+        eyebrow="TALABALAR / SO'ROVNOMALAR"
+        title={student ? studentFullName || "—" : "So'rovnoma"}
+        description="Talaba so'rovnomasi javoblari va profili."
+        actions={
+          <>
+            {isAdmin && (
+              editing ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => { if (survey) populateSurveyForm(survey); if (student) populateStudentForm(student); setEditing(false); }} disabled={saving}>
+                    <X className="mr-1 h-3.5 w-3.5" />Bekor
+                  </Button>
+                  <Button size="sm" onClick={handleSave} disabled={saving}>
+                    <Save className="mr-1 h-3.5 w-3.5" />{saving ? "Saqlanmoqda..." : "Saqlash"}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  <Pencil className="mr-1 h-3.5 w-3.5" />Tahrirlash
                 </Button>
-                <Button size="sm" onClick={handleSave} disabled={saving}>
-                  <Save className="mr-1 h-3.5 w-3.5" />{saving ? "Saqlanmoqda..." : "Saqlash"}
-                </Button>
-              </>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                <Pencil className="mr-1 h-3.5 w-3.5" />Tahrirlash
-              </Button>
+              )
             )}
-          </div>
+            <Button variant="ghost" size="sm" onClick={() => router.back()}>
+              <ArrowLeft className="mr-1 h-4 w-4" />Orqaga
+            </Button>
+          </>
+        }
+      />
+
+      {/* ── So'rovnoma metama'lumotlari ── */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1 font-mono tabular-nums">
+          <Hash className="h-3 w-3" />{String(survey.id).slice(0, 8)}
+        </span>
+        {survey.submitted_at && (
+          <span className="flex items-center gap-1 font-mono tabular-nums">
+            <Send className="h-3 w-3" />
+            {formatDate(survey.submitted_at, true)}
+          </span>
         )}
       </div>
 
@@ -221,7 +234,7 @@ export default function SurveyDetailPage() {
         {/* Talaba ma'lumotlari */}
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
               <User className="h-4 w-4" />Talaba
             </CardTitle>
           </CardHeader>
@@ -255,17 +268,17 @@ export default function SurveyDetailPage() {
             ) : (
               <div className="divide-y">
                 <Row label="To'liq ism">
-                  <span className="font-semibold">{student?.first_name} {student?.last_name}</span>
+                  <span className="font-semibold">{studentFullName || "—"}</span>
                 </Row>
                 <Row label="Jins">
                   {student?.gender === "male" ? "👨 Erkak" : student?.gender === "female" ? "👩 Ayol" : "—"}
                 </Row>
                 <Row icon={Hash} label="Student ID">
-                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{student?.student_external_id || "—"}</code>
+                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums">{student?.student_external_id || "—"}</code>
                 </Row>
                 {student?.phone && (
                   <Row icon={Phone} label="Telefon">
-                    <a href={`tel:${student.phone}`} className="text-primary hover:underline">{formatUzPhone(student.phone)}</a>
+                    <a href={`tel:${student.phone}`} className="font-mono tabular-nums text-primary hover:underline">{formatUzPhone(student.phone)}</a>
                   </Row>
                 )}
                 {regionName && (
@@ -278,7 +291,7 @@ export default function SurveyDetailPage() {
                 )}
                 {student?.telegram_user_id && (
                   <Row label="Telegram ID">
-                    <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{student.telegram_user_id}</code>
+                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums">{student.telegram_user_id}</code>
                   </Row>
                 )}
               </div>
@@ -289,7 +302,7 @@ export default function SurveyDetailPage() {
         {/* Ta'lim va ish */}
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
               <GraduationCap className="h-4 w-4" />Ta&apos;lim va ish
             </CardTitle>
           </CardHeader>
@@ -319,15 +332,11 @@ export default function SurveyDetailPage() {
                 </div>
                 <EditField label="Kompaniya" value={editSurvey.employment_company} onChange={(v) => setEditSurvey(p => ({ ...p, employment_company: v }))} />
                 <EditField label="Lavozim" value={editSurvey.employment_role} onChange={(v) => setEditSurvey(p => ({ ...p, employment_role: v }))} />
-                <EditField label="Kampaniya" value={editSurvey.survey_campaign} onChange={(v) => setEditSurvey(p => ({ ...p, survey_campaign: v }))} />
               </div>
             ) : (
               <div className="divide-y">
                 {programName && <Row icon={GraduationCap} label="Yo'nalish">{programName}</Row>}
                 <Row label="Kurs">{courseYearLabel(survey.course_year)}</Row>
-                <Row label="Kampaniya">
-                  <Badge variant="secondary" className="text-xs">{survey.survey_campaign || "default"}</Badge>
-                </Row>
                 <Row icon={Briefcase} label="Ishlaysizmi?">
                   <Badge variant={isEmployed ? "default" : "secondary"} className={isEmployed ? "bg-green-600 text-white text-xs" : "text-xs"}>
                     {EMPLOYMENT_LABELS[survey.employment_status] || survey.employment_status || "—"}
@@ -337,15 +346,15 @@ export default function SurveyDetailPage() {
                 {survey.employment_role && <Row label="Lavozim">{survey.employment_role}</Row>}
                 <div className="pt-3 space-y-1.5">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Calendar className="h-3 w-3" />Yaratilgan: {formatDate(survey.created_at)}
+                    <Calendar className="h-3 w-3" />Yaratilgan: <span className="font-mono tabular-nums">{formatDate(survey.created_at)}</span>
                   </div>
                   {survey.submitted_at && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Send className="h-3 w-3" />Yuborilgan: {formatDate(survey.submitted_at, true)}
+                      <Send className="h-3 w-3" />Yuborilgan: <span className="font-mono tabular-nums">{formatDate(survey.submitted_at, true)}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />Yangilangan: {formatDate(survey.updated_at)}
+                    <Clock className="h-3 w-3" />Yangilangan: <span className="font-mono tabular-nums">{formatDate(survey.updated_at)}</span>
                   </div>
                 </div>
               </div>
@@ -360,7 +369,7 @@ export default function SurveyDetailPage() {
         {/* Til darajalari */}
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
               <Languages className="h-4 w-4" />Til darajalari
             </CardTitle>
           </CardHeader>
@@ -370,13 +379,13 @@ export default function SurveyDetailPage() {
                 {englishLevel && (
                   <div className="flex items-center justify-between py-3">
                     <span className="flex items-center gap-2 text-sm">🇬🇧 Ingliz tili</span>
-                    <Badge variant="outline" className="font-mono text-sm font-semibold">{englishLevel}</Badge>
+                    <Badge variant="outline" className="font-mono text-sm font-semibold tabular-nums">{englishLevel}</Badge>
                   </div>
                 )}
                 {russianLevel && (
                   <div className="flex items-center justify-between py-3">
                     <span className="flex items-center gap-2 text-sm">🇷🇺 Rus tili</span>
-                    <Badge variant="outline" className="font-mono text-sm font-semibold">{russianLevel}</Badge>
+                    <Badge variant="outline" className="font-mono text-sm font-semibold tabular-nums">{russianLevel}</Badge>
                   </div>
                 )}
               </div>
@@ -389,7 +398,7 @@ export default function SurveyDetailPage() {
         {/* Roziliklar */}
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
               <CheckCircle className="h-4 w-4" />Roziliklar
             </CardTitle>
           </CardHeader>
@@ -448,11 +457,51 @@ export default function SurveyDetailPage() {
         </CardContent>
       </Card>
 
+      {/* ── Hujjatlar (CV va Sertifikat) ── */}
+      {documents.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <File className="h-4 w-4" />Hujjatlar
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {documents.map((doc) => {
+                const label = doc.doc_type === "cv" ? "📄 CV / Rezyume" : "📜 Til sertifikati";
+                const downloadUrl = bot2Api.documentDownloadUrl(doc.id);
+                const sizeKb = doc.file_size ? Math.round(doc.file_size / 1024) : null;
+                return (
+                  <a
+                    key={doc.id}
+                    href={downloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 rounded-lg border bg-muted/20 p-3 hover:bg-muted/40 transition-colors group"
+                  >
+                    <FileText className="h-8 w-8 shrink-0 text-primary/70" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{label}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {doc.original_filename || "hujjat"}
+                        {sizeKb ? ` · ${sizeKb} KB` : ""}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{formatDate(doc.created_at)}</p>
+                    </div>
+                    <Download className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </a>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── So'rovnoma javoblari (qo'shimcha) ── */}
       {(otherAnswers.length > 0 || editing) && (
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
               <FileText className="h-4 w-4" />So&apos;rovnoma javoblari
             </CardTitle>
           </CardHeader>
@@ -473,8 +522,8 @@ export default function SurveyDetailPage() {
                 {otherAnswers.map(([key, value]) => {
                   if (value === null || value === undefined || value === "") return null;
                   return (
-                    <div key={key} className="rounded-lg border bg-muted/20 p-3">
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <div key={key} className="rounded-md border border-border bg-muted/20 p-3">
+                      <p className="mb-2 font-mono text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                         {LABEL_TRANSLATIONS[key] || key.replace(/_/g, " ")}
                       </p>
                       {isRating(key, value as string | number) ? renderRating(value as string | number) : (

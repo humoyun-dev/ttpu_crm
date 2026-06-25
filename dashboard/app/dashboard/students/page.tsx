@@ -1,13 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -26,7 +20,8 @@ import { formatCourseYearLabel } from "@/lib/utils";
 import { bot2Api, StudentRoster } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSearch } from "@/lib/hooks/use-search";
-import { Plus, Pencil, Trash2, Users, Search, RefreshCw } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { Plus, Pencil, Trash2, Search, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -39,13 +34,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
@@ -115,53 +103,42 @@ export default function StudentsPage() {
   };
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Talabalar</h1>
-          <p className="text-sm text-muted-foreground">
-            Jami {totalCount} ta talaba ro&apos;yxatga olingan
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={reload}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Yangilash
-          </Button>
-          {isAdmin && (
-            <Button size="sm" onClick={() => router.push("/dashboard/students/new")}>
-              <Plus className="mr-2 h-4 w-4" />
-              Qo&apos;shish
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Talabalar"
+        title="Talabalar"
+        description="Ro'yxatga olingan talabalar reesti."
+        actions={
+          <>
+            <span className="hidden font-mono text-xs uppercase tracking-wide text-muted-foreground sm:inline">
+              Jami <span className="tabular-nums text-foreground">{totalCount.toLocaleString()}</span>
+            </span>
+            <Button variant="outline" size="sm" onClick={reload}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Yangilash
             </Button>
-          )}
-        </div>
+            {isAdmin && (
+              <Button size="sm" onClick={() => router.push("/dashboard/students/new")}>
+                <Plus className="mr-2 h-4 w-4" />
+                Qo&apos;shish
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      {/* Qidiruv */}
+      <div className="relative w-full sm:max-w-xs">
+        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          placeholder="ID bo'yicha qidirish..."
+          value={searchTerm}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          className="h-9 pl-8 text-sm"
+        />
       </div>
 
       <Card className="overflow-hidden">
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Users className="h-4 w-4" />
-                Talabalar ro&apos;yxati
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Barcha ro&apos;yxatga olingan talabalar
-              </CardDescription>
-            </div>
-            <div className="relative w-full sm:w-60">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="ID bo'yicha qidirish..."
-                value={searchTerm}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                className="h-9 pl-8 text-sm"
-              />
-            </div>
-          </div>
-        </CardHeader>
-
         <CardContent className="p-0">
           {loading ? (
             <div className="p-6"><TableLoading /></div>
@@ -172,42 +149,41 @@ export default function StudentsPage() {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/30 hover:bg-muted/30">
-                      <TableHead className="pl-4 text-xs">Student ID</TableHead>
-                      <TableHead className="text-xs">Yo&apos;nalish</TableHead>
-                      <TableHead className="text-center text-xs">Kurs</TableHead>
-                      <TableHead className="text-center text-xs">Kampaniya</TableHead>
-                      <TableHead className="text-center text-xs">Holat</TableHead>
-                      {isAdmin && <TableHead className="w-16 text-xs" />}
+                    <TableRow>
+                      <TableHead className="pl-4">Student ID</TableHead>
+                      <TableHead>Ism Familya</TableHead>
+                      <TableHead>Yo&apos;nalish</TableHead>
+                      <TableHead className="text-center">Kurs</TableHead>
+                      <TableHead className="text-center">Holat</TableHead>
+                      {isAdmin && <TableHead className="w-16" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rosters.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="py-16 text-center text-muted-foreground">
+                        <TableCell colSpan={6} className="py-16 text-center text-sm text-muted-foreground">
                           Ma&apos;lumot topilmadi
                         </TableCell>
                       </TableRow>
                     ) : (
                       rosters.map((roster) => (
-                        <TableRow key={roster.id}>
-                          <TableCell className="pl-4 font-mono text-sm font-medium">
+                        <TableRow key={roster.id} className="group">
+                          <TableCell className="pl-4 font-mono text-sm font-medium tabular-nums">
                             {roster.student_external_id}
                           </TableCell>
-                          <TableCell className="max-w-[200px] truncate text-sm">
+                          <TableCell className="text-sm">
+                            {roster.first_name || roster.last_name
+                              ? `${roster.first_name} ${roster.last_name}`.trim()
+                              : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="max-w-[180px] truncate text-sm">
                             {roster.program_details?.name_uz ||
                               roster.program_details?.name ||
-                              roster.program}
+                              roster.program ||
+                              <span className="text-muted-foreground text-xs">Belgilanmagan</span>}
                           </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline" className="text-xs">
-                              {formatCourseYearLabel(roster.course_year)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="secondary" className="text-xs">
-                              {roster.roster_campaign}
-                            </Badge>
+                          <TableCell className="text-center font-mono text-xs tabular-nums text-muted-foreground">
+                            {formatCourseYearLabel(roster.course_year)}
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   Card,
@@ -22,6 +22,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { bot2Api, catalogApi, CatalogItem } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { PageHeader } from "@/components/page-header";
 import { ArrowLeft, Save, CalendarIcon, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -49,10 +50,14 @@ function DatePickerField({
   const [text, setText] = useState(value ? isoToDisplay(value) : "");
   const [open, setOpen] = useState(false);
 
-  // Keep text in sync when value changes externally (load)
-  useEffect(() => {
+  // Keep text in sync when value changes externally (e.g. record load) without a
+  // setState-in-effect: store the previously seen value in state and reconcile
+  // during render (React's "adjusting state on prop change" pattern).
+  const [prevValue, setPrevValue] = useState(value);
+  if (prevValue !== value) {
+    setPrevValue(value);
     setText(value ? isoToDisplay(value) : "");
-  }, [value]);
+  }
 
   const handleTextChange = (raw: string) => {
     setText(raw);
@@ -64,7 +69,9 @@ function DatePickerField({
 
   const handleCalendarSelect = (date: Date | undefined) => {
     if (!date) return;
-    const iso = date.toISOString().slice(0, 10);
+    // Build a LOCAL YYYY-MM-DD (avoid toISOString() which is UTC and shifts the
+    // day backwards in positive-offset timezones such as UTC+5).
+    const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     onChange(iso);
     setText(isoToDisplay(iso));
     setOpen(false);
@@ -109,7 +116,7 @@ function DatePickerField({
       </div>
 
       {open && (
-        <div className="rounded-xl border bg-card shadow-md w-fit">
+        <div className="rounded-lg border border-border bg-card shadow-sm w-fit">
           <Calendar
             mode="single"
             selected={selectedDate}
@@ -146,25 +153,21 @@ export default function StudentFormPage() {
     birth_date: "",
   });
 
-  useEffect(() => {
-    loadPrograms();
-    if (!isNew) {
-      loadRoster();
-    }
-  }, [id]);
-
-  const loadPrograms = async () => {
+  const loadPrograms = useCallback(async () => {
     try {
-      const response = await catalogApi.list("program");
+      // Roster "yo'nalish" references catalog items of type `direction` (what the bot
+      // uses), NOT `program`. Loading `program` here left the selected value unmatched
+      // so the dropdown rendered empty even when a direction was set.
+      const response = await catalogApi.list("direction");
       if (response.data) {
         setPrograms(response.data.results);
       }
     } catch (error) {
       console.error("Error loading programs:", error);
     }
-  };
+  }, []);
 
-  const loadRoster = async () => {
+  const loadRoster = useCallback(async () => {
     setLoading(true);
     try {
       const response = await bot2Api.getRoster(id);
@@ -172,8 +175,8 @@ export default function StudentFormPage() {
         setFormData({
           student_external_id: response.data.student_external_id,
           roster_campaign: response.data.roster_campaign,
-          program: response.data.program,
-          course_year: response.data.course_year,
+          program: response.data.program ?? "",
+          course_year: response.data.course_year ?? 1,
           is_active: response.data.is_active,
           birth_date: response.data.birth_date ?? "",
         });
@@ -184,7 +187,14 @@ export default function StudentFormPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    loadPrograms();
+    if (!isNew) {
+      loadRoster();
+    }
+  }, [isNew, loadPrograms, loadRoster]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,27 +235,26 @@ export default function StudentFormPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.push("/dashboard/students")}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Orqaga
-        </Button>
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">
-            {isNew ? "Yangi talaba" : "Talabani tahrirlash"}
-          </h2>
-          <p className="text-muted-foreground">
-            {isNew
-              ? "Yangi talaba ma'lumotlarini kiriting"
-              : "Talaba ma'lumotlarini yangilang"}
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-8">
+      <PageHeader
+        eyebrow="Talabalar"
+        title={isNew ? "Yangi talaba" : "Talabani tahrirlash"}
+        description={
+          isNew
+            ? "Yangi talaba ma'lumotlarini kiriting."
+            : "Talaba ma'lumotlarini yangilang."
+        }
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push("/dashboard/students")}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Orqaga
+          </Button>
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -273,21 +282,7 @@ export default function StudentFormPage() {
                   placeholder="Masalan: S12345"
                   required
                   disabled={!isNew} // ID ni faqat yaratishda o'zgartirish mumkin
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="roster_campaign">Kampaniya</Label>
-                <Input
-                  id="roster_campaign"
-                  value={formData.roster_campaign}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      roster_campaign: e.target.value,
-                    })
-                  }
-                  placeholder="default"
+                  className="font-mono tabular-nums"
                 />
               </div>
 

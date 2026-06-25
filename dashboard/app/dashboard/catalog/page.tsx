@@ -61,11 +61,11 @@ import {
   CatalogItem,
   CatalogType,
   CATALOG_TYPES_INFO,
-  CatalogTypeInfo,
   formatDate,
 } from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { PageHeader } from "@/components/page-header";
 import {
   Select,
   SelectContent,
@@ -87,7 +87,7 @@ interface CatalogFormData {
 export default function CatalogPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  const [activeTab, setActiveTab] = useState<CatalogType>("program");
+  const [activeTab, setActiveTab] = useState<CatalogType>("direction");
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +99,7 @@ export default function CatalogPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
   const [formData, setFormData] = useState<CatalogFormData>({
-    type: "program",
+    type: "direction",
     name: "",
     name_uz: "",
     name_ru: "",
@@ -145,7 +145,7 @@ export default function CatalogPage() {
     );
   });
 
-  const resetForm = (type: CatalogType = "program") => {
+  const resetForm = (type: CatalogType = "direction") => {
     setFormData({
       type,
       name: "",
@@ -178,8 +178,7 @@ export default function CatalogPage() {
         }
       }
 
-      const payload: Record<string, unknown> = {
-        type: formData.type,
+      const payload: Parameters<typeof catalogApi.create>[1] = {
         name: formData.name_uz,
         name_uz: formData.name_uz,
         name_ru: formData.name_ru,
@@ -190,16 +189,9 @@ export default function CatalogPage() {
         payload.meta = metadata;
       }
 
-      const res = await catalogApi.create(formData.type, payload as any);
+      const res = await catalogApi.create(formData.type, payload);
 
       if (res.error) {
-        const details = (res.error as any).details;
-        if (details && typeof details === "object") {
-          const msgs = Object.entries(details)
-            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-            .join("; ");
-          throw new Error(msgs || String(res.error.message));
-        }
         throw new Error(String(res.error.message || "Xatolik yuz berdi"));
       }
 
@@ -236,7 +228,7 @@ export default function CatalogPage() {
         }
       }
 
-      const updatePayload: Record<string, unknown> = {
+      const updatePayload: Parameters<typeof catalogApi.update>[2] = {
         name: formData.name_uz,
         name_uz: formData.name_uz,
         name_ru: formData.name_ru,
@@ -250,17 +242,10 @@ export default function CatalogPage() {
       const res = await catalogApi.update(
         formData.type,
         selectedItem.id,
-        updatePayload as any,
+        updatePayload,
       );
 
       if (res.error) {
-        const details = (res.error as any).details;
-        if (details && typeof details === "object") {
-          const msgs = Object.entries(details)
-            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-            .join("; ");
-          throw new Error(msgs || String(res.error.message));
-        }
         throw new Error(String(res.error.message || "Xatolik yuz berdi"));
       }
 
@@ -316,24 +301,25 @@ export default function CatalogPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Katalog</h1>
-          <p className="text-muted-foreground">Ma'lumotlar bazasi katalogi</p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={fetchData} variant="outline" size="sm">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Yangilash
-          </Button>
-          {isAdmin && (
-            <Button onClick={() => setCreateDialogOpen(true)} size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Yangi qo'shish
+      <PageHeader
+        eyebrow="Boshqaruv / Katalog"
+        title="Katalog"
+        description="Ma'lumotlar bazasi katalogi — yo'nalishlar, dasturlar va boshqa elementlar."
+        actions={
+          <>
+            <Button onClick={fetchData} variant="outline" size="sm">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Yangilash
             </Button>
-          )}
-        </div>
-      </div>
+            {isAdmin && (
+              <Button onClick={() => setCreateDialogOpen(true)} size="sm">
+                <Plus className="mr-2 h-4 w-4" />
+                Yangi qo'shish
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <Tabs
         value={activeTab}
@@ -357,7 +343,8 @@ export default function CatalogPage() {
                 <div className="flex-1">
                   <CardTitle className="text-base">{currentTypeInfo.label}</CardTitle>
                   <CardDescription className="text-xs">
-                    {currentTypeInfo.description} · {items.length} ta
+                    {currentTypeInfo.description} ·{" "}
+                    <span className="font-mono tabular-nums">{items.length}</span> ta
                   </CardDescription>
                 </div>
                 <div className="relative w-full sm:w-56">
@@ -384,17 +371,21 @@ export default function CatalogPage() {
               ) : (
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/30 hover:bg-muted/30">
-                      <TableHead className="pl-4 text-xs font-semibold">#</TableHead>
-                      <TableHead className="text-xs font-semibold">Nomlar</TableHead>
-                      <TableHead className="text-xs font-semibold">Sana</TableHead>
+                    <TableRow>
+                      <TableHead className="pl-4">#</TableHead>
+                      <TableHead>Nomlar</TableHead>
+                      <TableHead>Sana</TableHead>
                       {isAdmin && <TableHead className="w-10" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredItems.map((item, idx) => (
-                      <TableRow key={item.id} className="group align-top">
-                        <TableCell className="pl-4 text-xs text-muted-foreground tabular-nums">
+                      <TableRow
+                        key={item.id}
+                        className="group relative align-top transition-colors hover:bg-muted/40"
+                      >
+                        <TableCell className="relative pl-4 font-mono text-xs tabular-nums text-muted-foreground">
+                          <span className="absolute left-0 top-0 h-full w-0.5 bg-accent-gold opacity-0 transition-opacity group-hover:opacity-100" />
                           {idx + 1}
                         </TableCell>
                         <TableCell>
@@ -414,14 +405,14 @@ export default function CatalogPage() {
                           {item.metadata && Object.keys(item.metadata).length > 0 && (
                             <div className="mt-1 flex flex-wrap gap-1">
                               {Object.entries(item.metadata).slice(0, 3).map(([k, v]) => (
-                                <Badge key={k} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                                <Badge key={k} variant="outline" className="px-1.5 py-0 font-mono text-[10px] font-normal">
                                   {k}: {String(v)}
                                 </Badge>
                               ))}
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
                           {formatDate(item.created_at)}
                         </TableCell>
                         {isAdmin && (
@@ -542,7 +533,7 @@ export default function CatalogPage() {
             </div>
 
             {/* Generic JSON metadata */}
-            {formData.type !== "program" && (
+            {(
               <div className="space-y-2">
                 <Label htmlFor="meta">Meta (JSON) - Ixtiyoriy</Label>
                 <Textarea
@@ -625,7 +616,7 @@ export default function CatalogPage() {
             </div>
 
             {/* Generic JSON metadata */}
-            {formData.type !== "program" && (
+            {(
               <div className="space-y-2">
                 <Label htmlFor="edit-meta">Meta (JSON)</Label>
                 <Textarea
@@ -667,7 +658,7 @@ export default function CatalogPage() {
             <AlertDialogAction
               onClick={handleDelete}
               disabled={submitting}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {submitting ? "O'chirilmoqda..." : "O'chirish"}
             </AlertDialogAction>

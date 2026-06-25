@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { reportApi, StudentsByDirectionRow } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download, RefreshCw, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+import { PageHeader } from "@/components/page-header";
 
 export default function ReportsPage() {
   const [rows, setRows] = useState<StudentsByDirectionRow[]>([]);
@@ -48,58 +49,58 @@ export default function ReportsPage() {
   const totalRegistered = rows.reduce((s, r) => s + r.registered, 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Hisobotlar</h1>
-          <p className="text-sm text-muted-foreground">Yo'nalish bo'yicha talabalar</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-          <Button onClick={handleDownload} disabled={downloading}>
-            <Download className="mr-2 h-4 w-4" />
-            {downloading ? "Yuklanmoqda..." : "XLSX"}
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Analitika / Hisobotlar"
+        title="Hisobotlar"
+        description="Yo'nalish bo'yicha talabalar va bandlik ko'rsatkichlari."
+        actions={
+          <>
+            <Button variant="outline" size="icon" onClick={load} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+            <Button onClick={handleDownload} disabled={downloading}>
+              <Download className="mr-2 h-4 w-4" />
+              {downloading ? "Yuklanmoqda..." : "XLSX"}
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription>Jami talabalar</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{total}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription>So'rovnomada</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-blue-600">{totalRegistered}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription>Ish topganlar</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-green-600">{totalEmployed}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription>Bandlik %</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">
-              {total > 0 ? Math.round((totalEmployed / total) * 100) : 0}%
-            </p>
-          </CardContent>
-        </Card>
+      {/* Reestr-uslubidagi statistika */}
+      <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-4">
+        <div className="px-5 py-4">
+          <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+            {total.toLocaleString()}
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Jami talabalar
+          </p>
+        </div>
+        <div className="border-l border-border px-5 py-4">
+          <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+            {totalRegistered.toLocaleString()}
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            So&apos;rovnomada
+          </p>
+        </div>
+        <div className="border-l border-border px-5 py-4">
+          <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+            {totalEmployed.toLocaleString()}
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Ish topganlar
+          </p>
+        </div>
+        <div className="border-l border-border px-5 py-4">
+          <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+            {total > 0 ? Math.round((totalEmployed / total) * 100) : 0}%
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Bandlik %
+          </p>
+        </div>
       </div>
 
       <Card>
@@ -134,11 +135,11 @@ export default function ReportsPage() {
                 rows.map(r => (
                   <TableRow key={r.program_id}>
                     <TableCell className="font-medium">{r.program_name}</TableCell>
-                    <TableCell className="text-right">{r.total}</TableCell>
-                    <TableCell className="text-right text-blue-600">{r.registered}</TableCell>
-                    <TableCell className="text-right text-green-600">{r.employed}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{r.total}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums text-muted-foreground">{r.registered}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{r.employed}</TableCell>
                     <TableCell className="text-right">
-                      <span className={r.employed_pct >= 50 ? "text-green-600" : r.employed_pct >= 25 ? "text-yellow-600" : "text-red-500"}>
+                      <span className={`font-mono tabular-nums ${r.employed_pct >= 50 ? "text-emerald-600 dark:text-emerald-500" : r.employed_pct >= 25 ? "text-amber-600 dark:text-amber-500" : "text-destructive"}`}>
                         {r.employed_pct}%
                       </span>
                     </TableCell>
