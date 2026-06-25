@@ -1,8 +1,10 @@
 import json
 import logging
+import time
 
 from django.conf import settings
 
+from .pricing import calculate_cost
 from .prompts import get_prompt
 
 logger = logging.getLogger(__name__)
@@ -60,9 +62,12 @@ class GeminiVerificationService:
         # MIME type tekshirish (image/jpg -> image/jpeg normalizatsiya)
         normalized_mime = mime_type.lower().replace("image/jpg", "image/jpeg")
         if normalized_mime not in self.SUPPORTED_MIME_TYPES:
-            return self._error_result(f"Qo'llab-quvvatlanmaydigan fayl turi: {mime_type}")
+            return self._error_result_with_usage(
+                f"Qo'llab-quvvatlanmaydigan fayl turi: {mime_type}"
+            )
 
         prompt = get_prompt(document_type)
+        start = time.monotonic()
 
         try:
             from google.genai import types
@@ -83,12 +88,54 @@ class GeminiVerificationService:
                     thinking_config=types.ThinkingConfig(thinking_budget=0),
                 ),
             )
+            latency_ms = int((time.monotonic() - start) * 1000)
             raw_text = response.text or ""
         except Exception as exc:
+            latency_ms = int((time.monotonic() - start) * 1000)
             logger.error("Gemini API xatolik: %s", exc, exc_info=True)
-            return self._error_result(f"Gemini API xatoligi: {exc}")
+            result = self._error_result(f"Gemini API xatoligi: {exc}")
+            result["_usage"] = self._build_usage(
+                None, latency_ms, status="error", error_message=str(exc)
+            )
+            return result
 
-        return self._parse_response(raw_text)
+        result = self._parse_response(raw_text)
+        result["_usage"] = self._build_usage(response, latency_ms, status="success")
+        return result
+
+    def _build_usage(self, response, latency_ms, status="success", error_message=""):
+        """Gemini javobidan token va xarajat ma'lumotini ajratadi (xom dict)."""
+        input_tokens = output_tokens = thinking_tokens = 0
+
+        meta = getattr(response, "usage_metadata", None) if response is not None else None
+        if meta is not None:
+            input_tokens = getattr(meta, "prompt_token_count", 0) or 0
+            output_tokens = getattr(meta, "candidates_token_count", 0) or 0
+            thinking_tokens = getattr(meta, "thoughts_token_count", 0) or 0
+            # candidates_token_count odatda thinking ni o'z ichiga OLADI — ikki marta
+            # hisoblamaslik uchun output dan ayirib, alohida saqlaymiz.
+            if thinking_tokens and output_tokens >= thinking_tokens:
+                output_tokens = output_tokens - thinking_tokens
+
+        total_tokens = input_tokens + output_tokens + thinking_tokens
+        cost = calculate_cost(self.MODEL_NAME, input_tokens, output_tokens, thinking_tokens)
+
+        return {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "thinking_tokens": thinking_tokens,
+            "total_tokens": total_tokens,
+            "cost_usd": cost,
+            "latency_ms": latency_ms,
+            "model_name": self.MODEL_NAME,
+            "status": status,
+            "error_message": error_message,
+        }
+
+    def _error_result_with_usage(self, message: str) -> dict:
+        result = self._error_result(message)
+        result["_usage"] = self._build_usage(None, 0, status="error", error_message=message)
+        return result
 
     def _parse_response(self, raw_text: str) -> dict:
         """Gemini javobini JSON ga aylantiradi va validatsiya qiladi."""
@@ -101,8 +148,9 @@ class GeminiVerificationService:
 
             data = json.loads(text)
 
-            # Confidence level hisoblash (agar berilmagan bo'lsa)
-            score = float(data.get("confidence_score", 0.5))
+            # Confidence level hisoblash (agar berilmagan bo'lsa).
+            # Modeldan kelgan qiymatni [0,1] oralig'iga qisamiz.
+            score = max(0.0, min(1.0, float(data.get("confidence_score", 0.5))))
             if "confidence_level" not in data:
                 data["confidence_level"] = self._score_to_level(score)
 
