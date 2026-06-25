@@ -1,6 +1,13 @@
 from rest_framework import serializers
 
-from bot2.models import Bot2Student, Bot2SurveyResponse, StudentRoster, ProgramEnrollment
+from bot2.models import (
+    Bot2Student,
+    Bot2StudentAccount,
+    Bot2SurveyResponse,
+    StudentRoster,
+    ProgramEnrollment,
+    Bot2Document,
+)
 from catalog.models import CatalogItem
 
 
@@ -8,6 +15,15 @@ class CatalogItemNestedSerializer(serializers.ModelSerializer):
     class Meta:
         model = CatalogItem
         fields = ["id", "code", "name", "name_uz", "name_ru", "name_en", "type"]
+
+
+class Bot2StudentAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Bot2StudentAccount
+        fields = [
+            "id", "telegram_user_id", "username", "first_name", "last_name",
+            "phone", "is_active", "last_seen_at", "created_at",
+        ]
 
 
 class StudentRosterSerializer(serializers.ModelSerializer):
@@ -20,6 +36,7 @@ class StudentRosterSerializer(serializers.ModelSerializer):
 
 class Bot2StudentSerializer(serializers.ModelSerializer):
     region_details = CatalogItemNestedSerializer(source="region", read_only=True)
+    accounts = Bot2StudentAccountSerializer(many=True, read_only=True)
 
     class Meta:
         model = Bot2Student
@@ -64,3 +81,14 @@ class ProgramEnrollmentSerializer(serializers.ModelSerializer):
         if not total:
             return 0.0
         return round(min(responded * 100.0 / total, 100.0), 2)
+
+
+class Bot2DocumentSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Bot2Document
+        fields = ["id", "doc_type", "original_filename", "mime_type", "file_size", "file_url", "created_at"]
+
+    def get_file_url(self, obj) -> str:
+        return f"/api/v1/bot2/documents/{obj.id}/download/"

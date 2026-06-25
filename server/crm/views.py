@@ -6,7 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from audit.utils import log_audit
-from .models import AccessLink, FollowUp, Lead, LeadStudent
+from common.permissions import IsAdminUserRole, IsViewerOrAdminReadOnly
+from .models import AccessLink, FollowUp, Lead
 from .serializers import AccessLinkSerializer, FollowUpSerializer, LeadSerializer
 
 
@@ -15,14 +16,14 @@ class LeadViewSet(viewsets.ModelViewSet):
         "lead_students__student"
     ).order_by("-created_at")
     serializer_class = LeadSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
     filterset_fields = ["status", "employer"]
     ordering_fields = ["created_at", "status"]
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsAdminUserRole])
     def send(self, request, pk=None):
         lead = self.get_object()
         ttl = getattr(settings, "ACCESS_LINK_TTL_DAYS", 30)
@@ -52,6 +53,6 @@ class LeadViewSet(viewsets.ModelViewSet):
 class FollowUpViewSet(viewsets.ModelViewSet):
     queryset = FollowUp.objects.select_related("lead_student__student").order_by("-created_at")
     serializer_class = FollowUpSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
     filterset_fields = ["stage", "flagged_for_staff"]
     ordering_fields = ["created_at", "stage"]

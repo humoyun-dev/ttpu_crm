@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.utils import log_audit
-from common.permissions import ServiceTokenPermission
+from common.permissions import IsAdminUserRole, ServiceTokenPermission
 from .models import Document
 from .serializers import DocumentSerializer, DocumentUploadSerializer
 
@@ -21,7 +21,7 @@ class DocumentViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     filterset_fields = ["status", "type"]
 
-    @action(detail=True, methods=["patch"])
+    @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated, IsAdminUserRole])
     def review(self, request, pk=None):
         doc = self.get_object()
         new_status = request.data.get("status")

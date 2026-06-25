@@ -174,3 +174,87 @@ def test_audit_log_written_on_import(api_client, admin_user, program_item):
     assert log.actor_user_id == admin_user.id
     assert log.after_data["created"] == 1
     assert log.after_data["errors"] == 1
+
+
+def test_csv_alias_headers_are_normalized(api_client, admin_user, program_item):
+    """Excel-style header aliases (student_id/ism/familya) also work for CSV uploads,
+    not just .xlsx — so the column names documented in the dashboard behave identically
+    regardless of file type."""
+    api_client.force_authenticate(user=admin_user)
+    csv_text = (
+        "student_id,ism,familya,program_code,course_year\n"
+        f"ALIAS-1,Ali,Valiyev,{program_item.code},2\n"
+    )
+    upload = SimpleUploadedFile("roster.csv", csv_text.encode("utf-8"), content_type="text/csv")
+
+    resp = api_client.post(URL, {"file": upload}, format="multipart")
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.data["created"] == 1
+    roster = StudentRoster.objects.get(student_external_id="ALIAS-1")
+    assert roster.first_name == "Ali"
+    assert roster.last_name == "Valiyev"
+    assert roster.course_year == 2
+    assert roster.program_id == program_item.id
+
+
+def test_csv_merged_name_column_is_split(api_client, admin_user):
+    """A merged 'ism familya' column is split into first/last name for CSV too."""
+    api_client.force_authenticate(user=admin_user)
+    csv_text = "student_id,ism familya\nMERGE-1,Ali Valiyev\n"
+    upload = SimpleUploadedFile("roster.csv", csv_text.encode("utf-8"), content_type="text/csv")
+
+    resp = api_client.post(URL, {"file": upload}, format="multipart")
+
+    assert resp.status_code == status.HTTP_200_OK
+    roster = StudentRoster.objects.get(student_external_id="MERGE-1")
+    assert roster.first_name == "Ali"
+    assert roster.last_name == "Valiyev"
+
+
+def test_response_lists_imported_students(api_client, admin_user, program_item):
+    """The response carries a `students` list describing each imported row so the
+    dashboard can render what was imported."""
+    api_client.force_authenticate(user=admin_user)
+    payload = [
+        {
+            "student_external_id": "LST-1",
+            "first_name": "Ali",
+            "last_name": "Valiyev",
+            "program_id": str(program_item.id),
+            "course_year": 1,
+        },
+    ]
+
+    resp = api_client.post(URL, payload, format="json")
+
+    assert resp.status_code == status.HTTP_200_OK
+    students = resp.data["students"]
+    assert len(students) == 1
+    s = students[0]
+    assert s["row"] == 1
+    assert s["student_external_id"] == "LST-1"
+    assert s["first_name"] == "Ali"
+    assert s["last_name"] == "Valiyev"
+    assert s["course_year"] == 1
+    assert s["program"] == program_item.name
+    assert s["status"] == "created"
+
+
+def test_response_marks_updated_students_and_keeps_existing_program(api_client, admin_user, program_item):
+    """An update is reported with status='updated' and the response reflects the TRUE
+    post-upsert state — the program is preserved even though the row omitted it."""
+    api_client.force_authenticate(user=admin_user)
+    StudentRoster.objects.create(
+        student_external_id="UPD-1", program=program_item, course_year=1
+    )
+
+    resp = api_client.post(URL, [{"student_external_id": "UPD-1", "course_year": 3}], format="json")
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.data["created"] == 0
+    assert resp.data["updated"] == 1
+    s = resp.data["students"][0]
+    assert s["status"] == "updated"
+    assert s["course_year"] == 3
+    assert s["program"] == program_item.name  # preserved, not wiped

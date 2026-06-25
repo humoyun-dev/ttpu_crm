@@ -1,6 +1,9 @@
 import csv
 import io
 import logging
+import uuid
+
+import openpyxl
 from typing import List
 
 from django.core.exceptions import ValidationError
@@ -15,7 +18,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from audit.utils import log_audit
-from bot2.models import Bot2Student, Bot2SurveyResponse, StudentRoster, ProgramEnrollment
+from bot2.models import Bot2Student, Bot2StudentAccount, Bot2SurveyResponse, StudentRoster, ProgramEnrollment, Bot2Document, BotFsmState
 from bot2.services import parse_roster_payload, upsert_roster_row
 from catalog.models import CatalogItem
 from common.auth import verify_service_token
@@ -66,14 +69,19 @@ class Bot2StudentRosterViewSet(viewsets.ModelViewSet):
 
 
 class Bot2StudentViewSet(viewsets.ModelViewSet):
-    queryset = Bot2Student.objects.select_related("roster", "region")
+    # distinct(): searching across the reverse `accounts` join can otherwise return a
+    # student once per matching account.
+    queryset = Bot2Student.objects.select_related("roster", "region").prefetch_related("accounts").distinct()
     serializer_class = None
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
     # Students are created by the bot; direct POST would 500 (roster is read-only).
     http_method_names = ["get", "head", "options", "patch", "put", "delete"]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["gender", "region"]
-    search_fields = ["student_external_id", "username", "first_name", "last_name"]
+    search_fields = [
+        "student_external_id", "username", "first_name", "last_name",
+        "accounts__phone", "accounts__telegram_user_id",
+    ]
     ordering_fields = ["created_at"]
 
     def get_serializer_class(self):
@@ -201,6 +209,125 @@ class ProgramEnrollmentViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
+class Bot2DocumentViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["student", "doc_type", "survey"]
+    ordering_fields = ["created_at"]
+    ordering = ["-created_at"]
+
+    def get_serializer_class(self):
+        from bot2.serializers import Bot2DocumentSerializer
+        return Bot2DocumentSerializer
+
+    def get_queryset(self):
+        return Bot2Document.objects.select_related("student").all()
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def bot2_document_download(request, doc_id):
+    """Serve a document file to the dashboard (requires JWT auth)."""
+    from django.http import FileResponse
+    from django.shortcuts import get_object_or_404
+    doc = get_object_or_404(Bot2Document, id=doc_id)
+    if not doc.file:
+        return build_error_response("NO_FILE", "File not found.", status.HTTP_404_NOT_FOUND)
+
+    # Only serve a known-safe content type; anything else is forced to a generic
+    # binary type so the browser cannot be tricked into executing it (stored XSS).
+    safe_content_types = {
+        "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf",
+    }
+    mime = (doc.mime_type or "").lower()
+    if mime in safe_content_types:
+        content_type = mime
+    else:
+        content_type = "application/octet-stream"
+
+    # Inline only for images and PDFs; everything else is downloaded as an attachment.
+    if content_type.startswith("image/") or content_type == "application/pdf":
+        disposition = "inline"
+    else:
+        disposition = "attachment"
+
+    # Sanitize the filename used in the header to prevent header injection.
+    raw_filename = doc.original_filename or f"{doc.doc_type}_{doc.id}"
+    filename = raw_filename.replace('"', "").replace("\r", "").replace("\n", "")
+
+    response = FileResponse(doc.file.open("rb"), content_type=content_type)
+    response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+# Column aliases: Excel header → internal field name
+_XLSX_COLUMN_MAP = {
+    "student_id": "student_external_id",
+    "student id": "student_external_id",
+    "studentid": "student_external_id",
+    "id": "student_external_id",
+    "ism": "first_name",
+    "first_name": "first_name",
+    "firstname": "first_name",
+    "name": "first_name",
+    "familya": "last_name",
+    "last_name": "last_name",
+    "lastname": "last_name",
+    "surname": "last_name",
+    "ism familya": "first_name",  # merged column — handled separately below
+    "tug'ilgan sana": "birth_date",
+    "tug'ilgan_sana": "birth_date",
+    "birth_date": "birth_date",
+    "birthdate": "birth_date",
+    "dob": "birth_date",
+}
+
+
+def _normalize_row(raw: dict) -> dict:
+    """Map header aliases (case-insensitive) to canonical field names and split a
+    merged 'ism familya' column. Shared by the .xlsx and .csv upload paths so both
+    accept exactly the same headers (the ones documented in the dashboard)."""
+    row: dict = {}
+    for key, val in raw.items():
+        if key is None or val is None:
+            continue
+        canon = str(key).strip().lower()
+        canon = _XLSX_COLUMN_MAP.get(canon, canon)
+        value = val.strip() if isinstance(val, str) else val
+        if value == "":
+            continue
+        row[canon] = value
+
+    # Handle merged "ism familya" column: split on first space
+    first = row.get("first_name")
+    if isinstance(first, str) and "last_name" not in row and " " in first:
+        parts = first.split(None, 1)
+        row["first_name"] = parts[0]
+        row["last_name"] = parts[1] if len(parts) > 1 else ""
+
+    return row
+
+
+def _parse_xlsx(file) -> list[dict]:
+    wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+    ws = wb.active
+    rows_iter = ws.iter_rows(values_only=True)
+
+    raw_headers = list(next(rows_iter, []))  # first row = headers
+
+    result = []
+    for raw_row in rows_iter:
+        if all(v is None for v in raw_row):
+            continue  # skip fully empty rows
+        row = _normalize_row(dict(zip(raw_headers, raw_row)))
+        if row:
+            result.append(row)
+
+    wb.close()
+    return result
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 @transaction.atomic
@@ -208,30 +335,53 @@ def import_roster(request):
     created = 0
     updated = 0
     errors: List[dict] = []
+    imported: List[dict] = []
 
     rows = []
     if request.FILES.get("file"):
         file = request.FILES["file"]
-        decoded = file.read().decode("utf-8")
-        reader = csv.DictReader(io.StringIO(decoded))
-        rows = list(reader)
+        filename = file.name.lower()
+        if filename.endswith(".xlsx") or filename.endswith(".xls"):
+            rows = _parse_xlsx(file)
+        else:
+            decoded = file.read().decode("utf-8-sig")  # utf-8-sig strips BOM
+            reader = csv.DictReader(io.StringIO(decoded))
+            rows = [_normalize_row(r) for r in reader]
     elif isinstance(request.data, list):
         rows = request.data
     elif isinstance(request.data, dict) and "rows" in request.data:
         rows = request.data["rows"]
     else:
-        return build_error_response("INVALID_PAYLOAD", "Provide CSV file or JSON list.", status.HTTP_400_BAD_REQUEST)
+        return build_error_response("INVALID_PAYLOAD", "Provide Excel/CSV file or JSON list.", status.HTTP_400_BAD_REQUEST)
 
     for idx, row in enumerate(rows, start=1):
         try:
             parsed = parse_roster_payload(row)
-            created_flag = upsert_roster_row(parsed)
+            roster, created_flag = upsert_roster_row(parsed)
             created += int(created_flag)
             updated += int(not created_flag)
+            imported.append({
+                "row": idx,
+                "student_external_id": roster.student_external_id,
+                "first_name": roster.first_name,
+                "last_name": roster.last_name,
+                "course_year": roster.course_year,
+                "program_id": roster.program_id,
+                "status": "created" if created_flag else "updated",
+            })
         except APIError as exc:
             errors.append({"row": idx, "error": exc.detail})
         except Exception as exc:
             errors.append({"row": idx, "error": str(exc)})
+
+    # Resolve program names for the imported rows in a single query
+    program_ids = {r["program_id"] for r in imported if r["program_id"]}
+    program_names = (
+        dict(CatalogItem.objects.filter(id__in=program_ids).values_list("id", "name"))
+        if program_ids else {}
+    )
+    for r in imported:
+        r["program"] = program_names.get(r.pop("program_id"))
 
     log_audit(
         actor_type="user",
@@ -244,7 +394,93 @@ def import_roster(request):
     )
 
     status_code = status.HTTP_207_MULTI_STATUS if errors else status.HTTP_200_OK
-    return Response({"created": created, "updated": updated, "errors": errors}, status=status_code)
+    return Response(
+        {"created": created, "updated": updated, "errors": errors, "students": imported},
+        status=status_code,
+    )
+
+
+def _safe_program_id(value):
+    """Return a valid UUID string for `value`, or None. Stale bot FSM state can send
+    program_id as the literal string "None"/"null", an empty string, or other non-UUID
+    junk; passing any of those to a UUID-typed `id=` filter raises ValidationError and
+    500s. Normalizing to None lets the roster's own program take over and degrades a
+    truly-missing program to a clean 4xx instead of a crash."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if text.lower() in ("", "none", "null"):
+        return None
+    try:
+        return str(uuid.UUID(text))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _link_account(student, telegram_user_id, *, username="", first_name="", last_name="", phone=""):
+    """Attach a Telegram account to `student`, creating or re-activating the link, and
+    keep ALL such accounts (a student may log in from several Telegram accounts with the
+    same student_external_id). A telegram_user_id already linked to a different student
+    is moved to this one. The student's denormalized 'primary' Telegram/phone fields are
+    synced to this most-recent account. Returns the Bot2StudentAccount (or None)."""
+    if not telegram_user_id:
+        return None
+
+    account, _ = Bot2StudentAccount.objects.update_or_create(
+        telegram_user_id=telegram_user_id,
+        defaults={
+            "student": student,
+            "username": username or "",
+            "first_name": first_name or "",
+            "last_name": last_name or "",
+            "is_active": True,
+            "last_seen_at": timezone.now(),
+        },
+    )
+    # Only overwrite the stored phone when this call actually carries one, so we never
+    # wipe a previously captured number.
+    if phone and account.phone != phone:
+        account.phone = phone
+        account.save(update_fields=["phone", "updated_at"])
+
+    # Mirror the latest account onto the student's denormalized convenience fields.
+    # Only overwrite with non-blank values so a later sparse update never wipes data.
+    # NOTE: first_name/last_name are intentionally NOT synced here — the student's
+    # official name comes from the roster (Excel import) via _sync_student_name;
+    # the Telegram display name stays a per-account snapshot only.
+    fields = []
+    if student.telegram_user_id != telegram_user_id:
+        student.telegram_user_id = telegram_user_id
+        fields.append("telegram_user_id")
+    for attr, val in (("phone", phone), ("username", username)):
+        if val and getattr(student, attr) != val:
+            setattr(student, attr, val)
+            fields.append(attr)
+    if fields:
+        fields.append("updated_at")
+        student.save(update_fields=fields)
+    return account
+
+
+def _sync_student_name(student, roster, fallback_first="", fallback_last=""):
+    """Keep the student's name populated for the survey detail page and Excel export.
+
+    The roster (Excel import) is the authoritative source of the official name, so it
+    wins when present; otherwise we fall back to the Telegram-supplied name (latest
+    submission wins). A blank value never overwrites a populated one."""
+    fields = []
+    desired_first = (getattr(roster, "first_name", "") or "").strip() or (fallback_first or "").strip()
+    if desired_first and student.first_name != desired_first:
+        student.first_name = desired_first
+        fields.append("first_name")
+    desired_last = (getattr(roster, "last_name", "") or "").strip() or (fallback_last or "").strip()
+    if desired_last and student.last_name != desired_last:
+        student.last_name = desired_last
+        fields.append("last_name")
+    if fields:
+        fields.append("updated_at")
+        student.save(update_fields=fields)
+    return student
 
 
 @api_view(["POST"])
@@ -276,25 +512,39 @@ def submit_survey(request):
         if existing:
             return Response(
                 {"ok": True, "response_id": str(existing.id), "idempotent": True,
-                 "roster": {"program_id": str(existing.program_id), "course_year": existing.course_year}},
+                 "roster": {"program_id": str(existing.program_id) if existing.program_id else None, "course_year": existing.course_year}},
                 status=status.HTTP_200_OK,
             )
 
     roster = StudentRoster.objects.filter(student_external_id=student_external_id).first()
     program = None
+
+    # Resolve program: prefer roster value, fall back to payload.
+    # Guard against stale bot state sending the literal string "None"/"null" or a
+    # non-UUID value — normalize those to None so they never reach (and crash) the
+    # UUID-typed `id=` lookup below. A roster's own program always wins regardless.
+    program_id_payload = _safe_program_id(request.data.get("program_id"))
     if not roster:
-        program_id = request.data.get("program_id")
-        if not program_id:
+        if not program_id_payload:
             return build_error_response("ROSTER_NOT_FOUND", "Student roster not found and program_id not provided.", status.HTTP_400_BAD_REQUEST)
         program = CatalogItem.objects.filter(
-            id=program_id
+            id=program_id_payload
         ).filter(
             Q(type=CatalogItem.ItemType.PROGRAM) | Q(type=CatalogItem.ItemType.DIRECTION)
         ).first()
         if not program:
             return build_error_response("INVALID_PROGRAM", "program_id must reference a program or direction catalog item.", status.HTTP_400_BAD_REQUEST)
     else:
-        course_year = roster.course_year
+        if roster.program:
+            program = roster.program
+            course_year = roster.course_year or course_year
+        elif program_id_payload:
+            # Roster exists but has no program — student selected it in bot
+            program = CatalogItem.objects.filter(
+                id=program_id_payload
+            ).filter(
+                Q(type=CatalogItem.ItemType.PROGRAM) | Q(type=CatalogItem.ItemType.DIRECTION)
+            ).first()
 
     campaign = request.data.get("survey_campaign") or "default"
     region_id = request.data.get("region_id")
@@ -312,47 +562,51 @@ def submit_survey(request):
                 roster = StudentRoster.objects.create(
                     student_external_id=student_external_id,
                     program=program,
-                    course_year=course_year,
+                    course_year=course_year if course_year else None,
                     roster_campaign="bot2_auto",
                     is_active=True,
                 )
+            elif program and not roster.program:
+                # Back-fill program/course_year onto roster when bot collects them
+                update_fields = ["updated_at"]
+                roster.program = program
+                update_fields.append("program")
+                if course_year and not roster.course_year:
+                    roster.course_year = course_year
+                    update_fields.append("course_year")
+                roster.save(update_fields=update_fields)
 
-            existing_student = None
-            if telegram_user_id:
-                existing_student = Bot2Student.objects.filter(telegram_user_id=telegram_user_id).first()
-
-            if existing_student:
-                existing_student.student_external_id = student_external_id
-                existing_student.roster = roster
-                existing_student.username = request.data.get("username", "") or ""
-                existing_student.first_name = request.data.get("first_name", "") or ""
-                existing_student.last_name = request.data.get("last_name", "") or ""
-                existing_student.gender = request.data.get("gender") or Bot2Student.Gender.UNSPECIFIED
-                existing_student.phone = request.data.get("phone", "") or ""
-                existing_student.region = region
-                existing_student.save()
-                student = existing_student
-            else:
-                student, _ = Bot2Student.objects.update_or_create(
-                    student_external_id=student_external_id,
-                    defaults={
-                        "roster": roster,
-                        "telegram_user_id": telegram_user_id,
-                        "username": request.data.get("username", "") or "",
-                        "first_name": request.data.get("first_name", "") or "",
-                        "last_name": request.data.get("last_name", "") or "",
-                        "gender": request.data.get("gender") or Bot2Student.Gender.UNSPECIFIED,
-                        "phone": request.data.get("phone", "") or "",
-                        "region": region,
-                    },
-                )
+            # The student is keyed by student_external_id (canonical). The Telegram
+            # account is linked separately via _link_account so several accounts can
+            # map to one student instead of overwriting a single field.
+            student, _ = Bot2Student.objects.update_or_create(
+                student_external_id=student_external_id,
+                defaults={
+                    "roster": roster,
+                    "gender": request.data.get("gender") or Bot2Student.Gender.UNSPECIFIED,
+                    "region": region,
+                },
+            )
+            _link_account(
+                student,
+                telegram_user_id,
+                username=request.data.get("username", "") or "",
+                first_name=request.data.get("first_name", "") or "",
+                last_name=request.data.get("last_name", "") or "",
+                phone=request.data.get("phone", "") or "",
+            )
+            _sync_student_name(
+                student, roster,
+                fallback_first=request.data.get("first_name", "") or "",
+                fallback_last=request.data.get("last_name", "") or "",
+            )
 
             # Append-only: always create a new survey row.
             survey = Bot2SurveyResponse.objects.create(
                 student=student,
                 roster=roster,
-                program=roster.program,
-                course_year=course_year,
+                program=program,
+                course_year=course_year if course_year else None,
                 survey_campaign=campaign,
                 idempotency_key=idempotency_key,
                 source="survey",
@@ -364,6 +618,14 @@ def submit_survey(request):
                 answers=request.data.get("answers", {}) or {},
                 submitted_at=timezone.now(),
             )
+            # Link any pre-uploaded documents to this survey
+            answers_data = request.data.get("answers", {}) or {}
+            for key in ("cv_doc_id", "cert_doc_id"):
+                doc_id = answers_data.get(key)
+                if doc_id:
+                    Bot2Document.objects.filter(
+                        id=doc_id, student=student, survey__isnull=True
+                    ).update(survey=survey)
     except ValidationError as exc:
         return build_error_response("VALIDATION_ERROR", exc.messages, status.HTTP_400_BAD_REQUEST)
     except IntegrityError:
@@ -388,11 +650,140 @@ def submit_survey(request):
     return Response(
         {
             "ok": True,
-            "roster": {"program_id": str(roster.program_id), "course_year": roster.course_year},
+            "roster": {"program_id": str(roster.program_id) if roster.program_id else None, "course_year": roster.course_year},
             "response_id": str(survey.id),
         },
         status=status.HTTP_200_OK,
     )
+
+
+@api_view(["GET", "PUT", "DELETE"])
+@permission_classes([])
+def bot_fsm_state(request, user_id: int):
+    """
+    Persistent FSM storage for aiogram — survives bot restarts.
+    GET  → {state, data}
+    PUT  ← {state, data}  (upsert)
+    DELETE → clears entry
+    """
+    verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")
+
+    if request.method == "GET":
+        obj = BotFsmState.objects.filter(telegram_user_id=user_id).first()
+        if obj:
+            return Response({"state": obj.state, "data": obj.data})
+        return Response({"state": None, "data": {}})
+
+    if request.method == "PUT":
+        state_val = request.data.get("state")
+        data_val = request.data.get("data", {})
+        BotFsmState.objects.update_or_create(
+            telegram_user_id=user_id,
+            defaults={"state": state_val, "data": data_val},
+        )
+        return Response({"ok": True})
+
+    # DELETE
+    BotFsmState.objects.filter(telegram_user_id=user_id).delete()
+    return Response({"ok": True})
+
+
+@api_view(["GET"])
+@permission_classes([])
+def bot_student_profile(request):
+    """
+    Returns existing Bot2Student profile by telegram_user_id.
+    Used by the bot to pre-fill known fields and skip already-answered steps.
+    """
+    verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")
+    telegram_user_id = request.query_params.get("telegram_user_id")
+    if not telegram_user_id:
+        return build_error_response("VALIDATION_ERROR", "telegram_user_id is required.", status.HTTP_400_BAD_REQUEST)
+
+    # Resolve the student through the (active) Telegram account link. After /logout the
+    # account is inactive, so the profile reads as "not found" and /start re-verifies.
+    account = (
+        Bot2StudentAccount.objects
+        .select_related("student__region", "student__roster__program")
+        .filter(telegram_user_id=telegram_user_id, is_active=True)
+        .first()
+    )
+    if not account:
+        return Response({"found": False})
+
+    student = account.student
+    region = student.region
+    roster = student.roster
+    last_survey = student.survey_responses.order_by("-submitted_at").first()
+    return Response({
+        "found": True,
+        "student_external_id": student.student_external_id,
+        "first_name": student.first_name or "",
+        "last_name": student.last_name or "",
+        "phone": account.phone or student.phone or "",
+        "gender": student.gender if student.gender and student.gender != "unspecified" else "",
+        "language": student.language or "uz",
+        "region_id": str(region.id) if region else "",
+        "region_name_uz": (region.name or "") if region else "",
+        "region_name_ru": (region.metadata.get("name_ru", "") if region and region.metadata else "") if region else "",
+        "program_id": str(roster.program_id) if roster and roster.program_id else None,
+        "program_name": roster.program.name if roster and roster.program else "",
+        "course_year": roster.course_year if roster else None,
+        "last_survey_at": last_survey.submitted_at.isoformat() if last_survey and last_survey.submitted_at else None,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([])
+@transaction.atomic
+def bot_logout(request):
+    """
+    Deactivate ONE Telegram account link so the next /start from it re-runs the full
+    identify+verify flow. The account row, the student, their other linked accounts and
+    the append-only survey history are all preserved — only this account's is_active flag
+    and the persisted FSM state are cleared. Idempotent: unknown user still returns ok.
+    """
+    verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")
+
+    telegram_user_id = request.data.get("telegram_user_id")
+    if not telegram_user_id:
+        return build_error_response("VALIDATION_ERROR", "telegram_user_id is required.", status.HTTP_400_BAD_REQUEST)
+
+    # Always drop any persisted FSM state for this user, linked or not.
+    BotFsmState.objects.filter(telegram_user_id=telegram_user_id).delete()
+
+    account = Bot2StudentAccount.objects.select_related("student").filter(
+        telegram_user_id=telegram_user_id
+    ).first()
+    if not account:
+        return Response({"ok": True, "found": False})
+
+    account.is_active = False
+    account.save(update_fields=["is_active", "updated_at"])
+
+    # Repoint the student's denormalized 'primary' telegram link if it pointed here:
+    # to another still-active account, else clear it.
+    student = account.student
+    if student.telegram_user_id == account.telegram_user_id:
+        next_active = (
+            student.accounts.filter(is_active=True)
+            .exclude(pk=account.pk)
+            .order_by("-last_seen_at", "-created_at")
+            .first()
+        )
+        student.telegram_user_id = next_active.telegram_user_id if next_active else None
+        student.save(update_fields=["telegram_user_id", "updated_at"])
+
+    log_audit(
+        actor_type="service",
+        actor_service="bot2",
+        action="logout",
+        entity=student,
+        request=None,
+        after_data={"student_external_id": student.student_external_id,
+                    "telegram_user_id": account.telegram_user_id},
+    )
+    return Response({"ok": True, "found": True})
 
 
 @api_view(["POST"])
@@ -427,7 +818,7 @@ def bot_verify(request):
     return Response({
         "match": True,
         "roster": {
-            "program_id": str(roster.program_id),
+            "program_id": str(roster.program_id) if roster.program_id else None,
             "program_name": roster.program.name if roster.program else None,
             "course_year": roster.course_year,
         },
@@ -492,29 +883,35 @@ def bot_register(request):
     if language not in ("uz", "ru"):
         language = "uz"
 
-    try:
-        student, created = Bot2Student.objects.update_or_create(
-            student_external_id=student_id,
-            defaults={
-                "roster": roster,
-                "telegram_user_id": telegram_user_id,
-                "username": request.data.get("username", "") or "",
-                "first_name": request.data.get("first_name", "") or "",
-                "last_name": request.data.get("last_name", "") or "",
-                "language": language,
-                "consent": True,
-                "state": "registered",
-            },
-        )
-    except IntegrityError:
-        logger.warning("bot_register telegram_user_id conflict for student_id=%s", student_id)
-        return build_error_response("CONFLICT", "telegram_user_id is already linked to another student.", status.HTTP_409_CONFLICT)
+    student, created = Bot2Student.objects.update_or_create(
+        student_external_id=student_id,
+        defaults={
+            "roster": roster,
+            "language": language,
+            "consent": True,
+            "state": "registered",
+        },
+    )
+    # Link this Telegram account to the student, keeping any previously linked
+    # accounts intact (a student may register from several accounts).
+    _link_account(
+        student,
+        telegram_user_id,
+        username=request.data.get("username", "") or "",
+        first_name=request.data.get("first_name", "") or "",
+        last_name=request.data.get("last_name", "") or "",
+    )
+    _sync_student_name(
+        student, roster,
+        fallback_first=request.data.get("first_name", "") or "",
+        fallback_last=request.data.get("last_name", "") or "",
+    )
 
     return Response({
         "ok": True,
         "student_id": str(student.id),
         "created": created,
-        "roster": {"program_id": str(roster.program_id), "course_year": roster.course_year},
+        "roster": {"program_id": str(roster.program_id) if roster.program_id else None, "course_year": roster.course_year},
     }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
@@ -549,3 +946,68 @@ def bot_catalog_items(request):
         .values("id", "code", "name", "name_uz", "name_ru", "name_en", "metadata")
     )
     return Response({"results": list(items)})
+
+
+@api_view(["POST"])
+@permission_classes([])
+def bot_upload_document(request):
+    """
+    Receive a CV or certificate file from the bot and save it.
+    Returns doc_id that the bot includes in the survey answers payload.
+    """
+    verify_service_token(request.headers.get("X-SERVICE-TOKEN"), service_name="bot2")
+
+    student_external_id = request.data.get("student_external_id")
+    doc_type = request.data.get("doc_type")
+    file = request.FILES.get("file")
+
+    if not student_external_id or not doc_type or not file:
+        return build_error_response(
+            "VALIDATION_ERROR",
+            "student_external_id, doc_type, and file are required.",
+            status.HTTP_400_BAD_REQUEST,
+        )
+    if doc_type not in ("cv", "certificate"):
+        return build_error_response(
+            "INVALID_TYPE", "doc_type must be 'cv' or 'certificate'.", status.HTTP_400_BAD_REQUEST
+        )
+
+    if file.size > 10 * 1024 * 1024:
+        return build_error_response(
+            "VALIDATION_ERROR",
+            "Fayl hajmi 10 MB dan oshmasligi kerak.",
+            status.HTTP_400_BAD_REQUEST,
+        )
+    allowed_mime_types = {
+        "image/jpeg", "image/png", "image/webp", "application/pdf",
+    }
+    if not file.content_type or file.content_type.lower() not in allowed_mime_types:
+        return build_error_response(
+            "VALIDATION_ERROR",
+            "Ruxsat etilmagan fayl turi. JPG, PNG, WEBP yoki PDF yuboring.",
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    student = Bot2Student.objects.filter(student_external_id=student_external_id).first()
+    if not student:
+        return build_error_response("STUDENT_NOT_FOUND", "Student not found.", status.HTTP_404_NOT_FOUND)
+
+    doc = Bot2Document.objects.create(
+        student=student,
+        doc_type=doc_type,
+        file=file,
+        original_filename=file.name or "",
+        mime_type=file.content_type or "",
+        file_size=file.size,
+    )
+
+    log_audit(
+        actor_type="service",
+        actor_service="bot2",
+        action="create",
+        entity=doc,
+        request=None,
+        after_data={"student_external_id": student_external_id, "doc_type": doc_type},
+    )
+
+    return Response({"ok": True, "doc_id": str(doc.id)}, status=status.HTTP_201_CREATED)

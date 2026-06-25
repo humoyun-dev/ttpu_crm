@@ -34,7 +34,7 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
         """Override create to handle IntegrityError gracefully."""
         try:
             return super().create(request, *args, **kwargs)
-        except IntegrityError as e:
+        except IntegrityError:
             return Response(
                 {"detail": "Bu turdagi element uchun bunday kod allaqachon mavjud.",
                  "code": ["Unique constraint violated."]},

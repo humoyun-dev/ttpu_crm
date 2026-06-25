@@ -28,3 +28,18 @@ class DocumentUploadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
         fields = ("student", "type", "file")
+
+    def validate_file(self, value):
+        max_size = 10 * 1024 * 1024  # 10 MB
+        if value.size > max_size:
+            raise serializers.ValidationError("Fayl hajmi 10 MB dan oshmasligi kerak.")
+        allowed = {
+            "image/jpeg", "image/jpg", "image/png",
+            "image/webp", "application/pdf",
+        }
+        if value.content_type and value.content_type.lower() not in allowed:
+            raise serializers.ValidationError(
+                f"Ruxsat etilmagan fayl turi: {value.content_type}. "
+                "JPG, PNG, WEBP yoki PDF yuboring."
+            )
+        return value

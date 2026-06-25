@@ -5,9 +5,11 @@ from typing import List
 # deploy test 2026-06-19
 
 from corsheaders.defaults import default_headers
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv()
+# Markazlashgan muhit: yuqoriga qarab repo-root ./.env ni topadi.
+# Docker'da compose env_file orqali env allaqachon o'rnatilgan (override=False).
+load_dotenv(find_dotenv())
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -57,6 +59,7 @@ INSTALLED_APPS = [
     "employers",
     "crm",
     "documents",
+    "ai_verification",
 ]
 
 MIDDLEWARE = [
@@ -105,7 +108,15 @@ DATABASES = {
     }
 }
 
-if os.getenv("USE_SQLITE", "1") == "1":
+if os.getenv("USE_SQLITE", "0") == "1":
+    # Never silently fall back to SQLite in production: a misconfigured env var
+    # must not point a live deployment at an ephemeral on-disk file.
+    if not DEBUG:
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured(
+            "USE_SQLITE must not be enabled when DJANGO_DEBUG is false."
+        )
     DATABASES["default"] = {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
@@ -132,6 +143,9 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Gemini AI — hujjat tekshiruvi (ai_verification app)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "authn.User"
@@ -227,6 +241,7 @@ SECURE_PROXY_SSL_HEADER = (
     if os.getenv("SECURE_PROXY_SSL_HEADER_ENABLED", "false").lower() == "true"
     else None
 )
+SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "false").lower() == "true"
 SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", _secure_default).lower() == "true"
 CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", _secure_default).lower() == "true"

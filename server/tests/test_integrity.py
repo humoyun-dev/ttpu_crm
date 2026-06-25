@@ -45,7 +45,7 @@ def test_roster_updates_keep_surveys_in_sync(db, program_item):
     other_program = CatalogItem.objects.create(
         type=CatalogItem.ItemType.PROGRAM, name="Program B", code="PB"
     )
-    created = upsert_roster_row(
+    _, created = upsert_roster_row(
         {
             "student_external_id": "s1",
             "program": program_item,
@@ -65,7 +65,7 @@ def test_roster_updates_keep_surveys_in_sync(db, program_item):
         survey_campaign="default",
         submitted_at=timezone.now(),
     )
-    updated = upsert_roster_row(
+    _, updated = upsert_roster_row(
         {
             "student_external_id": "s1",
             "program": other_program,

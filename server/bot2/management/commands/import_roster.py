@@ -42,7 +42,7 @@ class Command(BaseCommand):
         for idx, row in enumerate(rows, start=1):
             try:
                 parsed = parse_roster_payload(row)
-                flag = upsert_roster_row(parsed)
+                _, flag = upsert_roster_row(parsed)
                 created += int(flag)
                 updated += int(not flag)
             except Exception as exc:

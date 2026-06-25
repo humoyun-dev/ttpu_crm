@@ -5,7 +5,7 @@ records so the analytics pages show realistic charts.
 """
 
 import random
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
