@@ -36,3 +36,6 @@ class CatalogCache:
 
     async def get_regions(self) -> List[dict]:
         return await self._get_cached("regions", "region")
+
+    async def get_catalog_items(self, item_type: str) -> List[dict]:
+        return await self._get_cached(item_type, item_type)

@@ -30,6 +30,8 @@ PROMPTS = {
         "gender_male": "👨 Erkak",
         "gender_female": "👩 Ayol",
         "ask_region": "Hududingizni tanlang:",
+        "ask_direction": "Ta'lim yo'nalishingizni tanlang:",
+        "ask_course_year": "Qaysi kursda o'qiysiz?",
         "ask_employment": "Hozirda ishlaysizmi?",
         "yes": "✅ Ha",
         "no": "❌ Yo'q",
@@ -39,27 +41,87 @@ PROMPTS = {
         "ask_share": "Ma'lumotlaringizni ish beruvchilarga ulashishni istaysizmi?",
         "channels": "Quyidagi kanallarga a'zo bo'ling:",
         "ask_suggestions": "Universitet faoliyatini takomillashtirish bo'yicha takliflaringiz:",
+        "suggestions_skip": "📭 Taklifim yo'q",
         "ask_lang_select": "Til bilish darajangizni belgilang:",
         "lang_english": "🇬🇧 Ingliz tili",
         "lang_russian": "🇷🇺 Rus tili",
         "ask_english_level": "Ingliz tili darajangizni kiriting (masalan: B2, Advanced):",
         "ask_russian_level": "Rus tili darajangizni kiriting (masalan: B1, Intermediate):",
-        "thanks": "Rahmat! Ma'lumotlaringiz qabul qilindi. ✅\n\nHujjat (CV, IELTS) yuklash uchun /upload bosing.",
+        "thanks": "Rahmat! Ma'lumotlaringiz qabul qilindi. ✅",
         "submission_failed": "Ma'lumotlarni yuborishda xatolik. /retry bilan qayta urinib ko'ring.",
         "use_buttons": "Iltimos, yuqoridagi tugmalardan birini tanlang.",
         "cancelled": "Bekor qilindi. Qaytadan boshlash uchun /start bosing.",
+        "logged_out": "Hisobingizdan chiqdingiz. Qaytadan kirish uchun /start bosing.",
+        "restarted": "Javoblar bekor qilindi. Qaytadan boshlash uchun /start bosing.",
+        "welcome_back": "Salom, {name}! 👋",
+        "welcome_back_anon": "Xush kelibsiz! 👋",
         "unknown_command": "Boshlash uchun /start bosing.",
         "retry_nothing": "Qayta yuboriladigan ma'lumot yo'q. /start bilan boshlang.",
-        # Document upload
-        "ask_doc_type": "Qanday hujjat yuklaysiz?",
-        "doc_type_cv": "📄 CV / Rezyume",
-        "doc_type_ielts": "📊 IELTS / Til sertifikati",
-        "doc_type_cert": "📜 Boshqa sertifikat",
-        "ask_doc_file": "Hujjatni yuboring (PDF yoki rasm):",
-        "doc_upload_success": "Hujjat muvaffaqiyatli yuklandi ✅",
-        "doc_upload_failed": "Hujjat yuklashda xatolik. Qayta urinib ko'ring.",
-        "doc_invalid_file": "Iltimos, faqat PDF yoki rasm fayl yuboring.",
-        "upload_not_registered": "Hujjat yuklash uchun avval /start bilan ro'yxatdan o'ting.",
+        # CV upload
+        "ask_cv": "CV yoki rezyumengizni yuboring (PDF yoki rasm):",
+        "cv_no": "📭 Menda CV yo'q",
+        "cv_received": "CV qabul qilindi ✅",
+        # Language selection
+        "ask_languages": "Qaysi tillarni bilasiz? (bir yoki bir nechta tanlang)",
+        "lang_other": "🌐 Boshqa til",
+        "lang_done": "✅ Tayyor",
+        "select_at_least_one": "Kamida bitta tilni tanlang.",
+        # Certificate upload
+        "ask_certificate": "Til bilimingizni tasdiqlovchi xalqaro sertifikat yuklang (PDF yoki rasm):",
+        "cert_skip": "📭 Sertifikat yo'q",
+        "cert_received": "Sertifikat qabul qilindi ✅",
+        # Confirmation
+        "confirm_send": "Barcha javoblaringizni jo'natayinmi?",
+        "confirm_yes": "✅ Ha, jo'nating",
+        "confirm_no": "🔄 Yo'q, qaytadan",
+        # Review (answers summary before sending)
+        "review_title": "📝 <b>Javoblaringiz:</b>",
+        "review_direction": "🎓 Yo'nalish:",
+        "review_course": "📚 Kurs:",
+        "review_employment": "💼 Ish bilan bandlik:",
+        "review_company": "🏢 Kompaniya:",
+        "review_role": "👔 Lavozim:",
+        "review_langs": "🗣 Til darajalari:",
+        "review_suggestions": "💬 Takliflar:",
+        "review_help": "🤝 Yordam kerak:",
+        "review_share": "🔗 Ma'lumot ulashish:",
+        "employed_label": "Ishlayman",
+        "unemployed_label": "Ishlamayman",
+        "course_graduated_label": "Bitirgan",
+        "yes_short": "Ha",
+        "no_short": "Yo'q",
+        "restart_notice": "Yaxshi, qaytadan boshlaymiz. 🔄",
+        # Main menu
+        "menu_main": "Asosiy bo'limni tanlang:",
+        "menu_portfolio": "📄 Portfolio",
+        "menu_vacancy": "💼 Vakansiya",
+        "menu_survey": "📝 So'rovnoma",
+        "menu_account": "👤 Akkaunt",
+        "menu_support": "🆘 Support",
+        "survey_has_previous": "📊 So'rovnomalar tarixi\n\nOxirgi topshirilgan: <b>{date}</b>\n\nNima qilmoqchisiz?",
+        "survey_new": "📝 Yangi so'rovnoma to'ldirish",
+        "survey_back_btn": "◀ Orqaga",
+        "portfolio_info": (
+            "📄 <b>Portfolio</b>\n\n"
+            "Siz yuklagan hujjatlar (CV va sertifikatlar) serverda saqlangan.\n"
+            "Bandlik Markazi administratori ularni ko'rib chiqadi."
+        ),
+        "vacancy_info": "💼 <b>Vakansiya</b>\n\nYangi vakansiyalardan xabardor bo'lish uchun kanalimizga a'zo bo'ling:",
+        "support_info": (
+            "🆘 <b>Yordam</b>\n\n"
+            "📞 TTPU Bandlik Markazi\n"
+            "📍 Bosh bino, 1-qavat, 118-xona\n\n"
+            "Savol yoki muammo bo'lsa kanalimizga yozing."
+        ),
+        "account_title": "👤 <b>Sizning profilingiz:</b>",
+        "account_not_found": "Profil topilmadi. /start bilan qayta kiring.",
+        "account_name": "📋 Ism:",
+        "account_phone": "📱 Telefon:",
+        "account_gender": "👤 Jins:",
+        "account_region": "🗺 Hudud:",
+        "account_survey": "📊 So'rovnoma topshirildi:",
+        "gender_male_label": "Erkak",
+        "gender_female_label": "Ayol",
         # Followup
         "followup_answer_received": "Javobingiz qabul qilindi ✅",
         "followup_answer_failed": "Xatolik yuz berdi. Keyinroq urinib ko'ring.",
@@ -91,6 +153,8 @@ PROMPTS = {
         "gender_male": "👨 Мужской",
         "gender_female": "👩 Женский",
         "ask_region": "Выберите ваш регион:",
+        "ask_direction": "Выберите направление обучения:",
+        "ask_course_year": "На каком курсе вы учитесь?",
         "ask_employment": "Вы сейчас работаете?",
         "yes": "✅ Да",
         "no": "❌ Нет",
@@ -100,28 +164,88 @@ PROMPTS = {
         "ask_share": "Хотите поделиться данными с работодателями?",
         "channels": "Подпишитесь на каналы:",
         "ask_suggestions": "Ваши предложения по улучшению деятельности университета:",
+        "suggestions_skip": "📭 Нет предложений",
         "ask_lang_select": "Укажите уровень владения языками:",
         "lang_english": "🇬🇧 Английский",
         "lang_russian": "🇷🇺 Русский",
         "ask_english_level": "Введите уровень английского (например: B2, Advanced):",
         "ask_russian_level": "Введите уровень русского (например: B1, Intermediate):",
-        "thanks": "Спасибо! Ваши данные приняты. ✅\n\nДля загрузки документов нажмите /upload.",
+        "thanks": "Спасибо! Ваши данные приняты. ✅",
         "submission_failed": "Ошибка при отправке данных. Нажмите /retry.",
         "use_buttons": "Пожалуйста, выберите один из вариантов.",
         "cancelled": "Отменено. Нажмите /start для повтора.",
+        "logged_out": "Вы вышли из аккаунта. Нажмите /start, чтобы войти снова.",
+        "restarted": "Ответы отменены. Нажмите /start чтобы начать заново.",
+        "welcome_back": "Привет, {name}! 👋",
+        "welcome_back_anon": "Добро пожаловать! 👋",
         "unknown_command": "Нажмите /start для начала.",
         "retry_nothing": "Нет данных для повторной отправки. Начните с /start.",
-        "ask_doc_type": "Какой документ загружаете?",
-        "doc_type_cv": "📄 CV / Резюме",
-        "doc_type_ielts": "📊 IELTS / Языковой сертификат",
-        "doc_type_cert": "📜 Другой сертификат",
-        "ask_doc_file": "Отправьте документ (PDF или фото):",
-        "doc_upload_success": "Документ успешно загружен ✅",
-        "doc_upload_failed": "Ошибка загрузки. Попробуйте ещё раз.",
-        "doc_invalid_file": "Пожалуйста, отправьте PDF или фото.",
-        "upload_not_registered": "Для загрузки документов сначала пройдите регистрацию через /start.",
+        # CV upload
+        "ask_cv": "Отправьте ваше CV или резюме (PDF или фото):",
+        "cv_no": "📭 У меня нет CV",
+        "cv_received": "CV принят ✅",
+        # Language selection
+        "ask_languages": "Какими языками владеете? (выберите один или несколько)",
+        "lang_other": "🌐 Другой язык",
+        "lang_done": "✅ Готово",
+        "select_at_least_one": "Выберите хотя бы один язык.",
+        # Certificate upload
+        "ask_certificate": "Загрузите международный сертификат, подтверждающий знание языков (PDF или фото):",
+        "cert_skip": "📭 Нет сертификата",
+        "cert_received": "Сертификат принят ✅",
+        "confirm_send": "Отправить все ваши ответы?",
+        "confirm_yes": "✅ Да, отправить",
+        "confirm_no": "🔄 Нет, начать заново",
+        # Review (answers summary before sending)
+        "review_title": "📝 <b>Ваши ответы:</b>",
+        "review_direction": "🎓 Направление:",
+        "review_course": "📚 Курс:",
+        "review_employment": "💼 Занятость:",
+        "review_company": "🏢 Компания:",
+        "review_role": "👔 Должность:",
+        "review_langs": "🗣 Языки:",
+        "review_suggestions": "💬 Предложения:",
+        "review_help": "🤝 Нужна помощь:",
+        "review_share": "🔗 Делиться данными:",
+        "employed_label": "Работаю",
+        "unemployed_label": "Не работаю",
+        "course_graduated_label": "Выпускник",
+        "yes_short": "Да",
+        "no_short": "Нет",
+        "restart_notice": "Хорошо, начнём заново. 🔄",
         "followup_answer_received": "Ваш ответ принят ✅",
         "followup_answer_failed": "Произошла ошибка. Попробуйте позже.",
+        # Main menu
+        "menu_main": "Выберите раздел:",
+        "menu_portfolio": "📄 Портфолио",
+        "menu_vacancy": "💼 Вакансии",
+        "menu_survey": "📝 Анкета",
+        "menu_account": "👤 Аккаунт",
+        "menu_support": "🆘 Поддержка",
+        "survey_has_previous": "📊 История анкет\n\nПоследняя отправлена: <b>{date}</b>\n\nЧто хотите сделать?",
+        "survey_new": "📝 Заполнить новую анкету",
+        "survey_back_btn": "◀ Назад",
+        "portfolio_info": (
+            "📄 <b>Портфолио</b>\n\n"
+            "Ваши документы (CV и сертификаты) сохранены на сервере.\n"
+            "Администратор Центра трудоустройства рассмотрит их."
+        ),
+        "vacancy_info": "💼 <b>Вакансии</b>\n\nПодпишитесь на наш канал, чтобы не пропустить новые вакансии:",
+        "support_info": (
+            "🆘 <b>Поддержка</b>\n\n"
+            "📞 Центр трудоустройства TTPU\n"
+            "📍 Главный корпус, 1 этаж, каб. 118\n\n"
+            "По вопросам пишите в наш канал."
+        ),
+        "account_title": "👤 <b>Ваш профиль:</b>",
+        "account_not_found": "Профиль не найден. Войдите через /start.",
+        "account_name": "📋 Имя:",
+        "account_phone": "📱 Телефон:",
+        "account_gender": "👤 Пол:",
+        "account_region": "🗺 Регион:",
+        "account_survey": "📊 Анкета отправлена:",
+        "gender_male_label": "Мужской",
+        "gender_female_label": "Женский",
     },
 }
 
@@ -129,12 +253,13 @@ CHANNELS = [
     {"name": "TTPU Career Center", "url": "https://t.me/+JCloQxJacT5lMjRi"},
 ]
 
-DOC_TYPE_MAP = {
-    "cv": "CV",
-    "ielts": "IELTS",
-    "cert": "CERT",
-}
-
 
 def get_text(key: str, lang: str = "uz") -> str:
     return PROMPTS.get(lang, PROMPTS["uz"]).get(key, PROMPTS["uz"].get(key, key))
+
+
+def channels_text(lang: str = "uz") -> str:
+    """Return channel list as HTML text links (no inline keyboard needed)."""
+    header = get_text("channels", lang)
+    links = "\n".join(f'• <a href="{ch["url"]}">{ch["name"]}</a>' for ch in CHANNELS)
+    return f"{header}\n{links}"

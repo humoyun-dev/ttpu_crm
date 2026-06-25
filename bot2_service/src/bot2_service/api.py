@@ -24,57 +24,15 @@ class CrmApiClient:
     def __init__(self):
         self.base_url = settings.server_base_url
         self.service_token = settings.service_token
-        self.email = settings.dashboard_email
-        self.password = settings.dashboard_password
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=httpx.Timeout(connect=5.0, read=15.0, write=10.0, pool=5.0),
             follow_redirects=True,
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
         )
-        self._logged_in = False
-        self._auth_token: str | None = None
 
     async def close(self):
         await self.client.aclose()
-
-    def _auth_headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._auth_token}"} if self._auth_token else {}
-
-    async def login_dashboard(self) -> bool:
-        if not (self.email and self.password):
-            logger.warning("Dashboard credentials are missing for bot2 service")
-            return False
-
-        if self._logged_in and self._auth_token:
-            return True
-
-        try:
-            resp = await self.client.post(
-                "/auth/login",
-                json={"email": self.email, "password": self.password},
-            )
-        except Exception as exc:  # pragma: no cover
-            logger.exception("Dashboard login error: %s", exc)
-            return False
-
-        if resp.status_code != 200:
-            logger.warning("Dashboard login failed: %s %s", resp.status_code, resp.text)
-            return False
-
-        try:
-            token = resp.json().get("access")
-        except Exception:
-            logger.warning("Dashboard login response parsing failed")
-            return False
-
-        if not token:
-            logger.warning("Dashboard login response missing access token")
-            return False
-
-        self._auth_token = token
-        self._logged_in = True
-        return True
 
     async def _get_catalog(self, item_type: str) -> list[dict]:
         headers = {"X-SERVICE-TOKEN": self.service_token}
@@ -114,21 +72,21 @@ class CrmApiClient:
         for attempt in (1, 2):
             try:
                 resp = await self.client.post(path, json=payload, headers=headers)
-            except httpx.TimeoutException as exc:
-                logger.warning("POST %s timeout (attempt %d): %s", path, attempt, exc)
-                if attempt == 1:
-                    continue
-                return ApiResult(ok=False, error=f"Timeout: {exc}")
-            except httpx.ConnectError as exc:
+            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                # Connection-only retry: the request never reached the server,
+                # so retrying is safe even for non-idempotent POSTs.
                 logger.warning("POST %s connection error (attempt %d): %s", path, attempt, exc)
                 if attempt == 1:
                     await asyncio.sleep(1)
                     continue
                 return ApiResult(ok=False, error=f"Connection error: {exc}")
+            except httpx.TimeoutException as exc:
+                # Read/write/pool timeout — the server may have already committed,
+                # so do NOT retry (unsafe for non-idempotent POSTs).
+                logger.warning("POST %s timeout: %s", path, exc)
+                return ApiResult(ok=False, error=f"Timeout: {exc}")
             except Exception as exc:  # pragma: no cover
-                logger.exception("POST %s failed (attempt %d): %s", path, attempt, exc)
-                if attempt == 1:
-                    continue
+                logger.exception("POST %s failed: %s", path, exc)
                 return ApiResult(ok=False, error=str(exc))
 
             if 200 <= resp.status_code < 300:
@@ -138,11 +96,9 @@ class CrmApiClient:
                     data = resp.text
                 return ApiResult(ok=True, data=data, status=resp.status_code)
 
-            logger.warning("POST %s returned %s (attempt %d): %s", path, resp.status_code, attempt, resp.text[:500])
-            if attempt == 1 and resp.status_code >= 500:
-                await asyncio.sleep(1)
-                continue
-
+            # A response (even 5xx) means the server received the request; do not
+            # retry non-idempotent POSTs on server errors.
+            logger.warning("POST %s returned %s: %s", path, resp.status_code, resp.text[:500])
             try:
                 err = resp.json()
             except Exception:
@@ -155,6 +111,12 @@ class CrmApiClient:
         return await self._post_service("/bot/verify", {
             "student_id": student_id,
             "birth_date": birth_date,
+        })
+
+    async def logout(self, telegram_user_id: int) -> ApiResult:
+        """Unlink the Telegram account from its student so /start re-verifies."""
+        return await self._post_service("/bot/logout", {
+            "telegram_user_id": telegram_user_id,
         })
 
     async def register(
@@ -179,7 +141,7 @@ class CrmApiClient:
 
     async def upload_document(
         self,
-        student_id: str,
+        student_external_id: str,
         doc_type: str,
         file_bytes: bytes,
         filename: str,
@@ -190,7 +152,7 @@ class CrmApiClient:
             try:
                 resp = await self.client.post(
                     "/bot/document",
-                    data={"student_external_id": student_id, "type": doc_type},
+                    data={"student_external_id": student_external_id, "doc_type": doc_type},
                     files={"file": (filename, file_bytes, mime_type)},
                     headers=headers,
                 )
@@ -200,7 +162,7 @@ class CrmApiClient:
                     continue
                 return ApiResult(ok=False, error=f"Timeout: {exc}")
             except httpx.ConnectError as exc:
-                logger.warning("upload_document connection error (attempt %d): %s", attempt, exc)
+                logger.warning("upload_document connect error (attempt %d): %s", attempt, exc)
                 if attempt == 1:
                     await asyncio.sleep(1)
                     continue
@@ -213,16 +175,14 @@ class CrmApiClient:
 
             if 200 <= resp.status_code < 300:
                 try:
-                    data = resp.json()
+                    return ApiResult(ok=True, data=resp.json(), status=resp.status_code)
                 except Exception:
-                    data = resp.text
-                return ApiResult(ok=True, data=data, status=resp.status_code)
+                    return ApiResult(ok=True, data={}, status=resp.status_code)
 
-            logger.warning("upload_document returned %s (attempt %d): %s", resp.status_code, attempt, resp.text[:500])
+            logger.warning("upload_document %s (attempt %d): %s", resp.status_code, attempt, resp.text[:300])
             if attempt == 1 and resp.status_code >= 500:
                 await asyncio.sleep(1)
                 continue
-
             try:
                 err = resp.json()
             except Exception:
@@ -230,6 +190,24 @@ class CrmApiClient:
             return ApiResult(ok=False, error=str(err), status=resp.status_code)
 
         return ApiResult(ok=False, error="Max retries exceeded")
+
+    async def get_student_profile(self, telegram_user_id: int) -> ApiResult:
+        headers = {"X-SERVICE-TOKEN": self.service_token}
+        try:
+            resp = await self.client.get(
+                "/bot/profile",
+                params={"telegram_user_id": telegram_user_id},
+                headers=headers,
+            )
+        except Exception as exc:
+            logger.warning("get_student_profile error: %s", exc)
+            return ApiResult(ok=False, error=str(exc))
+        if 200 <= resp.status_code < 300:
+            try:
+                return ApiResult(ok=True, data=resp.json())
+            except Exception:
+                return ApiResult(ok=True, data={})
+        return ApiResult(ok=False, error=resp.text, status=resp.status_code)
 
     async def followup_answer(self, followup_id: str, answer: str, telegram_user_id: int) -> ApiResult:
         return await self._post_service("/bot/followup-answer", {
@@ -240,3 +218,41 @@ class CrmApiClient:
 
     async def submit_survey(self, payload: dict[str, Any]) -> ApiResult:
         return await self._post_service("/bot2/surveys/submit", payload)
+
+    async def fsm_get(self, user_id: int) -> dict:
+        headers = {"X-SERVICE-TOKEN": self.service_token}
+        try:
+            resp = await self.client.get(f"/bot/fsm/{user_id}", headers=headers)
+            if 200 <= resp.status_code < 300:
+                return resp.json()
+        except Exception as exc:
+            logger.warning("fsm_get error user=%s: %s", user_id, exc)
+        return {"state": None, "data": {}}
+
+    async def fsm_put(self, user_id: int, state: str | None, data: dict) -> bool:
+        headers = {"X-SERVICE-TOKEN": self.service_token}
+        try:
+            resp = await self.client.put(
+                f"/bot/fsm/{user_id}",
+                json={"state": state, "data": data},
+                headers=headers,
+            )
+        except Exception as exc:
+            logger.warning("fsm_put error user=%s: %s", user_id, exc)
+            return False
+        if 200 <= resp.status_code < 300:
+            return True
+        logger.warning("fsm_put failed user=%s: %s %s", user_id, resp.status_code, resp.text[:200])
+        return False
+
+    async def fsm_delete(self, user_id: int) -> bool:
+        headers = {"X-SERVICE-TOKEN": self.service_token}
+        try:
+            resp = await self.client.delete(f"/bot/fsm/{user_id}", headers=headers)
+        except Exception as exc:
+            logger.warning("fsm_delete error user=%s: %s", user_id, exc)
+            return False
+        if 200 <= resp.status_code < 300:
+            return True
+        logger.warning("fsm_delete failed user=%s: %s %s", user_id, resp.status_code, resp.text[:200])
+        return False

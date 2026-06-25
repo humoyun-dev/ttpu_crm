@@ -133,13 +133,79 @@ def lang_select_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def document_type_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+def directions_keyboard(directions: Sequence[dict], lang: str = "uz") -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text=get_text("doc_type_cv", lang), callback_data="doctype:cv")
-    kb.button(text=get_text("doc_type_ielts", lang), callback_data="doctype:ielts")
-    kb.button(text=get_text("doc_type_cert", lang), callback_data="doctype:cert")
+    for d in directions:
+        kb.button(text=str(_localized_name(d, lang)), callback_data=f"direction:{d.get('id')}")
     kb.adjust(1)
     return kb.as_markup()
+
+
+def course_year_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    if lang == "ru":
+        labels = ["1 курс", "2 курс", "3 курс", "4 курс", "Выпускник"]
+    else:
+        labels = ["1-kurs", "2-kurs", "3-kurs", "4-kurs", "Bitiruvchi"]
+    for i, label in enumerate(labels, start=1):
+        kb.button(text=label, callback_data=f"course_year:{i}")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
+def suggestions_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=get_text("suggestions_skip", lang), callback_data="suggestions:skip")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def cv_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=get_text("cv_no", lang), callback_data="cv:no")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def languages_keyboard(selected: list, lang: str = "uz") -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    options = [
+        ("ru", get_text("lang_russian", lang)),
+        ("en", get_text("lang_english", lang)),
+        ("other", get_text("lang_other", lang)),
+    ]
+    for key, label in options:
+        mark = "✅ " if key in selected else ""
+        kb.button(text=f"{mark}{label}", callback_data=f"lang_toggle:{key}")
+    kb.button(text=get_text("lang_done", lang), callback_data="lang_done")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def certificate_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=get_text("cert_skip", lang), callback_data="cert:skip")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def confirm_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=get_text("confirm_yes", lang), callback_data="confirm:yes")
+    kb.button(text=get_text("confirm_no", lang), callback_data="confirm:no")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
+def main_menu_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        resize_keyboard=True,
+        keyboard=[
+            [KeyboardButton(text=get_text("menu_portfolio", lang)), KeyboardButton(text=get_text("menu_vacancy", lang))],
+            [KeyboardButton(text=get_text("menu_survey", lang)), KeyboardButton(text=get_text("menu_account", lang))],
+            [KeyboardButton(text=get_text("menu_support", lang))],
+        ],
+    )
 
 
 def channels_keyboard() -> InlineKeyboardMarkup:
