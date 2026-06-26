@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Eye,
@@ -9,6 +10,8 @@ import {
   Search,
   Download,
   CalendarIcon,
+  Filter,
+  X,
 } from "lucide-react";
 import {
   Table,
@@ -43,7 +46,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { bot2Api, Bot2SurveyResponse, DocVerificationStatus, formatDate } from "@/lib/api";
+import { bot2Api, catalogApi, Bot2SurveyResponse, DocVerificationStatus, formatDate } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSearch } from "@/lib/hooks/use-search";
 import { formatCourseYearLabel, cn } from "@/lib/utils";
@@ -131,9 +134,8 @@ function isNewerResponse(
   return String(a.id) > String(b.id);
 }
 
-/* Keep only the latest response per unique student (by Student ID). A student
-   may submit the survey several times; stats and export should count each
-   student once, using their most recent submission. */
+/* Keep only the latest response per unique student (by Student ID). Used for
+   stats and export — the table view uses server-side latest_only filter. */
 function dedupeLatestByStudent(
   list: Bot2SurveyResponse[],
 ): Bot2SurveyResponse[] {
@@ -154,7 +156,6 @@ async function fetchAllSurveys(
 ): Promise<Bot2SurveyResponse[]> {
   const all: Bot2SurveyResponse[] = [];
   let page = 1;
-  // Safety cap to avoid an unbounded loop if `next` is mis-reported.
   for (let guard = 0; guard < 1000; guard += 1) {
     const res = await bot2Api.listSurveys({
       ...params,
@@ -177,22 +178,54 @@ async function fetchAllSurveys(
   return all;
 }
 
+interface ProgramOption {
+  id: string;
+  name: string;
+}
+
+interface SurveyFilters {
+  gender: string;
+  employment_status: string;
+  course_year: string;
+  program: string;
+  latest_only: string;
+  want_help: string;
+  share_with_employers: string;
+}
+
+const EMPTY_FILTERS: SurveyFilters = {
+  gender: "",
+  employment_status: "",
+  course_year: "",
+  program: "",
+  latest_only: "",
+  want_help: "",
+  share_with_employers: "",
+};
+
+function hasActiveFilters(f: SurveyFilters): boolean {
+  return Object.values(f).some(Boolean);
+}
+
 export default function SurveysPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const router = useRouter();
 
-  // Current page of surveys (server-side pagination)
   const [surveys, setSurveys] = useState<Bot2SurveyResponse[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Server-side search + pagination state
   const { searchTerm, debouncedSearch, setSearch } = useSearch();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  // Full dataset (all surveys) for whole-dataset stats + export
+  // Filters
+  const [filters, setFilters] = useState<SurveyFilters>(EMPTY_FILTERS);
+  const [programs, setPrograms] = useState<ProgramOption[]>([]);
+
+  // Full dataset for stats + export (always unfiltered for correct totals)
   const [allSurveys, setAllSurveys] = useState<Bot2SurveyResponse[]>([]);
   const [allLoaded, setAllLoaded] = useState(false);
 
@@ -204,18 +237,42 @@ export default function SurveysPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
+  /* ── load program list for filter dropdown ── */
+  useEffect(() => {
+    catalogApi.list("direction", { page_size: "200", ordering: "name_uz" }).then((res) => {
+      if (res.data) {
+        setPrograms(
+          res.data.results.map((p) => ({ id: p.id, name: p.name_uz || p.name })),
+        );
+      }
+    });
+  }, []);
+
+  /* ── build filter params for API calls ── */
+  const buildFilterParams = useCallback(
+    (extra?: Record<string, string>): Record<string, string> => {
+      const params: Record<string, string> = { ordering: "-submitted_at", ...extra };
+      if (debouncedSearch) params.search = debouncedSearch;
+      if (filters.gender) params.gender = filters.gender;
+      if (filters.employment_status) params.employment_status = filters.employment_status;
+      if (filters.course_year) params.course_year = filters.course_year;
+      if (filters.program) params.program = filters.program;
+      if (filters.latest_only) params.latest_only = filters.latest_only;
+      if (filters.want_help) params.want_help = filters.want_help;
+      if (filters.share_with_employers) params.share_with_employers = filters.share_with_employers;
+      return params;
+    },
+    [debouncedSearch, filters],
+  );
+
   /* ── load current page from server ── */
   const fetchPage = useCallback(async () => {
     setLoading(true);
     setError(null);
-
-    const params: Record<string, string> = {
+    const params = buildFilterParams({
       page: String(currentPage),
       page_size: String(pageSize),
-      ordering: "-submitted_at",
-    };
-    if (debouncedSearch) params.search = debouncedSearch;
-
+    });
     const res = await bot2Api.listSurveys(params);
     if (res.error) {
       setError(
@@ -231,9 +288,9 @@ export default function SurveysPage() {
       setTotalCount(res.data.count);
     }
     setLoading(false);
-  }, [currentPage, pageSize, debouncedSearch]);
+  }, [currentPage, pageSize, buildFilterParams]);
 
-  /* ── load whole dataset (stats + export) ── */
+  /* ── load whole dataset (stats + export) — always unfiltered ── */
   const fetchAll = useCallback(async () => {
     setAllLoaded(false);
     try {
@@ -241,7 +298,6 @@ export default function SurveysPage() {
       setAllSurveys(all);
       setAllLoaded(true);
     } catch {
-      // Stats/export remain unavailable; the table itself still works.
       setAllLoaded(false);
     }
   }, []);
@@ -264,7 +320,17 @@ export default function SurveysPage() {
     setCurrentPage(1);
   };
 
-  /* ── whole-dataset stats (unique students only — latest response per ID) ── */
+  const handleFilterChange = (key: keyof SurveyFilters, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  };
+
+  const clearFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    setCurrentPage(1);
+  };
+
+  /* ── whole-dataset stats (unique students only) ── */
   const uniqueSurveys = dedupeLatestByStudent(allSurveys);
   const uniqueStudentsCount = uniqueSurveys.length;
   const employedCount = uniqueSurveys.filter(
@@ -293,7 +359,6 @@ export default function SurveysPage() {
       if (range.to && d >= range.to) return false;
       return true;
     });
-    // Keep only the latest response per student within the selected range.
     return dedupeLatestByStudent(inRange);
   })();
 
@@ -349,7 +414,6 @@ export default function SurveysPage() {
 
       const ws = XLSX.utils.json_to_sheet(rows);
 
-      /* auto-width columns */
       const colKeys = Object.keys(rows[0] || {});
       ws["!cols"] = colKeys.map((key) => {
         const maxLen = Math.max(
@@ -562,6 +626,150 @@ export default function SurveysPage() {
               />
             </div>
           </div>
+
+          {/* Filter bar */}
+          <div className="mt-3 border-t border-border pt-3">
+            <div className="mb-2 flex items-center gap-1.5">
+              <Filter className="h-3 w-3 text-muted-foreground" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                Filterlar
+              </span>
+              {hasActiveFilters(filters) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-6 px-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                  onClick={clearFilters}
+                >
+                  <X className="mr-1 h-3 w-3" />
+                  Tozalash
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {/* Jins */}
+              <Select
+                value={filters.gender || "_all"}
+                onValueChange={(v) => handleFilterChange("gender", v === "_all" ? "" : v)}
+              >
+                <SelectTrigger className="h-8 w-36 text-xs">
+                  <SelectValue placeholder="Jins" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Barcha jinslar</SelectItem>
+                  <SelectItem value="male">Erkak</SelectItem>
+                  <SelectItem value="female">Ayol</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Ish holati */}
+              <Select
+                value={filters.employment_status || "_all"}
+                onValueChange={(v) =>
+                  handleFilterChange("employment_status", v === "_all" ? "" : v)
+                }
+              >
+                <SelectTrigger className="h-8 w-40 text-xs">
+                  <SelectValue placeholder="Ish holati" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Barcha holat</SelectItem>
+                  <SelectItem value="employed">Ishlamoqda</SelectItem>
+                  <SelectItem value="unemployed">Ishlamaydi</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Kurs */}
+              <Select
+                value={filters.course_year || "_all"}
+                onValueChange={(v) =>
+                  handleFilterChange("course_year", v === "_all" ? "" : v)
+                }
+              >
+                <SelectTrigger className="h-8 w-32 text-xs">
+                  <SelectValue placeholder="Kurs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Barcha kurs</SelectItem>
+                  <SelectItem value="1">1-kurs</SelectItem>
+                  <SelectItem value="2">2-kurs</SelectItem>
+                  <SelectItem value="3">3-kurs</SelectItem>
+                  <SelectItem value="4">4-kurs</SelectItem>
+                  <SelectItem value="5">Bitirgan</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Yo'nalish */}
+              <Select
+                value={filters.program || "_all"}
+                onValueChange={(v) =>
+                  handleFilterChange("program", v === "_all" ? "" : v)
+                }
+              >
+                <SelectTrigger className="h-8 w-52 text-xs">
+                  <SelectValue placeholder="Yo'nalish" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Barcha yo&apos;nalish</SelectItem>
+                  {programs.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Unikal */}
+              <Select
+                value={filters.latest_only || "_all"}
+                onValueChange={(v) =>
+                  handleFilterChange("latest_only", v === "_all" ? "" : v)
+                }
+              >
+                <SelectTrigger className="h-8 w-44 text-xs">
+                  <SelectValue placeholder="Unikal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Barcha javoblar</SelectItem>
+                  <SelectItem value="true">Oxirgi javob (unikal)</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Yordam kerakmi */}
+              <Select
+                value={filters.want_help || "_all"}
+                onValueChange={(v) =>
+                  handleFilterChange("want_help", v === "_all" ? "" : v)
+                }
+              >
+                <SelectTrigger className="h-8 w-40 text-xs">
+                  <SelectValue placeholder="Yordam" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Yordam (hammasi)</SelectItem>
+                  <SelectItem value="true">Yordam kerak</SelectItem>
+                  <SelectItem value="false">Kerak emas</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Ma'lumot ulashish */}
+              <Select
+                value={filters.share_with_employers || "_all"}
+                onValueChange={(v) =>
+                  handleFilterChange("share_with_employers", v === "_all" ? "" : v)
+                }
+              >
+                <SelectTrigger className="h-8 w-44 text-xs">
+                  <SelectValue placeholder="Ma'lumot ulashish" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Ulashish (hammasi)</SelectItem>
+                  <SelectItem value="true">Ulashishga rozi</SelectItem>
+                  <SelectItem value="false">Rozi emas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
@@ -606,7 +814,11 @@ export default function SurveysPage() {
                           "-";
 
                         return (
-                          <TableRow key={survey.id}>
+                          <TableRow
+                            key={survey.id}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => router.push(`/dashboard/surveys/${survey.id}`)}
+                          >
                             <TableCell className="font-medium whitespace-nowrap">
                               <div>
                                 {student
@@ -647,7 +859,7 @@ export default function SurveysPage() {
                                 survey.submitted_at || survey.created_at,
                               )}
                             </TableCell>
-                            <TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-1">
                                 <Link href={`/dashboard/surveys/${survey.id}`}>
                                   <Button

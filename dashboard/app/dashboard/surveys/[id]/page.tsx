@@ -3,9 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, User, GraduationCap, Clock, CheckCircle, FileText,
+  ArrowLeft, User, GraduationCap, FileText,
   Phone, MapPin, MessageSquare, Pencil, Save, X, Briefcase,
-  Send, Languages, Calendar, Hash, Download, File,
+  Send, Languages, Calendar, Hash, Download, File, ShieldCheck,
+  CheckCircle2, XCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,22 +23,21 @@ import {
 import {
   bot2Api, catalogApi, Bot2SurveyResponse, Bot2Student, Bot2Document, CatalogItem, formatDate,
 } from "@/lib/api";
-import { formatUzPhone } from "@/lib/utils";
+import { formatUzPhone, cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { EMPLOYMENT_LABELS, CONSENT_LABELS, LABEL_TRANSLATIONS, courseYearLabel } from "@/lib/constants";
 
-/* ── Info row ── */
-function Row({ icon: Icon, label, children }: {
-  icon?: React.ComponentType<{ className?: string }>;
-  label: string;
-  children: React.ReactNode;
+/* ── Vertical labeled field ── */
+function Field({ label, children, className }: {
+  label: string; children: React.ReactNode; className?: string;
 }) {
   return (
-    <div className="flex items-start gap-3 py-2.5">
-      {Icon && <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
-      <span className="min-w-[120px] text-sm text-muted-foreground">{label}</span>
-      <span className="flex-1 text-right text-sm font-medium">{children}</span>
+    <div className={cn("space-y-1", className)}>
+      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </p>
+      <div className="text-sm font-medium leading-snug text-foreground">{children}</div>
     </div>
   );
 }
@@ -87,26 +87,21 @@ export default function SurveyDetailPage() {
       if (!surveyRes.data) throw new Error("So'rovnoma topilmadi");
       setSurvey(surveyRes.data);
       populateSurveyForm(surveyRes.data);
-      let resolvedStudent: Bot2Student | null = null;
       if (surveyRes.data.student_details) {
-        resolvedStudent = surveyRes.data.student_details;
-        setStudent(resolvedStudent);
-        populateStudentForm(resolvedStudent);
+        setStudent(surveyRes.data.student_details);
+        populateStudentForm(surveyRes.data.student_details);
       } else if (surveyRes.data.student) {
         const studentRes = await bot2Api.getStudent(surveyRes.data.student);
-        if (studentRes.data) { resolvedStudent = studentRes.data; setStudent(resolvedStudent); populateStudentForm(resolvedStudent); }
+        if (studentRes.data) { setStudent(studentRes.data); populateStudentForm(studentRes.data); }
       }
-      // Load documents linked to THIS survey only
       const docsRes = await bot2Api.listDocuments({ survey: id });
       if (docsRes.data?.results) {
-        // Keep only the latest doc per type (server returns newest first)
         const seen = new Set<string>();
-        const latest = docsRes.data.results.filter((d) => {
+        setDocuments(docsRes.data.results.filter((d) => {
           if (seen.has(d.doc_type)) return false;
           seen.add(d.doc_type);
           return true;
-        });
-        setDocuments(latest);
+        }));
       }
       const regionsRes = await catalogApi.list("region");
       if (regionsRes.data?.results) setRegions(regionsRes.data.results);
@@ -162,16 +157,14 @@ export default function SurveyDetailPage() {
   const consents = (survey.consents as Record<string, boolean>) || {};
   const programName = survey.program_details?.name_uz || survey.program_details?.name || null;
   const regionName = student?.region_details?.name_uz || student?.region_details?.name || null;
-
   const englishLevel = answers.english_level as string;
   const russianLevel = answers.russian_level as string;
-  const otherAnswers = Object.entries(answers).filter(([k]) => !["english_level", "russian_level", "region_label", "program_label", "course_year", "cv_doc_id", "cert_doc_id", "known_langs"].includes(k));
-
+  const otherAnswers = Object.entries(answers).filter(
+    ([k]) => !["english_level", "russian_level", "region_label", "program_label", "course_year", "cv_doc_id", "cert_doc_id", "known_langs"].includes(k),
+  );
   const isEmployed = survey.employment_status === "employed";
-
-  const studentFullName = student
-    ? [student.first_name, student.last_name].filter(Boolean).join(" ").trim()
-    : "";
+  const studentFullName = student ? [student.first_name, student.last_name].filter(Boolean).join(" ").trim() : "";
+  const initials = studentFullName.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase() || "?";
 
   const RATING_KEYS = new Set(["dormitory","transport","food","library","sports","wifi","cleanliness","security","teachers","materials","schedule","facilities"]);
   const isRating = (key: string, value: string | number) => {
@@ -183,19 +176,21 @@ export default function SurveyDetailPage() {
     if (isNaN(num)) return <span>{String(value)}</span>;
     return (
       <div className="flex items-center gap-0.5">
-        {[1,2,3,4,5].map(s => <span key={s} className={num >= s ? "text-accent-gold" : "text-muted-foreground/30"}>★</span>)}
+        {[1,2,3,4,5].map(s => <span key={s} className={num >= s ? "text-amber-400" : "text-muted-foreground/30"}>★</span>)}
         <span className="ml-1 font-mono text-xs tabular-nums text-muted-foreground">({num}/5)</span>
       </div>
     );
   };
 
+  const docStatus = survey.doc_verification_status;
+
   return (
-    <div className="space-y-5 max-w-5xl mx-auto">
+    <div className="mx-auto max-w-5xl space-y-5">
 
       {/* ── Header ── */}
       <PageHeader
-        eyebrow="TALABALAR / SO'ROVNOMALAR"
-        title={student ? studentFullName || "—" : "So'rovnoma"}
+        eyebrow="Talabalar / So'rovnomalar"
+        title={studentFullName || "So'rovnoma"}
         description="Talaba so'rovnomasi javoblari va profili."
         actions={
           <>
@@ -206,7 +201,7 @@ export default function SurveyDetailPage() {
                     <X className="mr-1 h-3.5 w-3.5" />Bekor
                   </Button>
                   <Button size="sm" onClick={handleSave} disabled={saving}>
-                    <Save className="mr-1 h-3.5 w-3.5" />{saving ? "Saqlanmoqda..." : "Saqlash"}
+                    <Save className="mr-1 h-3.5 w-3.5" />{saving ? "Saqlanmoqda…" : "Saqlash"}
                   </Button>
                 </>
               ) : (
@@ -222,30 +217,63 @@ export default function SurveyDetailPage() {
         }
       />
 
-      {/* ── So'rovnoma metama'lumotlari ── */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1 font-mono tabular-nums">
-          <Hash className="h-3 w-3" />{String(survey.id).slice(0, 8)}
-        </span>
-        {survey.submitted_at && (
-          <span className="flex items-center gap-1 font-mono tabular-nums">
-            <Send className="h-3 w-3" />
-            {formatDate(survey.submitted_at, true)}
-          </span>
-        )}
+      {/* ── Profile hero ── */}
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card px-5 py-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <span className="font-mono text-sm font-bold text-primary">{initials}</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-lg font-semibold tracking-tight">{studentFullName || "—"}</span>
+            <Badge
+              variant={isEmployed ? "default" : "secondary"}
+              className={cn("text-xs", isEmployed && "bg-emerald-600 hover:bg-emerald-600 dark:bg-emerald-700")}
+            >
+              {EMPLOYMENT_LABELS[survey.employment_status] || survey.employment_status || "—"}
+            </Badge>
+            {docStatus === "verified" && (
+              <Badge className="gap-1 bg-sky-600 hover:bg-sky-600 text-xs dark:bg-sky-700">
+                <ShieldCheck className="h-3 w-3" />Tasdiqlangan
+              </Badge>
+            )}
+            {docStatus === "pending" && (
+              <Badge variant="outline" className="gap-1 text-xs text-amber-600 border-amber-300">
+                Ko&apos;rib chiqilmoqda
+              </Badge>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+            {student?.student_external_id && (
+              <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                # {student.student_external_id}
+              </span>
+            )}
+            {student?.username && (
+              <a href={`https://t.me/${student.username}`} target="_blank" rel="noreferrer"
+                className="text-xs text-primary hover:underline">
+                @{student.username}
+              </a>
+            )}
+            {survey.submitted_at && (
+              <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                {formatDate(survey.submitted_at, true)}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* ── Row 1: Talaba + Ta'lim ── */}
+      {/* ── Row 1: Contact | Education + Employment ── */}
       <div className="grid gap-4 md:grid-cols-2">
 
-        {/* Talaba ma'lumotlari */}
+        {/* Shaxsiy ma'lumot */}
         <Card>
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              <User className="h-4 w-4" />Talaba
+          <CardHeader className="pb-3 pt-4 px-5">
+            <CardTitle className="flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <User className="h-3.5 w-3.5" />Shaxsiy ma&apos;lumot
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4">
+          <CardContent className="px-5 pb-5">
             {editing ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -273,33 +301,33 @@ export default function SurveyDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="divide-y">
-                <Row label="To'liq ism">
-                  <span className="font-semibold">{studentFullName || "—"}</span>
-                </Row>
-                <Row label="Jins">
-                  {student?.gender === "male" ? "👨 Erkak" : student?.gender === "female" ? "👩 Ayol" : "—"}
-                </Row>
-                <Row icon={Hash} label="Student ID">
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums">{student?.student_external_id || "—"}</code>
-                </Row>
-                {student?.phone && (
-                  <Row icon={Phone} label="Telefon">
-                    <a href={`tel:${student.phone}`} className="font-mono tabular-nums text-primary hover:underline">{formatUzPhone(student.phone)}</a>
-                  </Row>
-                )}
-                {regionName && (
-                  <Row icon={MapPin} label="Viloyat">{regionName}</Row>
-                )}
-                {student?.username && (
-                  <Row label="Telegram">
-                    <a href={`https://t.me/${student.username}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">@{student.username}</a>
-                  </Row>
-                )}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                <Field label="To'liq ism" className="col-span-2">
+                  {studentFullName || "—"}
+                </Field>
+                <Field label="Jins">
+                  {student?.gender === "male" ? "Erkak" : student?.gender === "female" ? "Ayol" : "—"}
+                </Field>
+                <Field label="Viloyat">{regionName || "—"}</Field>
+                <Field label="Telefon" className="col-span-2">
+                  {student?.phone ? (
+                    <a href={`tel:${student.phone}`}
+                      className="font-mono text-primary hover:underline">
+                      {formatUzPhone(student.phone)}
+                    </a>
+                  ) : "—"}
+                </Field>
+                <Field label="Student ID" className="col-span-2">
+                  <code className="rounded bg-muted px-2 py-0.5 font-mono text-xs tabular-nums">
+                    {student?.student_external_id || "—"}
+                  </code>
+                </Field>
                 {student?.telegram_user_id && (
-                  <Row label="Telegram ID">
-                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums">{student.telegram_user_id}</code>
-                  </Row>
+                  <Field label="Telegram ID" className="col-span-2">
+                    <code className="rounded bg-muted px-2 py-0.5 font-mono text-xs tabular-nums">
+                      {student.telegram_user_id}
+                    </code>
+                  </Field>
                 )}
               </div>
             )}
@@ -308,12 +336,12 @@ export default function SurveyDetailPage() {
 
         {/* Ta'lim va ish */}
         <Card>
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              <GraduationCap className="h-4 w-4" />Ta&apos;lim va ish
+          <CardHeader className="pb-3 pt-4 px-5">
+            <CardTitle className="flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <GraduationCap className="h-3.5 w-3.5" />Ta&apos;lim va ish
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4">
+          <CardContent className="px-5 pb-5 space-y-4">
             {editing ? (
               <div className="space-y-3">
                 {programName && <p className="rounded-md bg-muted px-3 py-2 text-sm">{programName}</p>}
@@ -332,8 +360,8 @@ export default function SurveyDetailPage() {
                   <Select value={editSurvey.employment_status} onValueChange={(v) => setEditSurvey(p => ({ ...p, employment_status: v }))}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="employed">Ha</SelectItem>
-                      <SelectItem value="unemployed">Yo&apos;q</SelectItem>
+                      <SelectItem value="employed">Ha, ishlayman</SelectItem>
+                      <SelectItem value="unemployed">Yo&apos;q, ishlamayman</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -341,81 +369,84 @@ export default function SurveyDetailPage() {
                 <EditField label="Lavozim" value={editSurvey.employment_role} onChange={(v) => setEditSurvey(p => ({ ...p, employment_role: v }))} />
               </div>
             ) : (
-              <div className="divide-y">
-                {programName && <Row icon={GraduationCap} label="Yo'nalish">{programName}</Row>}
-                <Row label="Kurs">{courseYearLabel(survey.course_year)}</Row>
-                <Row icon={Briefcase} label="Ishlaysizmi?">
-                  <Badge variant={isEmployed ? "default" : "secondary"} className={isEmployed ? "bg-green-600 text-white text-xs" : "text-xs"}>
+              <>
+                {/* Employment status block */}
+                <div className={cn(
+                  "rounded-lg border px-4 py-3",
+                  isEmployed
+                    ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30"
+                    : "border-border bg-muted/40",
+                )}>
+                  <p className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Ish holati
+                  </p>
+                  <p className={cn(
+                    "text-base font-semibold",
+                    isEmployed ? "text-emerald-700 dark:text-emerald-400" : "text-foreground",
+                  )}>
                     {EMPLOYMENT_LABELS[survey.employment_status] || survey.employment_status || "—"}
-                  </Badge>
-                </Row>
-                {survey.employment_company && <Row label="Kompaniya">{survey.employment_company}</Row>}
-                {survey.employment_role && <Row label="Lavozim">{survey.employment_role}</Row>}
-                <div className="pt-3 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Calendar className="h-3 w-3" />Yaratilgan: <span className="font-mono tabular-nums">{formatDate(survey.created_at)}</span>
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                  {programName && (
+                    <Field label="Yo'nalish" className="col-span-2">{programName}</Field>
+                  )}
+                  <Field label="Kurs">
+                    <span className="font-mono">{courseYearLabel(survey.course_year)}</span>
+                  </Field>
+                  {isEmployed && survey.employment_company && (
+                    <Field label="Kompaniya" className="col-span-2">{survey.employment_company}</Field>
+                  )}
+                  {isEmployed && survey.employment_role && (
+                    <Field label="Lavozim" className="col-span-2">{survey.employment_role}</Field>
+                  )}
+                </div>
+
+                {/* Timestamps */}
+                <div className="mt-2 space-y-1.5 border-t border-border pt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Yaratilgan
+                    </span>
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      {formatDate(survey.created_at)}
+                    </span>
                   </div>
                   {survey.submitted_at && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Send className="h-3 w-3" />Yuborilgan: <span className="font-mono tabular-nums">{formatDate(survey.submitted_at, true)}</span>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                        Yuborilgan
+                      </span>
+                      <span className="font-mono text-xs tabular-nums">
+                        {formatDate(survey.submitted_at, true)}
+                      </span>
                     </div>
                   )}
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />Yangilangan: <span className="font-mono tabular-nums">{formatDate(survey.updated_at)}</span>
-                  </div>
                 </div>
-              </div>
+              </>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Row 2: Til darajalari + Roziliklar ── */}
+      {/* ── Row 2: Consents | Languages ── */}
       <div className="grid gap-4 md:grid-cols-2">
-
-        {/* Til darajalari */}
-        <Card>
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              <Languages className="h-4 w-4" />Til darajalari
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            {englishLevel || russianLevel ? (
-              <div className="divide-y">
-                {englishLevel && (
-                  <div className="flex items-center justify-between py-3">
-                    <span className="flex items-center gap-2 text-sm">🇬🇧 Ingliz tili</span>
-                    <Badge variant="outline" className="font-mono text-sm font-semibold tabular-nums">{englishLevel}</Badge>
-                  </div>
-                )}
-                {russianLevel && (
-                  <div className="flex items-center justify-between py-3">
-                    <span className="flex items-center gap-2 text-sm">🇷🇺 Rus tili</span>
-                    <Badge variant="outline" className="font-mono text-sm font-semibold tabular-nums">{russianLevel}</Badge>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="py-4 text-center text-sm text-muted-foreground">Til darajasi kiritilmagan</p>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Roziliklar */}
         <Card>
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              <CheckCircle className="h-4 w-4" />Roziliklar
+          <CardHeader className="pb-3 pt-4 px-5">
+            <CardTitle className="flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <CheckCircle2 className="h-3.5 w-3.5" />Roziliklar
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4">
+          <CardContent className="px-5 pb-4">
             {editing ? (
               <div className="space-y-2">
                 {Object.entries(editConsents).map(([key, value]) => (
                   <div key={key} className="flex items-center justify-between rounded-lg border px-3 py-2.5">
                     <span className="text-sm">{CONSENT_LABELS[key] || key.replace(/_/g, " ")}</span>
-                    <Button variant={value ? "default" : "outline"} size="sm" className="h-7 text-xs"
+                    <Button variant={value ? "default" : "outline"} size="sm" className={cn("h-7 min-w-14 text-xs", value && "bg-emerald-600 hover:bg-emerald-700")}
                       onClick={() => setEditConsents(p => ({ ...p, [key]: !value }))}>
                       {value ? "Ha" : "Yo'q"}
                     </Button>
@@ -423,18 +454,82 @@ export default function SurveyDetailPage() {
                 ))}
               </div>
             ) : (
-              <div className="space-y-2">
-                {Object.entries(consents).length > 0 ? Object.entries(consents).map(([key, value]) => (
-                  <div key={key} className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-                    <span className="text-sm">{CONSENT_LABELS[key] || key.replace(/_/g, " ")}</span>
-                    <Badge variant={value ? "default" : "secondary"}
-                      className={value ? "bg-green-600 text-white text-xs" : "text-xs"}>
-                      {value ? "✓ Ha" : "✗ Yo'q"}
+              <div className="divide-y divide-border">
+                {[
+                  { key: "want_help", label: "Ish topishda yordam kerak" },
+                  { key: "share_with_employers", label: "Ma'lumotlarni ish beruvchilarga ulashish" },
+                ].map(({ key, label }) => {
+                  const value = consents[key] ?? false;
+                  return (
+                    <div key={key} className="flex items-center gap-3 py-3">
+                      <div className={cn(
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+                        value
+                          ? "bg-emerald-100 dark:bg-emerald-950"
+                          : "bg-muted",
+                      )}>
+                        {value
+                          ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                          : <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                        }
+                      </div>
+                      <span className="flex-1 text-sm">{label}</span>
+                      <span className={cn(
+                        "font-mono text-xs font-semibold tabular-nums",
+                        value ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+                      )}>
+                        {value ? "Ha" : "Yo'q"}
+                      </span>
+                    </div>
+                  );
+                })}
+                {/* Any extra consent keys beyond the known two */}
+                {Object.entries(consents)
+                  .filter(([k]) => !["want_help", "share_with_employers"].includes(k))
+                  .map(([key, value]) => (
+                    <div key={key} className="flex items-center gap-3 py-3">
+                      <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full", value ? "bg-emerald-100 dark:bg-emerald-950" : "bg-muted")}>
+                        {value ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <XCircle className="h-3.5 w-3.5 text-muted-foreground" />}
+                      </div>
+                      <span className="flex-1 text-sm">{CONSENT_LABELS[key] || key.replace(/_/g, " ")}</span>
+                      <span className={cn("font-mono text-xs font-semibold", value ? "text-emerald-600" : "text-muted-foreground")}>{value ? "Ha" : "Yo'q"}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Til darajalari */}
+        <Card>
+          <CardHeader className="pb-3 pt-4 px-5">
+            <CardTitle className="flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <Languages className="h-3.5 w-3.5" />Til darajalari
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5">
+            {englishLevel || russianLevel ? (
+              <div className="divide-y divide-border">
+                {englishLevel && (
+                  <div className="flex items-center justify-between py-3">
+                    <span className="text-sm">🇬🇧 Ingliz tili</span>
+                    <Badge variant="outline" className="font-mono text-sm font-bold tabular-nums px-3">
+                      {englishLevel}
                     </Badge>
                   </div>
-                )) : (
-                  <p className="py-4 text-center text-sm text-muted-foreground">Roziliklar yo&apos;q</p>
                 )}
+                {russianLevel && (
+                  <div className="flex items-center justify-between py-3">
+                    <span className="text-sm">🇷🇺 Rus tili</span>
+                    <Badge variant="outline" className="font-mono text-sm font-bold tabular-nums px-3">
+                      {russianLevel}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                Til darajasi kiritilmagan
               </div>
             )}
           </CardContent>
@@ -442,60 +537,57 @@ export default function SurveyDetailPage() {
       </div>
 
       {/* ── Takliflar ── */}
-      <Card>
-        <CardHeader className="pb-2 pt-4 px-4">
-          <CardTitle className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            <MessageSquare className="h-4 w-4" />Takliflar
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4">
-          {editing ? (
-            <Textarea value={editSurvey.suggestions}
-              onChange={(e) => setEditSurvey(p => ({ ...p, suggestions: e.target.value }))}
-              placeholder="Universitet faoliyatini takomillashtirish bo'yicha takliflar..."
-              className="min-h-[100px]" />
-          ) : survey.suggestions ? (
-            <p className="rounded-lg bg-muted/50 px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">
-              {survey.suggestions}
-            </p>
-          ) : (
-            <p className="py-4 text-center text-sm text-muted-foreground">Takliflar yo&apos;q</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Hujjatlar (CV va Sertifikat) ── */}
-      {documents.length > 0 && (
+      {(editing || survey.suggestions) && (
         <Card>
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              <File className="h-4 w-4" />Hujjatlar
+          <CardHeader className="pb-3 pt-4 px-5">
+            <CardTitle className="flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <MessageSquare className="h-3.5 w-3.5" />Takliflar
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4">
+          <CardContent className="px-5 pb-5">
+            {editing ? (
+              <Textarea value={editSurvey.suggestions}
+                onChange={(e) => setEditSurvey(p => ({ ...p, suggestions: e.target.value }))}
+                placeholder="Universitet faoliyatini takomillashtirish bo'yicha takliflar…"
+                className="min-h-[100px]" />
+            ) : (
+              <blockquote className="border-l-2 border-primary/30 pl-4 text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap italic">
+                {survey.suggestions}
+              </blockquote>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Hujjatlar ── */}
+      {documents.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3 pt-4 px-5">
+            <CardTitle className="flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <File className="h-3.5 w-3.5" />Hujjatlar
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5">
             <div className="grid gap-3 sm:grid-cols-2">
               {documents.map((doc) => {
-                const label = doc.doc_type === "cv" ? "📄 CV / Rezyume" : doc.doc_type === "employment" ? "🏢 Ish joyi hujjati" : "📜 Til sertifikati";
+                const label = doc.doc_type === "cv" ? "CV / Rezyume"
+                  : doc.doc_type === "employment" ? "Ish joyi hujjati"
+                  : "Til sertifikati";
+                const emoji = doc.doc_type === "cv" ? "📄" : doc.doc_type === "employment" ? "🏢" : "📜";
                 const downloadUrl = bot2Api.documentDownloadUrl(doc.id);
                 const sizeKb = doc.file_size ? Math.round(doc.file_size / 1024) : null;
                 return (
-                  <a
-                    key={doc.id}
-                    href={downloadUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-3 rounded-lg border bg-muted/20 p-3 hover:bg-muted/40 transition-colors group"
-                  >
-                    <FileText className="h-8 w-8 shrink-0 text-primary/70" />
+                  <a key={doc.id} href={downloadUrl} target="_blank" rel="noreferrer"
+                    className="group flex items-center gap-3 rounded-lg border bg-muted/20 p-3 transition-colors hover:bg-muted/40">
+                    <FileText className="h-8 w-8 shrink-0 text-primary/60" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{label}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {doc.original_filename || "hujjat"}
-                        {sizeKb ? ` · ${sizeKb} KB` : ""}
+                      <p className="text-sm font-medium">{emoji} {label}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {doc.original_filename || "hujjat"}{sizeKb ? ` · ${sizeKb} KB` : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">{formatDate(doc.created_at)}</p>
                     </div>
-                    <Download className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <Download className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
                   </a>
                 );
               })}
@@ -504,20 +596,20 @@ export default function SurveyDetailPage() {
         </Card>
       )}
 
-      {/* ── So'rovnoma javoblari (qo'shimcha) ── */}
+      {/* ── So'rovnoma qo'shimcha javoblari ── */}
       {(otherAnswers.length > 0 || editing) && (
         <Card>
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              <FileText className="h-4 w-4" />So&apos;rovnoma javoblari
+          <CardHeader className="pb-3 pt-4 px-5">
+            <CardTitle className="flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <FileText className="h-3.5 w-3.5" />So&apos;rovnoma javoblari
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4">
+          <CardContent className="px-5 pb-5">
             {editing ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {Object.entries(editAnswers).map(([key, value]) => (
                   <div key={key} className="space-y-1">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+                    <Label className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                       {LABEL_TRANSLATIONS[key] || key.replace(/_/g, " ")}
                     </Label>
                     <Input value={value} onChange={(e) => setEditAnswers(p => ({ ...p, [key]: e.target.value }))} className="h-9" />
@@ -530,12 +622,13 @@ export default function SurveyDetailPage() {
                   if (value === null || value === undefined || value === "") return null;
                   return (
                     <div key={key} className="rounded-md border border-border bg-muted/20 p-3">
-                      <p className="mb-2 font-mono text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      <p className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                         {LABEL_TRANSLATIONS[key] || key.replace(/_/g, " ")}
                       </p>
-                      {isRating(key, value as string | number) ? renderRating(value as string | number) : (
-                        <p className="text-sm font-medium whitespace-pre-wrap">{String(value)}</p>
-                      )}
+                      {isRating(key, value as string | number)
+                        ? renderRating(value as string | number)
+                        : <p className="text-sm font-medium whitespace-pre-wrap">{String(value)}</p>
+                      }
                     </div>
                   );
                 })}

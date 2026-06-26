@@ -9,7 +9,8 @@ from typing import List
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Exists, OuterRef, Q, F
+import django_filters
+from django.db.models import Count, Exists, OuterRef, Q, F, Subquery
 from django.http import HttpRequest
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -114,12 +115,41 @@ class Bot2StudentViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
+class Bot2SurveyFilterSet(django_filters.FilterSet):
+    gender = django_filters.CharFilter(field_name="student__gender")
+    latest_only = django_filters.BooleanFilter(method="filter_latest_only")
+    want_help = django_filters.BooleanFilter(method="filter_want_help")
+    share_with_employers = django_filters.BooleanFilter(method="filter_share_with_employers")
+
+    def filter_latest_only(self, qs, name, value):
+        if not value:
+            return qs
+        latest_id_sq = Bot2SurveyResponse.objects.filter(
+            student=OuterRef("student"), student__isnull=False,
+        ).order_by("-submitted_at", "-created_at", "-id").values("id")[:1]
+        return (
+            qs.filter(student__isnull=False)
+            .annotate(_latest_id_for_filter=Subquery(latest_id_sq))
+            .filter(_latest_id_for_filter=F("id"))
+        )
+
+    def filter_want_help(self, qs, name, value):
+        return qs.filter(consents__want_help=value)
+
+    def filter_share_with_employers(self, qs, name, value):
+        return qs.filter(consents__share_with_employers=value)
+
+    class Meta:
+        model = Bot2SurveyResponse
+        fields = ["program", "course_year", "survey_campaign", "source", "employment_status"]
+
+
 class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
     queryset = Bot2SurveyResponse.objects.select_related("student", "student__region", "roster", "program")
     serializer_class = None
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["program", "course_year", "survey_campaign", "source"]
+    filterset_class = Bot2SurveyFilterSet
     search_fields = ["student__student_external_id", "student__username"]
     ordering_fields = ["submitted_at", "created_at"]
 
