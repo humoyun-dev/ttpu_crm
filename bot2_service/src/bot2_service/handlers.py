@@ -453,7 +453,11 @@ async def pick_direction(call: CallbackQuery, state: FSMContext):
             or selected.get("name", "")
         )
         await state.update_data(program_id=str(selected.get("id")), program_name=dir_name)
-    await _continue_survey(call.message.chat.id, call.bot, state, lang)
+    data = await state.get_data()
+    if data.get("_refill_mode"):
+        await _resume_to_employment(call.message.chat.id, call.bot, state, lang)
+    else:
+        await _continue_survey(call.message.chat.id, call.bot, state, lang)
     await call.answer()
 
 
@@ -465,7 +469,11 @@ async def pick_course_year(call: CallbackQuery, state: FSMContext):
         await call.message.delete()
     year = int(call.data.split(":")[1])
     await state.update_data(course_year=year)
-    await _continue_survey(call.message.chat.id, call.bot, state, lang)
+    data = await state.get_data()
+    if data.get("_refill_mode"):
+        await _resume_to_employment(call.message.chat.id, call.bot, state, lang)
+    else:
+        await _continue_survey(call.message.chat.id, call.bot, state, lang)
     await call.answer()
 
 
@@ -953,7 +961,14 @@ async def handle_survey_choice(call: CallbackQuery, state: FSMContext):
 
 
 async def _start_refill(chat_id: int, bot, state: FSMContext, lang: str, tg_user_id: int) -> None:
-    """Skip re-verification for known user; pre-fill profile data, then resume from first missing field."""
+    """Start a NEW survey for an already-verified user.
+
+    Pre-fills profile fields from DB.  Survey-critical fields (direction,
+    course_year) are asked if missing from the roster — everything else
+    (phone, gender, region) is collected during initial registration and is
+    NOT re-asked here.  After any mandatory fields are resolved, jumps
+    straight to the employment question.
+    """
     prof = await api_client.get_student_profile(tg_user_id)
     if not prof.ok or not (prof.data or {}).get("found"):
         await state.clear()
@@ -976,8 +991,25 @@ async def _start_refill(chat_id: int, bot, state: FSMContext, lang: str, tg_user
         program_id=p.get("program_id"),
         program_name=p.get("program_name", ""),
         course_year=p.get("course_year"),
+        _refill_mode=True,  # directs direction/course_year handlers → employment, not full _continue_survey
     )
-    await _continue_survey(chat_id, bot, state, lang)
+    await _resume_to_employment(chat_id, bot, state, lang)
+
+
+async def _resume_to_employment(chat_id: int, bot, state: FSMContext, lang: str) -> None:
+    """From _start_refill: ask direction / course_year if missing, then go to employment."""
+    data = await state.get_data()
+    if not data.get("program_id"):
+        dirs = await catalog.get_catalog_items("direction")
+        await state.set_state(BotState.waiting_direction)
+        await bot.send_message(chat_id, get_text("ask_direction", lang), reply_markup=directions_keyboard(dirs, lang))
+        return
+    if not data.get("course_year"):
+        await state.set_state(BotState.waiting_course_year)
+        await bot.send_message(chat_id, get_text("ask_course_year", lang), reply_markup=course_year_keyboard(lang))
+        return
+    await state.set_state(BotState.waiting_employment)
+    await bot.send_message(chat_id, get_text("ask_employment", lang), reply_markup=yes_no_keyboard("employment", lang))
 
 
 async def _show_account(message: Message, lang: str) -> None:
