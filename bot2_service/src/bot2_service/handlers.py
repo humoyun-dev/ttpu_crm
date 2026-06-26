@@ -953,7 +953,7 @@ async def handle_survey_choice(call: CallbackQuery, state: FSMContext):
 
 
 async def _start_refill(chat_id: int, bot, state: FSMContext, lang: str, tg_user_id: int) -> None:
-    """Skip re-verification for known user; pre-fill profile data and go to employment question."""
+    """Skip re-verification for known user; pre-fill profile data, then resume from first missing field."""
     prof = await api_client.get_student_profile(tg_user_id)
     if not prof.ok or not (prof.data or {}).get("found"):
         await state.clear()
@@ -977,8 +977,7 @@ async def _start_refill(chat_id: int, bot, state: FSMContext, lang: str, tg_user
         program_name=p.get("program_name", ""),
         course_year=p.get("course_year"),
     )
-    await state.set_state(BotState.waiting_employment)
-    await bot.send_message(chat_id, get_text("ask_employment", lang), reply_markup=yes_no_keyboard("employment", lang))
+    await _continue_survey(chat_id, bot, state, lang)
 
 
 async def _show_account(message: Message, lang: str) -> None:
