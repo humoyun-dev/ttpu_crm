@@ -70,6 +70,13 @@ PROMPTS = {
         "ask_certificate": "Til bilimingizni tasdiqlovchi xalqaro sertifikat yuklang (PDF yoki rasm):",
         "cert_skip": "📭 Sertifikat yo'q",
         "cert_received": "Sertifikat qabul qilindi ✅",
+        # Employment doc upload (employed branch)
+        "ask_employment_doc": (
+            "Ish joyingizni tasdiqlovchi rasmiy hujjat yuboring:\n"
+            "(Korxona ma'lumotnomasi, mehnat shartnomasi yoki davlat hujjati — PDF yoki rasm)"
+        ),
+        "employment_doc_skip": "📭 Hujjat yuborolmayman",
+        "employment_doc_received": "Ish joyi hujjati qabul qilindi ✅",
         # Confirmation
         "confirm_send": "Barcha javoblaringizni jo'natayinmi?",
         "confirm_yes": "✅ Ha, jo'nating",

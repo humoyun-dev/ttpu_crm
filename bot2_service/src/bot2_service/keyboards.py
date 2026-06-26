@@ -214,3 +214,9 @@ def channels_keyboard() -> InlineKeyboardMarkup:
         kb.button(text=channel["name"], url=channel["url"])
     kb.adjust(1)
     return kb.as_markup()
+
+
+def employment_doc_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=get_text("employment_doc_skip", lang), callback_data="employment_doc:skip")
+    return kb.as_markup()

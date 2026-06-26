@@ -17,6 +17,7 @@ class BotState(StatesGroup):
     waiting_employment = State()
     waiting_company = State()
     waiting_role = State()
+    waiting_employment_doc = State()   # ish joyi hujjati (employed branch)
     waiting_help = State()
     waiting_share_consent = State()
     waiting_suggestions = State()

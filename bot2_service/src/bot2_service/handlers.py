@@ -35,6 +35,7 @@ from bot2_service.keyboards import (
     course_year_keyboard,
     cv_keyboard,
     directions_keyboard,
+    employment_doc_keyboard,
     gender_keyboard,
     language_keyboard,
     languages_keyboard,
@@ -503,8 +504,49 @@ async def set_role(message: Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "uz")
     await state.update_data(role=(message.text or "").strip()[:255])
+    await state.set_state(BotState.waiting_employment_doc)
+    sent = await message.answer(
+        get_text("ask_employment_doc", lang),
+        reply_markup=employment_doc_keyboard(lang),
+    )
+    await state.update_data(_emp_doc_q_id=sent.message_id)
+
+
+@router.message(BotState.waiting_employment_doc, F.document | F.photo)
+async def handle_employment_doc_file(message: Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    if data.get("_emp_doc_q_id"):
+        with suppress(Exception):
+            await message.bot.delete_message(message.chat.id, data["_emp_doc_q_id"])
+    doc_id = await _upload_file_to_server(message, data.get("student_id", ""), "employment", lang)
+    if doc_id:
+        await state.update_data(employment_doc_id=doc_id)
+        await message.answer(get_text("employment_doc_received", lang))
     await state.set_state(BotState.waiting_suggestions)
     await _reply(message, get_text("ask_suggestions", lang), state, reply_markup=suggestions_keyboard(lang))
+
+
+@router.callback_query(F.data == "employment_doc:skip", BotState.waiting_employment_doc)
+async def employment_doc_skip(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    with suppress(Exception):
+        await call.message.delete()
+    await state.set_state(BotState.waiting_suggestions)
+    await _reply_cb(call, get_text("ask_suggestions", lang), state, reply_markup=suggestions_keyboard(lang))
+    await call.answer()
+
+
+@router.message(BotState.waiting_employment_doc)
+async def employment_doc_fallback(message: Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    sent = await message.answer(
+        get_text("ask_employment_doc", lang),
+        reply_markup=employment_doc_keyboard(lang),
+    )
+    await state.update_data(_emp_doc_q_id=sent.message_id)
 
 
 # ── BRANCH B: Unemployed ──────────────────────────────────────────────────────
@@ -785,6 +827,8 @@ def _build_review(data: dict, lang: str) -> str:
             lines.append(f"{get_text('review_company', lang)} {data['company']}")
         if data.get("role"):
             lines.append(f"{get_text('review_role', lang)} {data['role']}")
+        emp_doc = get_text("employment_doc_received", lang) if data.get("employment_doc_id") else get_text("employment_doc_skip", lang)
+        lines.append(f"📎 {emp_doc}")
 
     langs = data.get("known_langs") or []
     if langs:
