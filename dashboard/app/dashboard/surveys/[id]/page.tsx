@@ -96,10 +96,17 @@ export default function SurveyDetailPage() {
         const studentRes = await bot2Api.getStudent(surveyRes.data.student);
         if (studentRes.data) { resolvedStudent = studentRes.data; setStudent(resolvedStudent); populateStudentForm(resolvedStudent); }
       }
-      // Load documents for this student
-      if (resolvedStudent) {
-        const docsRes = await bot2Api.listDocuments({ student: resolvedStudent.id });
-        if (docsRes.data?.results) setDocuments(docsRes.data.results);
+      // Load documents linked to THIS survey only
+      const docsRes = await bot2Api.listDocuments({ survey: id });
+      if (docsRes.data?.results) {
+        // Keep only the latest doc per type (server returns newest first)
+        const seen = new Set<string>();
+        const latest = docsRes.data.results.filter((d) => {
+          if (seen.has(d.doc_type)) return false;
+          seen.add(d.doc_type);
+          return true;
+        });
+        setDocuments(latest);
       }
       const regionsRes = await catalogApi.list("region");
       if (regionsRes.data?.results) setRegions(regionsRes.data.results);
@@ -468,7 +475,7 @@ export default function SurveyDetailPage() {
           <CardContent className="px-4 pb-4">
             <div className="grid gap-3 sm:grid-cols-2">
               {documents.map((doc) => {
-                const label = doc.doc_type === "cv" ? "📄 CV / Rezyume" : "📜 Til sertifikati";
+                const label = doc.doc_type === "cv" ? "📄 CV / Rezyume" : doc.doc_type === "employment" ? "🏢 Ish joyi hujjati" : "📜 Til sertifikati";
                 const downloadUrl = bot2Api.documentDownloadUrl(doc.id);
                 const sizeKb = doc.file_size ? Math.round(doc.file_size / 1024) : null;
                 return (

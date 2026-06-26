@@ -100,6 +100,8 @@ export interface CatalogItemNested {
 }
 
 // Bot2 Survey
+export type DocVerificationStatus = "verified" | "pending" | "no_docs";
+
 export interface Bot2SurveyResponse {
   id: string;
   student: string;
@@ -119,11 +121,12 @@ export interface Bot2SurveyResponse {
   submitted_at: string | null;
   created_at: string;
   updated_at: string;
+  doc_verification_status: DocVerificationStatus;
 }
 
 export interface Bot2Document {
   id: string;
-  doc_type: "cv" | "certificate";
+  doc_type: "cv" | "certificate" | "employment";
   original_filename: string;
   mime_type: string;
   file_size: number | null;
@@ -657,6 +660,118 @@ export const analyticsApi = {
         coverage_percent: number;
       }>;
     }>(`/api/v1/analytics/bot2/enrollments-overview?${_analyticsParams(opts)}`),
+};
+
+// ── AI xarajat kuzatuvi (Gemini) ──────────────────────────────────────────────
+
+export interface AIUsageSummary {
+  total_cost_usd: string;
+  total_tokens: number;
+  total_requests: number;
+  this_month_cost_usd: string;
+  today_cost_usd: string;
+  avg_cost_per_request: string;
+  by_model: Array<{
+    model_name: string;
+    cost: string;
+    tokens: number;
+    requests: number;
+  }>;
+}
+
+export interface AIUsageDaily {
+  days: Array<{ date: string; cost_usd: string; requests: number; tokens: number }>;
+}
+
+export interface AIUsageEstimate {
+  docs_per_day: number;
+  estimated_monthly_cost_usd: string;
+  model: string;
+}
+
+export const aiCostApi = {
+  getSummary: () =>
+    apiFetch<AIUsageSummary>(`/api/v1/ai-verification/usage/summary`),
+  getDaily: (days = 30) =>
+    apiFetch<AIUsageDaily>(`/api/v1/ai-verification/usage/daily?days=${days}`),
+  getEstimate: (docsPerDay = 50) =>
+    apiFetch<AIUsageEstimate>(
+      `/api/v1/ai-verification/usage/estimate?docs_per_day=${docsPerDay}`,
+    ),
+};
+
+// ── AI hujjat tekshiruvi (Gemini) ─────────────────────────────────────────────
+
+export type AIDocumentType = "cv" | "ielts" | "certificate" | "diploma" | "other";
+export type AIConfidence = "green" | "yellow" | "red";
+export type AIDecision = "pending" | "accepted" | "rejected";
+export type AIVerifyStatus = "pending" | "processing" | "done" | "failed";
+
+export interface DocumentVerification {
+  id: string;
+  student: string;
+  student_name: string;
+  document_type: AIDocumentType;
+  file_name: string;
+  mime_type: string;
+  status: AIVerifyStatus;
+  confidence_level: AIConfidence | null;
+  confidence_score: number | null;
+  extracted_data: Record<string, unknown>;
+  flags: string[];
+  ai_summary: string;
+  processed_at: string | null;
+  error_message: string;
+  uploaded_by: string | null;
+  uploaded_by_name: string;
+  reviewed_by: string | null;
+  reviewed_by_name: string;
+  reviewed_at: string | null;
+  review_note: string;
+  final_decision: AIDecision;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIVerifyStats {
+  total: number;
+  by_confidence: { green: number; yellow: number; red: number; none: number };
+  by_decision: { pending: number; accepted: number; rejected: number };
+  by_status: { done: number; processing: number; pending: number; failed: number };
+}
+
+export const aiVerifyApi = {
+  list: (params?: Record<string, string>) => {
+    const q = params ? `?${new URLSearchParams(params)}` : "";
+    return apiFetch<PaginatedResponse<DocumentVerification>>(
+      `/api/v1/ai-verification/${q}`,
+    );
+  },
+  getStats: () => apiFetch<AIVerifyStats>(`/api/v1/ai-verification/stats`),
+  detail: (id: string) =>
+    apiFetch<DocumentVerification>(`/api/v1/ai-verification/${id}`),
+  retry: (id: string) =>
+    apiFetch<DocumentVerification>(`/api/v1/ai-verification/${id}/retry`, {
+      method: "POST",
+    }),
+  review: (
+    id: string,
+    body: { final_decision?: AIDecision; confidence_level?: AIConfidence; review_note?: string },
+  ) =>
+    apiFetch<DocumentVerification>(`/api/v1/ai-verification/${id}/review`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  submit: (studentId: string, docType: AIDocumentType, file: File) => {
+    const form = new FormData();
+    form.append("student_id", studentId);
+    form.append("document_type", docType);
+    form.append("file", file);
+    return apiFetch<DocumentVerification>(`/api/v1/ai-verification/submit`, {
+      method: "POST",
+      body: form,
+    });
+  },
 };
 
 // Helper functions

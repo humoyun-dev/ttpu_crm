@@ -17,6 +17,8 @@ import {
   TrendingUp,
   LayoutDashboard,
   Upload,
+  Coins,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -46,6 +48,7 @@ const NAV_SECTIONS = [
     items: [
       { title: "So'rovnomalar", href: "/dashboard/surveys", icon: Users },
       { title: "Talabalar", href: "/dashboard/students", icon: GraduationCap },
+      { title: "AI Tekshiruv", href: "/dashboard/ai-verifications", icon: ShieldCheck },
       { title: "Ro'yxatga olish", href: "/dashboard/enrollments", icon: BookOpen },
       { title: "Import", href: "/dashboard/import", icon: Upload },
     ],
@@ -56,6 +59,7 @@ const NAV_SECTIONS = [
       { title: "So'rovnoma", href: "/dashboard/analytics/surveys", icon: BarChart3 },
       { title: "Ro'yxat", href: "/dashboard/analytics/enrollments", icon: TrendingUp },
       { title: "Hisobotlar", href: "/dashboard/reports", icon: TrendingUp },
+      { title: "AI Xarajatlar", href: "/dashboard/ai-costs", icon: Coins },
     ],
   },
   {

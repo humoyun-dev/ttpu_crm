@@ -7,8 +7,6 @@ import {
   Pencil,
   RefreshCw,
   Search,
-  Phone,
-  MapPin,
   Download,
   CalendarIcon,
 } from "lucide-react";
@@ -45,18 +43,40 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { bot2Api, Bot2SurveyResponse, formatDate } from "@/lib/api";
+import { bot2Api, Bot2SurveyResponse, DocVerificationStatus, formatDate } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSearch } from "@/lib/hooks/use-search";
 import { formatCourseYearLabel, cn } from "@/lib/utils";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
-import { EMPLOYMENT_LABELS, GENDER_LABELS } from "@/lib/constants";
+import { EMPLOYMENT_LABELS } from "@/lib/constants";
 import { PaginationBar } from "@/components/ui/pagination-bar";
 import { PageHeader } from "@/components/page-header";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 const FETCH_ALL_PAGE_SIZE = 500;
+
+function DocStatusBadge({ status }: { status: DocVerificationStatus }) {
+  if (status === "verified") {
+    return (
+      <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
+        Tasdiqlangan
+      </Badge>
+    );
+  }
+  if (status === "pending") {
+    return (
+      <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 dark:text-amber-400">
+        Ko&apos;rib chiqilmoqda
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-xs text-rose-500 border-rose-300 dark:text-rose-400">
+      Hujjat yo&apos;q
+    </Badge>
+  );
+}
 
 type DatePreset = "all" | "today" | "week" | "month" | "year" | "custom";
 
@@ -304,7 +324,6 @@ export default function SurveysPage() {
           Familiya: student?.last_name || "",
           "Student ID": student?.student_external_id || "",
           Telefon: student?.phone || "",
-          Jins: GENDER_LABELS[student?.gender || ""] || student?.gender || "",
           Viloyat: regionName,
           "Telegram username": student?.username || "",
           "Telegram ID": student?.telegram_user_id || "",
@@ -556,38 +575,15 @@ export default function SurveysPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Ism Familiya</TableHead>
-                      <TableHead className="hidden xl:table-cell">
-                        Student ID
-                      </TableHead>
-                      <TableHead className="hidden lg:table-cell">
-                        Telefon
-                      </TableHead>
-                      <TableHead className="hidden xl:table-cell">
-                        Jins
-                      </TableHead>
-                      <TableHead className="hidden xl:table-cell">
-                        Viloyat
-                      </TableHead>
-                      <TableHead className="hidden lg:table-cell">
+                      <TableHead className="hidden md:table-cell">
                         Yo&apos;nalish
                       </TableHead>
-                      <TableHead className="hidden md:table-cell">
+                      <TableHead className="hidden sm:table-cell">
                         Kurs
                       </TableHead>
                       <TableHead>Ishlaysizmi?</TableHead>
-                      <TableHead className="hidden lg:table-cell">
-                        Kompaniya
-                      </TableHead>
-                      <TableHead className="hidden xl:table-cell">
-                        Lavozim
-                      </TableHead>
-                      <TableHead className="hidden xl:table-cell">
-                        Yordam
-                      </TableHead>
-                      <TableHead className="hidden xl:table-cell">
-                        Takliflar
-                      </TableHead>
-                      <TableHead>Sana</TableHead>
+                      <TableHead className="hidden sm:table-cell">Hujjat</TableHead>
+                      <TableHead className="hidden sm:table-cell">Sana</TableHead>
                       <TableHead className="w-20 sm:w-24">Amal</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -595,7 +591,7 @@ export default function SurveysPage() {
                     {surveys.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={15}
+                          colSpan={7}
                           className="text-center text-muted-foreground"
                         >
                           Ma&apos;lumot topilmadi
@@ -604,56 +600,29 @@ export default function SurveysPage() {
                     ) : (
                       surveys.map((survey) => {
                         const student = survey.student_details;
-                        const regionName =
-                          student?.region_details?.name_uz ||
-                          student?.region_details?.name ||
-                          "-";
                         const programName =
                           survey.program_details?.name_uz ||
                           survey.program_details?.name ||
                           "-";
-                        const consents =
-                          (survey.consents as Record<string, boolean>) || {};
 
                         return (
                           <TableRow key={survey.id}>
                             <TableCell className="font-medium whitespace-nowrap">
-                              {student
-                                ? `${student.first_name} ${student.last_name}`
-                                : "-"}
-                            </TableCell>
-                            <TableCell className="hidden xl:table-cell font-mono text-xs tabular-nums text-muted-foreground">
-                              {student?.student_external_id || "-"}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap hidden lg:table-cell">
-                              {student?.phone ? (
-                                <span className="flex items-center gap-1 font-mono text-xs tabular-nums">
-                                  <Phone className="h-3 w-3 text-muted-foreground" />
-                                  {student.phone}
-                                </span>
-                              ) : (
-                                "-"
+                              <div>
+                                {student
+                                  ? `${student.first_name} ${student.last_name}`
+                                  : "-"}
+                              </div>
+                              {student?.student_external_id && (
+                                <div className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                                  {student.student_external_id}
+                                </div>
                               )}
                             </TableCell>
-                            <TableCell className="text-xs hidden xl:table-cell">
-                              {GENDER_LABELS[student?.gender || ""] ||
-                                student?.gender ||
-                                "-"}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap hidden xl:table-cell">
-                              {regionName !== "-" ? (
-                                <span className="flex items-center gap-1 text-xs">
-                                  <MapPin className="h-3 w-3 text-muted-foreground" />
-                                  {regionName}
-                                </span>
-                              ) : (
-                                "-"
-                              )}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap text-xs hidden lg:table-cell">
+                            <TableCell className="whitespace-nowrap text-xs hidden md:table-cell">
                               {programName}
                             </TableCell>
-                            <TableCell className="hidden md:table-cell font-mono text-xs tabular-nums">
+                            <TableCell className="hidden sm:table-cell font-mono text-xs tabular-nums">
                               {formatCourseYearLabel(survey.course_year)}
                             </TableCell>
                             <TableCell>
@@ -670,28 +639,10 @@ export default function SurveysPage() {
                                   "-"}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-xs whitespace-nowrap hidden lg:table-cell">
-                              {survey.employment_company || "-"}
+                            <TableCell className="hidden sm:table-cell">
+                              <DocStatusBadge status={survey.doc_verification_status ?? "no_docs"} />
                             </TableCell>
-                            <TableCell className="text-xs whitespace-nowrap hidden xl:table-cell">
-                              {survey.employment_role || "-"}
-                            </TableCell>
-                            <TableCell className="text-xs hidden xl:table-cell">
-                              {consents.want_help ? (
-                                <Badge variant="outline" className="text-xs">
-                                  Ha
-                                </Badge>
-                              ) : (
-                                "Yo'q"
-                              )}
-                            </TableCell>
-                            <TableCell
-                              className="max-w-50 truncate text-xs hidden xl:table-cell"
-                              title={survey.suggestions || ""}
-                            >
-                              {survey.suggestions || "-"}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
+                            <TableCell className="hidden sm:table-cell whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
                               {formatDate(
                                 survey.submitted_at || survey.created_at,
                               )}
