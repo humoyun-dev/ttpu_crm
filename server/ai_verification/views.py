@@ -5,7 +5,8 @@ from decimal import Decimal
 from django.db.models import Avg, Count, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
-from rest_framework import status
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, generics, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -19,26 +20,9 @@ from .serializers import (
     SubmitDocumentSerializer,
     ReviewSerializer,
 )
-from .services import GeminiVerificationService
+from .orchestration import run_document_verification, rerun_verification
 
 logger = logging.getLogger(__name__)
-
-
-def _write_usage_log(verification, usage: dict):
-    """result['_usage'] dan AIUsageLog yozadi (append-only, monitoring)."""
-    AIUsageLog.objects.create(
-        verification=verification,
-        operation="document_verification",
-        model_name=usage.get("model_name", "gemini-2.5-flash"),
-        input_tokens=usage.get("input_tokens", 0),
-        output_tokens=usage.get("output_tokens", 0),
-        thinking_tokens=usage.get("thinking_tokens", 0),
-        total_tokens=usage.get("total_tokens", 0),
-        cost_usd=usage.get("cost_usd", 0),
-        status=usage.get("status", "success"),
-        error_message=usage.get("error_message", ""),
-        latency_ms=usage.get("latency_ms"),
-    )
 
 
 @api_view(["POST"])
@@ -59,54 +43,12 @@ def submit_document(request):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
 
-    # Yozuv yaratish
-    verification = DocumentVerification.objects.create(
+    verification = run_document_verification(
         student_id=data["student_id"],
-        uploaded_by=request.user,
-        document_type=data["document_type"],
         file=data["file"],
-        original_filename=data["file"].name,
-        mime_type=data["file"].content_type or "application/octet-stream",
-        status=DocumentVerification.Status.PROCESSING,
+        doc_type=data["document_type"],
+        uploaded_by=request.user,
     )
-
-    # Gemini tekshiruvi (sinxron — ~2-4 sek)
-    try:
-        verification.file.seek(0)
-        file_bytes = verification.file.read()
-
-        service = GeminiVerificationService()
-        result = service.verify(
-            file_bytes=file_bytes,
-            mime_type=verification.mime_type,
-            document_type=verification.document_type,
-        )
-
-        # Natijani saqlash
-        verification.confidence_score = result.get("confidence_score")
-        verification.confidence_level = result.get("confidence_level")
-        verification.extracted_data = result.get("extracted_data", {})
-        verification.flags = result.get("flags", [])
-        verification.ai_summary = result.get("summary", "")
-        verification.processed_at = timezone.now()
-
-        if result.get("_error"):
-            verification.status = DocumentVerification.Status.FAILED
-            verification.error_message = result.get("summary", "")
-        else:
-            verification.status = DocumentVerification.Status.DONE
-
-        verification.save()
-
-        # Token/xarajat yozuvi (xatolik bo'lsa ham yoziladi — monitoring uchun)
-        _write_usage_log(verification, result.get("_usage", {}))
-
-    except Exception as exc:
-        logger.exception("Verification xatolik (id=%s): %s", verification.pk, exc)
-        verification.status = DocumentVerification.Status.FAILED
-        verification.error_message = str(exc)
-        verification.save()
-        _write_usage_log(verification, {"status": "error", "error_message": str(exc)})
 
     return Response(
         DocumentVerificationSerializer(verification).data,
@@ -125,6 +67,25 @@ def verification_detail(request, pk):
     except DocumentVerification.DoesNotExist:
         raise APIError("NOT_FOUND", "Topilmadi", status.HTTP_404_NOT_FOUND)
 
+    return Response(DocumentVerificationSerializer(verification).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsAdminUserRole])
+def retry_verification(request, pk):
+    """Hujjatni qaytadan AI tekshiruvidan o'tkazadi (xato bo'lganda foydali).
+
+    POST /api/v1/ai-verification/{id}/retry
+    """
+    try:
+        verification = DocumentVerification.objects.get(pk=pk)
+    except DocumentVerification.DoesNotExist:
+        raise APIError("NOT_FOUND", "Topilmadi", status.HTTP_404_NOT_FOUND)
+
+    if not verification.file:
+        raise APIError("NO_FILE", "Faylsiz yozuvni qayta tekshirib bo'lmaydi.", status.HTTP_400_BAD_REQUEST)
+
+    verification = rerun_verification(verification)
     return Response(DocumentVerificationSerializer(verification).data)
 
 
@@ -166,11 +127,18 @@ def review_verification(request, pk):
     serializer.is_valid(raise_exception=True)
     d = serializer.validated_data
 
-    verification.final_decision = d["final_decision"]
+    update_fields = ["reviewed_by", "reviewed_at", "review_note", "updated_at"]
+    if d.get("final_decision"):
+        verification.final_decision = d["final_decision"]
+        update_fields.append("final_decision")
+    if d.get("confidence_level"):
+        # Admin AI toifasini qo'lda bekor qiladi (override).
+        verification.confidence_level = d["confidence_level"]
+        update_fields.append("confidence_level")
     verification.review_note = d.get("review_note", "")
     verification.reviewed_by = request.user
     verification.reviewed_at = timezone.now()
-    verification.save()
+    verification.save(update_fields=update_fields)
 
     return Response(DocumentVerificationSerializer(verification).data)
 
@@ -259,4 +227,72 @@ def usage_estimate(request):
         "docs_per_day": docs_per_day,
         "estimated_monthly_cost_usd": str(estimate),
         "model": "gemini-2.5-flash",
+    })
+
+
+# ── Ro'yxat + statistika (admin boshqaruv dashboard'i) ────────────────────────
+
+class DocumentVerificationListView(generics.ListAPIView):
+    """
+    Barcha hujjat tekshiruvlari ro'yxati (filterli, sahifalangan).
+
+    GET /api/v1/ai-verification/
+        ?confidence_level=green|yellow|red
+        &final_decision=pending|accepted|rejected
+        &status=pending|processing|done|failed
+        &document_type=cv|ielts|certificate|diploma|other
+        &search=<talaba ismi/ID>
+        &ordering=-created_at
+    """
+    permission_classes = [IsAuthenticated, IsAdminUserRole]
+    serializer_class = DocumentVerificationSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["confidence_level", "final_decision", "status", "document_type"]
+    search_fields = [
+        "student__first_name", "student__last_name", "student__student_external_id",
+    ]
+    ordering_fields = ["created_at", "confidence_score", "processed_at"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        return DocumentVerification.objects.select_related(
+            "student", "uploaded_by", "reviewed_by"
+        )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsAdminUserRole])
+def verification_stats(request):
+    """3-toifa va qaror bo'yicha sanoq (kartalar uchun, butun ma'lumot bo'ylab).
+
+    GET /api/v1/ai-verification/stats
+    """
+    qs = DocumentVerification.objects.all()
+
+    def _counts(field):
+        return {row[field]: row["n"] for row in qs.values(field).annotate(n=Count("id"))}
+
+    conf = _counts("confidence_level")
+    dec = _counts("final_decision")
+    st = _counts("status")
+
+    return Response({
+        "total": qs.count(),
+        "by_confidence": {
+            "green": conf.get("green", 0),
+            "yellow": conf.get("yellow", 0),
+            "red": conf.get("red", 0),
+            "none": conf.get(None, 0),
+        },
+        "by_decision": {
+            "pending": dec.get("pending", 0),
+            "accepted": dec.get("accepted", 0),
+            "rejected": dec.get("rejected", 0),
+        },
+        "by_status": {
+            "done": st.get("done", 0),
+            "processing": st.get("processing", 0),
+            "pending": st.get("pending", 0),
+            "failed": st.get("failed", 0),
+        },
     })

@@ -225,6 +225,7 @@ class Bot2Document(BaseModel):
     class DocType(models.TextChoices):
         CV = "cv", "CV"
         CERTIFICATE = "certificate", "Certificate"
+        EMPLOYMENT = "employment", "Ish joyi ma'lumotnomasi"
 
     student = models.ForeignKey(
         Bot2Student, on_delete=models.CASCADE, related_name="bot2_documents"

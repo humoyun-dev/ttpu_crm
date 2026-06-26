@@ -228,3 +228,111 @@ def test_verify_unsupported_mime_usage_is_error(fake_genai):
     out = GeminiVerificationService().verify(b"x", "text/plain", "cv")
     assert out["_usage"]["status"] == "error"
     assert out["_usage"]["total_tokens"] == 0
+
+
+# ── student_name prompt injection ─────────────────────────────────────────────
+
+def test_verify_injects_student_name_into_prompt(fake_genai):
+    """student_name berilsa prompt ichida ism ko'rsatilishi kerak."""
+    fake_genai.response_text = '{"confidence_score": 0.9, "confidence_level": "green"}'
+    svc = GeminiVerificationService()
+    svc.verify(b"\x89PNG", "image/png", "cv", student_name="Humoyun Tursunov")
+    # contents[1] — matn prompt
+    prompt_text = fake_genai.last_call["contents"][1]
+    assert "Humoyun Tursunov" in prompt_text
+    assert "ISM MOSLIK TEKSHIRUVI" in prompt_text
+
+
+def test_verify_no_student_name_no_injection(fake_genai):
+    """student_name bo'sh bo'lsa ism bloki qo'shilmasligi kerak."""
+    fake_genai.response_text = '{"confidence_score": 0.9, "confidence_level": "green"}'
+    svc = GeminiVerificationService()
+    svc.verify(b"\x89PNG", "image/png", "cv")
+    prompt_text = fake_genai.last_call["contents"][1]
+    assert "ISM MOSLIK TEKSHIRUVI" not in prompt_text
+
+
+# ── get_prompt (prompts module) ───────────────────────────────────────────────
+
+def test_get_prompt_with_name_contains_name_check():
+    from ai_verification.prompts import get_prompt
+    p = get_prompt("cv", student_name="Ali Valiyev")
+    assert "Ali Valiyev" in p
+    assert "name_mismatch" in p
+    assert "name_variant" in p
+
+
+def test_get_prompt_without_name_no_name_block():
+    from ai_verification.prompts import get_prompt
+    p = get_prompt("cv")
+    assert "ISM MOSLIK TEKSHIRUVI" not in p
+
+
+def test_get_prompt_all_doc_types_include_name_flags():
+    from ai_verification.prompts import get_prompt
+    for dtype in ("cv", "ielts", "certificate", "diploma"):
+        p = get_prompt(dtype, student_name="Test Talaba")
+        assert "name_mismatch" in p, f"{dtype} promptida name_mismatch yo'q"
+        assert "name_variant" in p, f"{dtype} promptida name_variant yo'q"
+
+
+# ── retry logic ───────────────────────────────────────────────────────────────
+
+def test_retryable_503_retries_and_succeeds(fake_genai, monkeypatch):
+    """503 xatosidan keyin muvaffaqiyatli javob qaytarishi kerak."""
+    import ai_verification.services as svc_mod
+    monkeypatch.setattr(svc_mod, "_RETRY_BASE_DELAY", 0)  # testda kutmaslik
+
+    calls = []
+    ok_response = '{"confidence_score": 0.9, "confidence_level": "green"}'
+
+    original_generate = fake_genai.__class__  # unused; patch via state
+
+    attempt_count = 0
+    _original_models_cls = type(fake_genai)
+
+    # Birinchi chaqiruv 503, ikkinchisi muvaffaqiyatli
+    class _CountingModels:
+        def generate_content(self, model, contents, config):
+            nonlocal attempt_count
+            attempt_count += 1
+            if attempt_count == 1:
+                raise Exception("503 UNAVAILABLE high demand")
+            return _FakeResponse(ok_response, None)
+
+    svc = GeminiVerificationService()
+    svc.client = pytypes.SimpleNamespace(models=_CountingModels())
+
+    out = svc.verify(b"\x89PNG", "image/png", "cv")
+    assert attempt_count == 2
+    assert out["confidence_level"] == "green"
+    assert not out.get("_error")
+
+
+def test_non_retryable_error_no_retry(fake_genai, monkeypatch):
+    """Qayta urinib bo'lmaydigan xato (masalan 400) darhol xato qaytarishi kerak."""
+    import ai_verification.services as svc_mod
+    monkeypatch.setattr(svc_mod, "_RETRY_BASE_DELAY", 0)
+
+    attempt_count = 0
+
+    class _FailModels:
+        def generate_content(self, model, contents, config):
+            nonlocal attempt_count
+            attempt_count += 1
+            raise Exception("400 INVALID_ARGUMENT bad request")
+
+    svc = GeminiVerificationService()
+    svc.client = pytypes.SimpleNamespace(models=_FailModels())
+
+    out = svc.verify(b"\x89PNG", "image/png", "cv")
+    assert attempt_count == 1   # faqat bir marta, retry yo'q
+    assert out.get("_error")
+
+
+def test_is_retryable():
+    from ai_verification.services import _is_retryable
+    assert _is_retryable(Exception("503 UNAVAILABLE high demand"))
+    assert _is_retryable(Exception("429 RESOURCE_EXHAUSTED"))
+    assert not _is_retryable(Exception("400 INVALID_ARGUMENT"))
+    assert not _is_retryable(Exception("404 NOT_FOUND"))

@@ -52,7 +52,7 @@ def _result_with_usage(cost="0.00145000", tokens=1900, status_="success"):
 
 def test_submit_writes_usage_log(api_client, admin_user, student):
     api_client.force_authenticate(user=admin_user)
-    with patch("ai_verification.views.GeminiVerificationService") as M:
+    with patch("ai_verification.orchestration.GeminiVerificationService") as M:
         M.return_value.verify.return_value = _result_with_usage()
         resp = api_client.post(
             SUBMIT_URL,
@@ -72,7 +72,7 @@ def test_submit_writes_usage_log(api_client, admin_user, student):
 
 def test_submit_service_exception_writes_error_log(api_client, admin_user, student):
     api_client.force_authenticate(user=admin_user)
-    with patch("ai_verification.views.GeminiVerificationService") as M:
+    with patch("ai_verification.orchestration.GeminiVerificationService") as M:
         M.return_value.verify.side_effect = RuntimeError("boom")
         api_client.post(
             SUBMIT_URL,

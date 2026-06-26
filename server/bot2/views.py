@@ -6,9 +6,10 @@ import uuid
 import openpyxl
 from typing import List
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q, F
+from django.db.models import Count, Exists, OuterRef, Q, F
 from django.http import HttpRequest
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -123,6 +124,7 @@ class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
     ordering_fields = ["submitted_at", "created_at"]
 
     def get_queryset(self):
+        from ai_verification.models import DocumentVerification
         qs = super().get_queryset()
         submitted_from = self.request.query_params.get("from")
         submitted_to = self.request.query_params.get("to")
@@ -130,7 +132,29 @@ class Bot2SurveyResponseViewSet(viewsets.ModelViewSet):
             qs = qs.filter(submitted_at__gte=dt)
         if submitted_to and (dt := parse_iso_datetime(submitted_to)):
             qs = qs.filter(submitted_at__lte=dt)
-        return qs
+        # Annotate doc verification status (ikkala yo'l OR bilan birlashadi).
+        _doc_q = (
+            Q(source_document__survey=OuterRef("pk")) |
+            Q(source_document__isnull=True, student=OuterRef("student"))
+        )
+        return qs.annotate(
+            # Ishlamaydigan talabalar: istalgan turdagi hujjat
+            has_accepted_doc=Exists(
+                DocumentVerification.objects.filter(_doc_q, final_decision="accepted")
+            ),
+            has_any_doc=Exists(
+                DocumentVerification.objects.filter(_doc_q)
+            ),
+            # Ishlaydigan talabalar: faqat ish joyi hujjati (employment)
+            has_accepted_employment_doc=Exists(
+                DocumentVerification.objects.filter(
+                    _doc_q, final_decision="accepted", document_type="employment"
+                )
+            ),
+            has_any_employment_doc=Exists(
+                DocumentVerification.objects.filter(_doc_q, document_type="employment")
+            ),
+        )
 
     def get_serializer_class(self):
         from bot2.serializers import Bot2SurveyResponseSerializer
@@ -967,7 +991,7 @@ def bot_upload_document(request):
             "student_external_id, doc_type, and file are required.",
             status.HTTP_400_BAD_REQUEST,
         )
-    if doc_type not in ("cv", "certificate"):
+    if doc_type not in ("cv", "certificate", "employment"):
         return build_error_response(
             "INVALID_TYPE", "doc_type must be 'cv' or 'certificate'.", status.HTTP_400_BAD_REQUEST
         )
@@ -1010,4 +1034,25 @@ def bot_upload_document(request):
         after_data={"student_external_id": student_external_id, "doc_type": doc_type},
     )
 
-    return Response({"ok": True, "doc_id": str(doc.id)}, status=status.HTTP_201_CREATED)
+    # Bot orqali kelgan hujjatni avtomatik AI (Gemini) tekshiruvidan o'tkazamiz —
+    # best-effort: tekshiruv xato bo'lsa ham faylni saqlash va doc_id qaytarish buzilmaydi.
+    verification_id = None
+    if getattr(settings, "GEMINI_API_KEY", ""):
+        try:
+            from ai_verification.orchestration import run_document_verification
+            file.seek(0)
+            verification = run_document_verification(
+                student=student,
+                file=file,
+                doc_type=doc_type,
+                source_document=doc,   # Bot2Document → survey zanjiri uchun
+                operation="bot_document",
+            )
+            verification_id = str(verification.id)
+        except Exception:
+            logger.exception("Bot hujjat AI tekshiruvi muvaffaqiyatsiz (doc=%s)", doc.id)
+
+    return Response(
+        {"ok": True, "doc_id": str(doc.id), "verification_id": verification_id},
+        status=status.HTTP_201_CREATED,
+    )

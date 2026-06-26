@@ -47,6 +47,7 @@ class Bot2StudentSerializer(serializers.ModelSerializer):
 class Bot2SurveyResponseSerializer(serializers.ModelSerializer):
     student_details = serializers.SerializerMethodField()
     program_details = CatalogItemNestedSerializer(source="program", read_only=True)
+    doc_verification_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Bot2SurveyResponse
@@ -59,6 +60,43 @@ class Bot2SurveyResponseSerializer(serializers.ModelSerializer):
         if obj.student:
             return Bot2StudentSerializer(obj.student).data
         return None
+
+    def get_doc_verification_status(self, obj) -> str:
+        """verified | pending | no_docs.
+
+        Ishlaydigan talaba (employed) uchun faqat 'employment' turli hujjat tekshiriladi.
+        Ishlamaydigan talaba uchun istalgan qabul qilingan hujjat yetarli.
+        Annotated by the viewset for performance; DB fallback for detail endpoint.
+        """
+        from ai_verification.models import DocumentVerification
+        employed = obj.employment_status == "employed"
+
+        if employed:
+            has_accepted = getattr(obj, "has_accepted_employment_doc", None)
+            has_any = getattr(obj, "has_any_employment_doc", None)
+            if has_accepted is None:
+                if not obj.student_id:
+                    return "no_docs"
+                qs = DocumentVerification.objects.filter(
+                    student_id=obj.student_id, document_type="employment"
+                )
+                has_any = qs.exists()
+                has_accepted = qs.filter(final_decision="accepted").exists()
+        else:
+            has_accepted = getattr(obj, "has_accepted_doc", None)
+            has_any = getattr(obj, "has_any_doc", None)
+            if has_accepted is None:
+                if not obj.student_id:
+                    return "no_docs"
+                qs = DocumentVerification.objects.filter(student_id=obj.student_id)
+                has_any = qs.exists()
+                has_accepted = qs.filter(final_decision="accepted").exists()
+
+        if has_accepted:
+            return "verified"
+        if has_any:
+            return "pending"
+        return "no_docs"
 
 
 class ProgramEnrollmentSerializer(serializers.ModelSerializer):

@@ -9,6 +9,24 @@ from .prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
+# 503 / 429 kabi o'tkinchi xatolar uchun retry sozlamalari
+_RETRY_ATTEMPTS = 3          # jami urinishlar soni (birinchi + 2 retry)
+_RETRY_BASE_DELAY = 1.0      # birinchi kutish (soniya); keyingisi 2x oshadi
+_RETRYABLE_CODES = {"503", "429", "500"}
+_RETRYABLE_STATUSES = {"UNAVAILABLE", "RESOURCE_EXHAUSTED", "INTERNAL"}
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Xato o'tkinchi (server yuklama / rate-limit) ekanligini tekshiradi."""
+    msg = str(exc)
+    for code in _RETRYABLE_CODES:
+        if code in msg:
+            return True
+    for status in _RETRYABLE_STATUSES:
+        if status in msg:
+            return True
+    return False
+
 
 class GeminiVerificationService:
     """
@@ -46,16 +64,21 @@ class GeminiVerificationService:
         file_bytes: bytes,
         mime_type: str,
         document_type: str,
+        student_name: str = "",
     ) -> dict:
         """
         Hujjatni Gemini orqali tekshiradi.
+
+        Args:
+            student_name: Tizimda saqlangan talabaning to'liq ismi. Berilsa,
+                          Gemini hujjatdagi ism bilan solishtirib bayroq qo'yadi.
 
         Returns:
             {
                 "confidence_score": float,
                 "confidence_level": "green"|"yellow"|"red",
-                "extracted_data": dict,
-                "flags": list,
+                "extracted_data": dict,   # name_match, document_name maydonlari bor
+                "flags": list,            # name_mismatch / name_variant
                 "summary": str,
             }
         """
@@ -66,42 +89,78 @@ class GeminiVerificationService:
                 f"Qo'llab-quvvatlanmaydigan fayl turi: {mime_type}"
             )
 
-        prompt = get_prompt(document_type)
+        prompt = get_prompt(document_type, student_name=student_name)
         start = time.monotonic()
 
-        try:
-            from google.genai import types
+        from google.genai import types
 
-            response = self.client.models.generate_content(
-                model=self.MODEL_NAME,
-                contents=[
-                    # Xom bytes — SDK base64 ni o'zi qiladi
-                    types.Part.from_bytes(data=file_bytes, mime_type=normalized_mime),
-                    prompt,
-                ],
-                config=types.GenerateContentConfig(
-                    temperature=0.1,            # Past temperature = barqaror javob
-                    max_output_tokens=2048,
-                    response_mime_type="application/json",  # JSON rejimi
-                    # 2.5 Flash "thinking" modeli — strukturali ajratish uchun
-                    # o'ylashni o'chiramiz (tezroq, arzonroq, JSON budjetini yemaydi).
-                    thinking_config=types.ThinkingConfig(thinking_budget=0),
-                ),
-            )
-            latency_ms = int((time.monotonic() - start) * 1000)
-            raw_text = response.text or ""
-        except Exception as exc:
-            latency_ms = int((time.monotonic() - start) * 1000)
-            logger.error("Gemini API xatolik: %s", exc, exc_info=True)
-            result = self._error_result(f"Gemini API xatoligi: {exc}")
+        config_kwargs = dict(
+            temperature=0.1,
+            max_output_tokens=2048,
+            response_mime_type="application/json",
+        )
+        thinking_cfg = self._build_thinking_config(types)
+        if thinking_cfg is not None:
+            config_kwargs["thinking_config"] = thinking_cfg
+
+        contents = [
+            types.Part.from_bytes(data=file_bytes, mime_type=normalized_mime),
+            prompt,
+        ]
+        config = types.GenerateContentConfig(**config_kwargs)
+
+        last_exc: Exception | None = None
+        response = None
+        for attempt in range(_RETRY_ATTEMPTS):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.MODEL_NAME,
+                    contents=contents,
+                    config=config,
+                )
+                last_exc = None
+                break  # muvaffaqiyatli — chiqamiz
+            except Exception as exc:
+                last_exc = exc
+                if _is_retryable(exc) and attempt < _RETRY_ATTEMPTS - 1:
+                    delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        "Gemini %s xato (urinish %d/%d), %.1fs kutilmoqda: %s",
+                        "503/429" if _is_retryable(exc) else "xato",
+                        attempt + 1, _RETRY_ATTEMPTS, delay, exc,
+                    )
+                    time.sleep(delay)
+                else:
+                    break  # qayta urinib bo'lmaydigan xato yoki urinishlar tugadi
+
+        latency_ms = int((time.monotonic() - start) * 1000)
+
+        if last_exc is not None:
+            logger.error("Gemini API xatolik (barcha urinishlar tugadi): %s", last_exc, exc_info=True)
+            result = self._error_result(f"Gemini API xatoligi: {last_exc}")
             result["_usage"] = self._build_usage(
-                None, latency_ms, status="error", error_message=str(exc)
+                None, latency_ms, status="error", error_message=str(last_exc)
             )
             return result
+
+        raw_text = response.text or ""
 
         result = self._parse_response(raw_text)
         result["_usage"] = self._build_usage(response, latency_ms, status="success")
         return result
+
+    @staticmethod
+    def _build_thinking_config(types):
+        """`ThinkingConfig(thinking_budget=0)` ni faqat SDK qo'llab-quvvatlasa qaytaradi.
+        google-genai 1.2.0 da bu maydon yo'q (pydantic 'extra_forbidden' xatosi beradi),
+        shuning uchun mavjudligini tekshiramiz."""
+        try:
+            fields = getattr(types.ThinkingConfig, "model_fields", {})
+            if "thinking_budget" in fields:
+                return types.ThinkingConfig(thinking_budget=0)
+        except Exception:
+            pass
+        return None
 
     def _build_usage(self, response, latency_ms, status="success", error_message=""):
         """Gemini javobidan token va xarajat ma'lumotini ajratadi (xom dict)."""

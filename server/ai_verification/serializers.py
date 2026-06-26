@@ -68,5 +68,16 @@ class SubmitDocumentSerializer(serializers.Serializer):
 
 
 class ReviewSerializer(serializers.Serializer):
-    final_decision = serializers.ChoiceField(choices=["accepted", "rejected"])
+    """Admin yakuniy qarori. Admin yo qaror (accepted/rejected), yoki AI toifasini
+    (green/yellow/red) qo'lda o'zgartira oladi — yoki ikkalasini birga. Kamida bittasi
+    berilishi shart."""
+    final_decision = serializers.ChoiceField(choices=["accepted", "rejected"], required=False)
+    confidence_level = serializers.ChoiceField(choices=["green", "yellow", "red"], required=False)
     review_note = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        if not attrs.get("final_decision") and not attrs.get("confidence_level"):
+            raise serializers.ValidationError(
+                "final_decision yoki confidence_level dan kamida bittasi berilishi kerak."
+            )
+        return attrs

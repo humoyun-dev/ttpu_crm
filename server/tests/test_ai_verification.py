@@ -52,7 +52,7 @@ def _png(name="cv.png"):
 
 def test_submit_creates_done_verification(api_client, admin_user, student):
     api_client.force_authenticate(user=admin_user)
-    with patch("ai_verification.views.GeminiVerificationService") as M:
+    with patch("ai_verification.orchestration.GeminiVerificationService") as M:
         M.return_value.verify.return_value = GREEN_RESULT
         resp = api_client.post(
             SUBMIT_URL,
@@ -78,7 +78,7 @@ def test_submit_creates_done_verification(api_client, admin_user, student):
 def test_submit_error_result_marks_failed(api_client, admin_user, student):
     """AI _error qaytarsa: yozuv yaratiladi (201) lekin status=failed."""
     api_client.force_authenticate(user=admin_user)
-    with patch("ai_verification.views.GeminiVerificationService") as M:
+    with patch("ai_verification.orchestration.GeminiVerificationService") as M:
         M.return_value.verify.return_value = {
             "confidence_score": 0.0,
             "confidence_level": "red",
@@ -101,7 +101,7 @@ def test_submit_error_result_marks_failed(api_client, admin_user, student):
 def test_submit_service_exception_marks_failed(api_client, admin_user, student):
     """Service istisno tashlasa view uni ushlab status=failed qiladi (500 emas)."""
     api_client.force_authenticate(user=admin_user)
-    with patch("ai_verification.views.GeminiVerificationService") as M:
+    with patch("ai_verification.orchestration.GeminiVerificationService") as M:
         M.return_value.verify.side_effect = RuntimeError("boom")
         resp = api_client.post(
             SUBMIT_URL,

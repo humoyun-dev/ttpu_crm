@@ -18,6 +18,7 @@ class DocumentVerification(BaseModel):
         IELTS = "ielts", "IELTS Sertifikati"
         CERTIFICATE = "certificate", "Boshqa Sertifikat"
         DIPLOMA = "diploma", "Diplom"
+        EMPLOYMENT = "employment", "Ish joyi ma'lumotnomasi"
         OTHER = "other", "Boshqa"
 
     class Status(models.TextChoices):
@@ -41,6 +42,15 @@ class DocumentVerification(BaseModel):
         "bot2.Bot2Student",
         on_delete=models.CASCADE,
         related_name="document_verifications",
+    )
+    # Bot orqali yuklanganda: qaysi Bot2Document dan kelib chiqqanini saqlaydi.
+    # Bu orqali verification → Bot2Document.survey → Bot2SurveyResponse zanjiri quriladi.
+    # Dashboard orqali to'g'ridan-to'g'ri yuklanganda null.
+    source_document = models.ForeignKey(
+        "bot2.Bot2Document",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="verifications",
     )
     uploaded_by = models.ForeignKey(
         "authn.User",
