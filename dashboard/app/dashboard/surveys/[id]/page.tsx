@@ -26,7 +26,13 @@ import {
 import { formatUzPhone, cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { EMPLOYMENT_LABELS, CONSENT_LABELS, LABEL_TRANSLATIONS, courseYearLabel } from "@/lib/constants";
+import { CONSENT_LABELS, LABEL_TRANSLATIONS, courseYearLabel } from "@/lib/constants";
+
+// Detail sahifasida aniqroq yorliqlar ("Ha"/"Yo'q" emas)
+const EMPLOYMENT_STATUS: Record<string, string> = {
+  employed: "Ishlamoqda",
+  unemployed: "Ishlamaydi",
+};
 
 /* ── Vertical labeled field ── */
 function Field({ label, children, className }: {
@@ -229,7 +235,7 @@ export default function SurveyDetailPage() {
               variant={isEmployed ? "default" : "secondary"}
               className={cn("text-xs", isEmployed && "bg-emerald-600 hover:bg-emerald-600 dark:bg-emerald-700")}
             >
-              {EMPLOYMENT_LABELS[survey.employment_status] || survey.employment_status || "—"}
+              {EMPLOYMENT_STATUS[survey.employment_status] || survey.employment_status || "—"}
             </Badge>
             {docStatus === "verified" && (
               <Badge className="gap-1 bg-sky-600 hover:bg-sky-600 text-xs dark:bg-sky-700">
@@ -302,9 +308,6 @@ export default function SurveyDetailPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                <Field label="To'liq ism" className="col-span-2">
-                  {studentFullName || "—"}
-                </Field>
                 <Field label="Jins">
                   {student?.gender === "male" ? "Erkak" : student?.gender === "female" ? "Ayol" : "—"}
                 </Field>
@@ -317,18 +320,35 @@ export default function SurveyDetailPage() {
                     </a>
                   ) : "—"}
                 </Field>
+                {student?.username && (
+                  <Field label="Telegram" className="col-span-2">
+                    <a href={`https://t.me/${student.username}`} target="_blank" rel="noreferrer"
+                      className="text-primary hover:underline">
+                      @{student.username}
+                    </a>
+                  </Field>
+                )}
                 <Field label="Student ID" className="col-span-2">
                   <code className="rounded bg-muted px-2 py-0.5 font-mono text-xs tabular-nums">
                     {student?.student_external_id || "—"}
                   </code>
                 </Field>
                 {student?.telegram_user_id && (
-                  <Field label="Telegram ID" className="col-span-2">
+                  <Field label="Telegram ID">
                     <code className="rounded bg-muted px-2 py-0.5 font-mono text-xs tabular-nums">
                       {student.telegram_user_id}
                     </code>
                   </Field>
                 )}
+                <Field label="Hujjat holati">
+                  {docStatus === "verified" ? (
+                    <span className="font-medium text-emerald-600 dark:text-emerald-400">✓ Tasdiqlangan</span>
+                  ) : docStatus === "pending" ? (
+                    <span className="font-medium text-amber-600">Ko&apos;rib chiqilmoqda</span>
+                  ) : (
+                    <span className="text-muted-foreground">Hujjat yo&apos;q</span>
+                  )}
+                </Field>
               </div>
             )}
           </CardContent>
@@ -384,7 +404,7 @@ export default function SurveyDetailPage() {
                     "text-base font-semibold",
                     isEmployed ? "text-emerald-700 dark:text-emerald-400" : "text-foreground",
                   )}>
-                    {EMPLOYMENT_LABELS[survey.employment_status] || survey.employment_status || "—"}
+                    {EMPLOYMENT_STATUS[survey.employment_status] || survey.employment_status || "—"}
                   </p>
                 </div>
 
@@ -404,24 +424,18 @@ export default function SurveyDetailPage() {
                 </div>
 
                 {/* Timestamps */}
-                <div className="mt-2 space-y-1.5 border-t border-border pt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                      Yaratilgan
-                    </span>
+                <div className="mt-1 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-4">
+                  <Field label="Yaratilgan">
                     <span className="font-mono text-xs tabular-nums text-muted-foreground">
                       {formatDate(survey.created_at)}
                     </span>
-                  </div>
+                  </Field>
                   {survey.submitted_at && (
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                        Yuborilgan
-                      </span>
+                    <Field label="Yuborilgan">
                       <span className="font-mono text-xs tabular-nums">
                         {formatDate(survey.submitted_at, true)}
                       </span>
-                    </div>
+                    </Field>
                   )}
                 </div>
               </>
