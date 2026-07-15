@@ -264,12 +264,19 @@ export function RosterTab() {
                             )}
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge
-                              variant={roster.is_active ? "default" : "secondary"}
-                              className="text-xs"
-                            >
-                              {roster.is_active ? "Aktiv" : "Noaktiv"}
-                            </Badge>
+                            <div className="flex flex-col items-center gap-1">
+                              <Badge
+                                variant={roster.is_active ? "default" : "secondary"}
+                                className="text-xs"
+                              >
+                                {roster.is_active ? "Aktiv" : "Noaktiv"}
+                              </Badge>
+                              {!roster.birth_date && (
+                                <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
+                                  <AlertTriangle className="h-3 w-3" />Sana yo&apos;q
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           {isAdmin && (
                             <TableCell>
