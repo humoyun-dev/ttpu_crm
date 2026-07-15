@@ -55,6 +55,7 @@ services:
   bot2:
     build:
       context: ./bot2_service
+    image: ttpu_crm-bot2:latest
     command: python -m bot2_service.main
     restart: unless-stopped
     env_file:
@@ -64,11 +65,13 @@ services:
     depends_on:
       server:
         condition: service_healthy
+    # Checks that PID 1 (the bot process) is still alive.
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
+      start_period: 10s
     logging:
       driver: "json-file"
       options:
@@ -86,7 +89,8 @@ services:
         # Brauzerga ko'rinadigan API URL — markazlashgan ./.env dan olinadi.
         # Prod uchun root .env da NEXT_PUBLIC_API_URL ni o'zgartiring.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:9006}
-    command: npm run start
+    image: ttpu_crm-dashboard:latest
+    command: node server.js
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -108,21 +112,19 @@ services:
         limits:
           memory: 512M
 
-  # Runs CRM followup messages on a schedule (every 15 min).
-  # Reuses the server image — no extra build needed.
+  # Scheduled jobs: followup messages + pending Telegram posts (every 60s).
+  # Reuses the server image — no extra build or Django app reload.
   followup_cron:
-    build:
-      context: ./server
     image: ttpu_crm-server:latest
-    command: >
-      sh -c "while true; do
-        python manage.py process_followups;
-        sleep 900;
-      done"
+    command: python manage.py run_scheduler
     restart: unless-stopped
     env_file:
       - ./.env
+    volumes:
+      - ./server:/app
     depends_on:
+      db:
+        condition: service_healthy
       server:
         condition: service_healthy
     logging:
@@ -130,6 +132,10 @@ services:
       options:
         max-size: "5m"
         max-file: "2"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
 volumes:
   postgres_data:
