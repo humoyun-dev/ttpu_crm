@@ -102,6 +102,7 @@ class DocumentVerification(BaseModel):
             models.Index(fields=["status"]),
             models.Index(fields=["confidence_level"]),
             models.Index(fields=["final_decision"]),
+            models.Index(fields=["-created_at"]),
         ]
 
     def __str__(self):

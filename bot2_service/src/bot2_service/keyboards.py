@@ -125,14 +125,6 @@ def yes_no_keyboard(prefix: str, lang: str = "uz") -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def lang_select_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=get_text("lang_english", lang), callback_data="lang:english")
-    kb.button(text=get_text("lang_russian", lang), callback_data="lang:russian")
-    kb.adjust(2)
-    return kb.as_markup()
-
-
 def directions_keyboard(directions: Sequence[dict], lang: str = "uz") -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for d in directions:
@@ -202,8 +194,8 @@ def main_menu_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         keyboard=[
             [KeyboardButton(text=get_text("menu_portfolio", lang)), KeyboardButton(text=get_text("menu_vacancy", lang))],
-            [KeyboardButton(text=get_text("menu_survey", lang)), KeyboardButton(text=get_text("menu_account", lang))],
-            [KeyboardButton(text=get_text("menu_support", lang))],
+            [KeyboardButton(text=get_text("menu_survey", lang)), KeyboardButton(text=get_text("menu_internship", lang))],
+            [KeyboardButton(text=get_text("menu_account", lang)), KeyboardButton(text=get_text("menu_support", lang))],
         ],
     )
 

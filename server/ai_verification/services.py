@@ -96,7 +96,7 @@ class GeminiVerificationService:
 
         config_kwargs = dict(
             temperature=0.1,
-            max_output_tokens=2048,
+            max_output_tokens=8192,
             response_mime_type="application/json",
         )
         thinking_cfg = self._build_thinking_config(types)
@@ -171,10 +171,9 @@ class GeminiVerificationService:
             input_tokens = getattr(meta, "prompt_token_count", 0) or 0
             output_tokens = getattr(meta, "candidates_token_count", 0) or 0
             thinking_tokens = getattr(meta, "thoughts_token_count", 0) or 0
-            # candidates_token_count odatda thinking ni o'z ichiga OLADI — ikki marta
-            # hisoblamaslik uchun output dan ayirib, alohida saqlaymiz.
-            if thinking_tokens and output_tokens >= thinking_tokens:
-                output_tokens = output_tokens - thinking_tokens
+            # google-genai usage_metadata da candidates va thoughts ALOHIDA
+            # (total = prompt + candidates + thoughts) — ayirish kerak emas.
+            # Ikkalasi ham output narxida hisoblanadi (calculate_cost).
 
         total_tokens = input_tokens + output_tokens + thinking_tokens
         cost = calculate_cost(self.MODEL_NAME, input_tokens, output_tokens, thinking_tokens)

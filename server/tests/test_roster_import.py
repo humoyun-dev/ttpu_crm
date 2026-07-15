@@ -258,3 +258,65 @@ def test_response_marks_updated_students_and_keeps_existing_program(api_client, 
     assert s["status"] == "updated"
     assert s["course_year"] == 3
     assert s["program"] == program_item.name  # preserved, not wiped
+
+
+# --------------------------------------------------------------------------- #
+# Real-world messy .xlsx (shape of the production "All Students.xlsx")
+# --------------------------------------------------------------------------- #
+
+def _messy_xlsx_bytes():
+    """Build an in-memory .xlsx mirroring the real export's structure (fake data):
+    a leading index column, an embedded stats block, a #REF! error cell, a merged
+    "Full name" (SURNAME FIRST PATRONYMIC), a "Year" course column, a curly-apostrophe
+    "Tug'ilgan sanasi" birth-date column with a real datetime, plus junk columns
+    (Group / Tel / Grant / IELTS / Stats) that must be ignored, and a trailing
+    stats-only row with no Student Id that must be skipped."""
+    import openpyxl
+    from datetime import datetime
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    # Curly apostrophe (U+2019) in the birth-date header — must still be recognised.
+    ws.append(["", "Student Id", "Group", "Year", "", "Full name", "Grant",
+               "Tug’ilgan sanasi", " Tel raqami", "IELTS", "Stats", "Umumiy"])
+    ws.append([6, "STU-1", "ADN1-25", 1, "#REF!", "ABDUSALIMOV DONIYOR RAVSHANOVICH",
+               "GRANT MINVUZ", datetime(2007, 7, 5), "901077330", "", "ADN1-25", 1172])
+    ws.append([7, "STU-2", "IT1-22", 2, "#REF!", "ALIYEV BOBUR", "",
+               datetime(2005, 3, 1), "935551020", 6.5, "IT1-22", 63])
+    # Stats-remnant row: no Student Id → must be skipped, not an error.
+    ws.append(["", "", "", "", "", "", "", "", "", "", "Umumiy", 1235])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_messy_real_world_xlsx_is_parsed(api_client, admin_user):
+    """The production export (merged name, Year column, curly-apostrophe birth date,
+    embedded stats columns, #REF! cells, id-less remnant row) imports correctly."""
+    from datetime import date
+
+    api_client.force_authenticate(user=admin_user)
+    upload = SimpleUploadedFile(
+        "All Students.xlsx", _messy_xlsx_bytes(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    resp = api_client.post(URL, {"file": upload}, format="multipart")
+
+    assert resp.status_code == status.HTTP_200_OK, resp.data
+    assert resp.data["created"] == 2
+    assert resp.data["skipped"] == 1          # the id-less stats remnant row
+    assert resp.data["errors"] == []
+
+    s1 = StudentRoster.objects.get(student_external_id="STU-1")
+    # Merged "SURNAME FIRST PATRONYMIC" → first token / rest, preserving display order.
+    assert s1.first_name == "ABDUSALIMOV"
+    assert s1.last_name == "DONIYOR RAVSHANOVICH"
+    assert s1.course_year == 1                # from the "Year" column
+    assert s1.birth_date == date(2007, 7, 5)  # curly-apostrophe header + datetime cell
+    assert s1.program is None                 # Group is NOT auto-mapped to a program
+
+    s2 = StudentRoster.objects.get(student_external_id="STU-2")
+    assert s2.course_year == 2
+    assert s2.birth_date == date(2005, 3, 1)

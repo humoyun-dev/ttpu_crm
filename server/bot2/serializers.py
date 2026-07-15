@@ -44,7 +44,37 @@ class Bot2StudentSerializer(serializers.ModelSerializer):
         read_only_fields = ("roster", "state")
 
 
+class Bot2StudentListSerializer(serializers.ModelSerializer):
+    """Yengil — talaba tanlash ro'yxati uchun (yo'nalish, kurs, hujjat holati)."""
+    region_details = CatalogItemNestedSerializer(source="region", read_only=True)
+    program_name = serializers.SerializerMethodField()
+    course_year = serializers.SerializerMethodField()
+    doc_verified = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Bot2Student
+        fields = (
+            "id", "student_external_id", "first_name", "last_name", "gender",
+            "phone", "language", "telegram_user_id", "region", "region_details",
+            "program_name", "course_year", "doc_verified", "ai_skills_at",
+        )
+
+    def get_program_name(self, obj):
+        r = getattr(obj, "roster", None)
+        return r.program.name if r and r.program_id else None
+
+    def get_course_year(self, obj):
+        r = getattr(obj, "roster", None)
+        return r.course_year if r else None
+
+    def get_doc_verified(self, obj):
+        return getattr(obj, "_has_accepted_doc", None)
+
+
 class Bot2SurveyResponseSerializer(serializers.ModelSerializer):
+    """Faqat o'qish uchun (list/retrieve): so'rovnomalar append-only — yozish yo'li
+    yagona, bot orqali submit_survey. write_only idempotency_key javoblarda
+    ko'rinmaydi (dedup kaliti tashqariga chiqmaydi)."""
     student_details = serializers.SerializerMethodField()
     program_details = CatalogItemNestedSerializer(source="program", read_only=True)
     doc_verification_status = serializers.SerializerMethodField()
@@ -62,10 +92,12 @@ class Bot2SurveyResponseSerializer(serializers.ModelSerializer):
         return None
 
     def get_doc_verification_status(self, obj) -> str:
-        """verified | pending | no_docs.
+        """verified | pending | rejected | no_docs.
 
         Ishlaydigan talaba (employed) uchun faqat 'employment' turli hujjat tekshiriladi.
         Ishlamaydigan talaba uchun istalgan qabul qilingan hujjat yetarli.
+        'rejected' — hujjat yuklangan va AI tomonidan rad etilgan; 'no_docs' dan farqli —
+        hujjat umuman yuklanmagan.
         Annotated by the viewset for performance; DB fallback for detail endpoint.
         """
         from ai_verification.models import DocumentVerification
@@ -73,29 +105,35 @@ class Bot2SurveyResponseSerializer(serializers.ModelSerializer):
 
         if employed:
             has_accepted = getattr(obj, "has_accepted_employment_doc", None)
-            has_any = getattr(obj, "has_any_employment_doc", None)
+            has_pending = getattr(obj, "has_pending_employment_doc", None)
+            has_rejected = getattr(obj, "has_rejected_employment_doc", None)
             if has_accepted is None:
                 if not obj.student_id:
                     return "no_docs"
                 qs = DocumentVerification.objects.filter(
                     student_id=obj.student_id, document_type="employment"
                 )
-                has_any = qs.exists()
+                has_pending = qs.filter(final_decision="pending").exists()
                 has_accepted = qs.filter(final_decision="accepted").exists()
+                has_rejected = qs.filter(final_decision="rejected").exists()
         else:
             has_accepted = getattr(obj, "has_accepted_doc", None)
-            has_any = getattr(obj, "has_any_doc", None)
+            has_pending = getattr(obj, "has_pending_doc", None)
+            has_rejected = getattr(obj, "has_rejected_doc", None)
             if has_accepted is None:
                 if not obj.student_id:
                     return "no_docs"
                 qs = DocumentVerification.objects.filter(student_id=obj.student_id)
-                has_any = qs.exists()
+                has_pending = qs.filter(final_decision="pending").exists()
                 has_accepted = qs.filter(final_decision="accepted").exists()
+                has_rejected = qs.filter(final_decision="rejected").exists()
 
         if has_accepted:
             return "verified"
-        if has_any:
+        if has_pending:
             return "pending"
+        if has_rejected:
+            return "rejected"
         return "no_docs"
 
 

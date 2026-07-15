@@ -32,3 +32,9 @@ class BotState(StatesGroup):
 
     # Main menu (after successful submission)
     in_menu = State()
+
+    # Amaliyot (internship) arizasi
+    intern_source = State()        # reestrdan tanlash yoki o'zi yozish
+    intern_pick_employer = State() # reestr ro'yxati (paginatsiya)
+    intern_type_company = State()  # erkin matn (kompaniya nomi)
+    intern_note = State()          # ixtiyoriy izoh

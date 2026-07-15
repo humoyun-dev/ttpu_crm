@@ -41,7 +41,11 @@ def test_student_roster_rejects_non_program(db):
         roster.full_clean()
 
 
-def test_roster_updates_keep_surveys_in_sync(db, program_item):
+def test_roster_update_does_not_rewrite_existing_survey_snapshots(db, program_item):
+    """APPEND-ONLY: roster'ni yangilash (masalan kurs 1→2) mavjud so'rovnoma
+    yozuvlarining program/course_year'ini QAYTA YOZMAYDI — har bir survey o'zgarmas
+    snapshot. Faqat NULL qiymatlar (hali to'ldirilmagan) backfill qilinishi mumkin.
+    """
     other_program = CatalogItem.objects.create(
         type=CatalogItem.ItemType.PROGRAM, name="Program B", code="PB"
     )
@@ -74,10 +78,14 @@ def test_roster_updates_keep_surveys_in_sync(db, program_item):
             "roster_campaign": "default",
         }
     )
-    assert updated is False
+    assert updated is False  # ikkinchi chaqiruvdagi 'created' flagi — yangi qator emas
+    roster.refresh_from_db()
+    assert roster.program_id == other_program.id
+    assert roster.course_year == 2
+    # ...ammo mavjud survey snapshot O'ZGARMAYDI:
     survey.refresh_from_db()
-    assert survey.program_id == other_program.id
-    assert survey.course_year == 2
+    assert survey.program_id == program_item.id
+    assert survey.course_year == 1
 
 
 def test_coverage_denominator_filters_campaign(api_client, admin_user, program_item):

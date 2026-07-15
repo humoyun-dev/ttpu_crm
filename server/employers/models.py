@@ -1,6 +1,5 @@
 from django.db import models
 
-from catalog.models import CatalogItem
 from common.models import BaseModel
 
 
@@ -11,13 +10,9 @@ class Employer(BaseModel):
         EXPIRED = "expired", "Expired"
 
     name = models.CharField(max_length=255)
-    industry = models.ForeignKey(
-        CatalogItem,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="+",
-    )
+    # Soha — erkin matn (IT, Moliya, ...). Avval CatalogItem FK edi, lekin
+    # industry katalogi ishlatilmagani uchun erkin matnga o'tkazildi.
+    industry = models.CharField(max_length=255, blank=True, default="")
     location = models.CharField(max_length=255, blank=True)
     logo = models.ImageField(upload_to="employers/", null=True, blank=True)
     description = models.TextField(blank=True)
@@ -32,7 +27,6 @@ class Employer(BaseModel):
         ordering = ("name",)
         indexes = [
             models.Index(fields=["mou_status"]),
-            models.Index(fields=["industry"]),
         ]
 
     def __str__(self) -> str:

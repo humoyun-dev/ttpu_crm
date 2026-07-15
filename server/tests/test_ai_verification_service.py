@@ -194,15 +194,17 @@ def test_build_usage_from_metadata_computes_cost_and_total():
     assert u["status"] == "success"
 
 
-def test_build_usage_subtracts_thinking_from_candidates():
-    # candidates_token_count INCLUDES thinking → must not double-count.
+def test_build_usage_counts_candidates_and_thinking_separately():
+    # google-genai usage_metadata da candidates va thoughts ALOHIDA (disjoint):
+    # total = prompt + candidates + thoughts. Ayirish NOTO'G'RI edi (thinking
+    # tokenlarni yo'qotardi) — ikkalasi ham output narxida hisoblanadi.
     meta = pytypes.SimpleNamespace(
         prompt_token_count=1000, candidates_token_count=500, thoughts_token_count=300
     )
     u = _svc()._build_usage(pytypes.SimpleNamespace(usage_metadata=meta), latency_ms=0)
-    assert u["output_tokens"] == 200      # 500 - 300
+    assert u["output_tokens"] == 500      # candidates (ayirilmaydi)
     assert u["thinking_tokens"] == 300
-    assert u["total_tokens"] == 1500      # 1000 + 200 + 300
+    assert u["total_tokens"] == 1800      # 1000 + 500 + 300
 
 
 def test_build_usage_no_metadata_is_zero():

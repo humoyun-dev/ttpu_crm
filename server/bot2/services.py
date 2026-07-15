@@ -1,5 +1,5 @@
 import re
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from django.db import transaction
@@ -16,6 +16,9 @@ def parse_birth_date(value) -> Optional[date]:
     """Accept DD.MM.YYYY (or - / separators). Returns date or None."""
     if not value:
         return None
+    # Excel (openpyxl) sana kataklarini datetime sifatida qaytaradi — sof date ga.
+    if isinstance(value, datetime):
+        return value.date()
     if isinstance(value, date):
         return value
     m = _BIRTH_DATE_RE.match(str(value).strip())
@@ -37,16 +40,28 @@ def get_program(program_id=None, program_code=None) -> Optional[CatalogItem]:
     return None
 
 
-def parse_roster_payload(row: dict) -> dict:
+def parse_roster_payload(row: dict, program_cache: Optional[dict] = None) -> dict:
     student_external_id = str(row.get("student_external_id") or "").strip()
     if not student_external_id:
         raise APIError(code="VALIDATION_ERROR", detail="student_external_id is required.")
 
-    # program and course_year are optional — collected from the student via bot
-    program = get_program(row.get("program_id"), row.get("program_code"))
-    if row.get("program_id") or row.get("program_code"):
+    # program and course_year are optional — collected from the student via bot.
+    # program_cache: bir xil program_id/code takror qidirilmasligi uchun (katta
+    # importda minglab bir xil qatorlar — bitta so'rov yetarli).
+    program_id = row.get("program_id")
+    program_code = row.get("program_code")
+    if program_id or program_code:
+        key = (program_id, program_code)
+        if program_cache is not None and key in program_cache:
+            program = program_cache[key]
+        else:
+            program = get_program(program_id, program_code)
+            if program_cache is not None:
+                program_cache[key] = program
         if not program:
             raise APIError(code="PROGRAM_NOT_FOUND", detail="Program not found.")
+    else:
+        program = None
 
     course_year = None
     raw_year = row.get("course_year")
@@ -102,12 +117,19 @@ def upsert_roster_row(data: dict) -> tuple[StudentRoster, bool]:
             existing.full_clean()
             existing.save(update_fields=changed_fields + ["updated_at"])
 
+            # Append-only tarix: survey qatorlarida faqat hali NULL bo'lgan
+            # program/course_year to'ldiriladi — mavjud (non-null) qiymat hech
+            # qachon qayta import bilan ustidan yozilmaydi.
             if "program" in changed_fields or "course_year" in changed_fields:
                 from bot2.models import Bot2SurveyResponse
-                Bot2SurveyResponse.objects.filter(roster=existing).update(
-                    program=existing.program,
-                    course_year=existing.course_year,
-                )
+                if "program" in changed_fields and existing.program_id:
+                    Bot2SurveyResponse.objects.filter(
+                        roster=existing, program__isnull=True
+                    ).update(program=existing.program)
+                if "course_year" in changed_fields and existing.course_year:
+                    Bot2SurveyResponse.objects.filter(
+                        roster=existing, course_year__isnull=True
+                    ).update(course_year=existing.course_year)
 
         return existing, False
 
@@ -118,3 +140,95 @@ def upsert_roster_row(data: dict) -> tuple[StudentRoster, bool]:
     roster.full_clean()
     roster.save()
     return roster, True
+
+
+def _roster_defaults(data: dict) -> dict:
+    """upsert_roster_row bilan bir xil "qaysi maydonlar yoziladi" qoidasi."""
+    defaults: dict = {
+        "is_active": data.get("is_active", True),
+        "roster_campaign": data.get("roster_campaign", "default"),
+    }
+    for f in ("first_name", "last_name", "birth_date", "program", "course_year"):
+        if data.get(f) is not None:
+            defaults[f] = data[f]
+    return defaults
+
+
+def bulk_upsert_roster_rows(parsed_rows: list[dict]) -> dict:
+    """Ko'p qatorli rosterni samarali upsert qiladi (katta Excel import uchun).
+
+    Har qatorda alohida SELECT + save (+ full_clean) o'rniga: mavjud qatorlar
+    BITTA so'rovda oldindan olinadi, yangilar `bulk_create`, o'zgarganlar
+    `bulk_update` bilan yoziladi. Semantikasi `upsert_roster_row` bilan bir xil
+    (program/course_year faqat berilganda ustidan yoziladi; survey snapshotlarida
+    faqat NULL qiymatlar backfill qilinadi — append-only saqlanadi).
+
+    Fayl ichida bir xil ID takrorlansa — oxirgisi g'olib. Qaytaradi:
+    {student_external_id: (StudentRoster, was_created)}.
+    """
+    from django.utils import timezone
+
+    ordered_ids: list[str] = []
+    by_id: dict[str, dict] = {}
+    for data in parsed_rows:
+        sid = data["student_external_id"]
+        if sid not in by_id:
+            ordered_ids.append(sid)
+        by_id[sid] = data  # oxirgisi g'olib
+
+    existing_map = {
+        r.student_external_id: r
+        for r in StudentRoster.objects.filter(student_external_id__in=ordered_ids)
+    }
+
+    to_create: list[StudentRoster] = []
+    to_update: list[StudentRoster] = []
+    update_fields: set[str] = set()
+    backfill: list[tuple[StudentRoster, bool, bool]] = []
+    result: dict[str, tuple[StudentRoster, bool]] = {}
+    now = timezone.now()
+
+    for sid in ordered_ids:
+        data = by_id[sid]
+        defaults = _roster_defaults(data)
+        ex = existing_map.get(sid)
+        if ex is None:
+            roster = StudentRoster(student_external_id=sid, **defaults)
+            to_create.append(roster)
+            result[sid] = (roster, True)
+        else:
+            changed: list[str] = []
+            for field, value in defaults.items():
+                if getattr(ex, field) != value:
+                    setattr(ex, field, value)
+                    changed.append(field)
+            if changed:
+                ex.updated_at = now  # bulk_update auto_now'ni ishga tushirmaydi
+                to_update.append(ex)
+                update_fields.update(changed)
+                do_prog = "program" in changed and bool(ex.program_id)
+                do_course = "course_year" in changed and bool(ex.course_year)
+                if do_prog or do_course:
+                    backfill.append((ex, do_prog, do_course))
+            result[sid] = (ex, False)
+
+    if to_create:
+        StudentRoster.objects.bulk_create(to_create, batch_size=500)
+    if to_update:
+        StudentRoster.objects.bulk_update(
+            to_update, fields=list(update_fields) + ["updated_at"], batch_size=500
+        )
+
+    if backfill:
+        from bot2.models import Bot2SurveyResponse
+        for roster, do_prog, do_course in backfill:
+            if do_prog:
+                Bot2SurveyResponse.objects.filter(
+                    roster=roster, program__isnull=True
+                ).update(program=roster.program)
+            if do_course:
+                Bot2SurveyResponse.objects.filter(
+                    roster=roster, course_year__isnull=True
+                ).update(course_year=roster.course_year)
+
+    return result

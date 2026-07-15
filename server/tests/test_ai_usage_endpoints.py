@@ -1,5 +1,6 @@
 """ai_verification — xarajat kuzatuvi: submit AIUsageLog yozadi + usage endpointlari."""
 
+import threading
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -12,6 +13,26 @@ from rest_framework.test import APIClient
 
 from ai_verification.models import AIUsageLog, DocumentVerification
 from bot2.models import Bot2Student, StudentRoster
+from contextlib import contextmanager
+
+
+@contextmanager
+def _joining_background_threads():
+    """submit endi run_document_verification_async orqali background thread'da
+    ishlaydi. Bu yerdagi threadlarni kuzatib, chiqishdan oldin join qiladi —
+    aks holda test tugagach ham fon jarayoni davom etib, keyingi testga
+    (yoki tashqarida qolgan patch'ga) halaqit berishi mumkin."""
+    created = []
+    real_init = threading.Thread.__init__
+
+    def _tracking_init(self, *a, **kw):
+        real_init(self, *a, **kw)
+        created.append(self)
+
+    with patch.object(threading.Thread, "__init__", _tracking_init):
+        yield
+    for t in created:
+        t.join(timeout=5)
 
 
 SUBMIT_URL = reverse("ai-verify-submit")
@@ -50,9 +71,13 @@ def _result_with_usage(cost="0.00145000", tokens=1900, status_="success"):
 
 # ── submit writes AIUsageLog ───────────────────────────────────────────────────
 
+@pytest.mark.django_db(transaction=True)
 def test_submit_writes_usage_log(api_client, admin_user, student):
+    """submit endi background thread'da ishlaydi — haqiqiy commit (transaction=True)
+    va thread.join() background yozuvni ko'rish uchun kerak."""
     api_client.force_authenticate(user=admin_user)
-    with patch("ai_verification.orchestration.GeminiVerificationService") as M:
+    with patch("ai_verification.orchestration.GeminiVerificationService") as M, \
+         _joining_background_threads():
         M.return_value.verify.return_value = _result_with_usage()
         resp = api_client.post(
             SUBMIT_URL,
@@ -70,9 +95,11 @@ def test_submit_writes_usage_log(api_client, admin_user, student):
     assert log.operation == "document_verification"
 
 
+@pytest.mark.django_db(transaction=True)
 def test_submit_service_exception_writes_error_log(api_client, admin_user, student):
     api_client.force_authenticate(user=admin_user)
-    with patch("ai_verification.orchestration.GeminiVerificationService") as M:
+    with patch("ai_verification.orchestration.GeminiVerificationService") as M, \
+         _joining_background_threads():
         M.return_value.verify.side_effect = RuntimeError("boom")
         api_client.post(
             SUBMIT_URL,

@@ -1,5 +1,7 @@
 """ai_verification — admin boshqaruv: ro'yxat (filter), stats, review (toifa override)."""
 
+import threading
+from contextlib import contextmanager
 from unittest.mock import patch
 
 import pytest
@@ -31,6 +33,25 @@ def student(db):
 
 def _png(name="d.png"):
     return SimpleUploadedFile(name, b"\x89PNG\r\n\x1a\n" + b"0" * 16, content_type="image/png")
+
+
+@contextmanager
+def _joining_background_threads():
+    """/bot/document run_document_verification_async orqali background thread'da
+    Gemini tekshiruvini ishga tushiradi — threadni kuzatib, patch hali faol
+    ekanida (va test tranzaksiyasi commit bo'lgach) join qilamiz, aks holda
+    natija ko'rinmaydi yoki thread testdan tashqarida ishlab qoladi."""
+    created = []
+    real_init = threading.Thread.__init__
+
+    def _tracking_init(self, *a, **kw):
+        real_init(self, *a, **kw)
+        created.append(self)
+
+    with patch.object(threading.Thread, "__init__", _tracking_init):
+        yield
+    for t in created:
+        t.join(timeout=5)
 
 
 def _mk(student, *, conf="green", decision="pending", st="done", dtype="cv"):
@@ -185,8 +206,14 @@ def test_retry_forbidden_for_viewer(api_client, viewer_user, student):
 
 # ── bot upload auto-verifies ──────────────────────────────────────────────────
 
+@pytest.mark.django_db(transaction=True)
 def test_bot_upload_auto_creates_verification(settings, student):
-    """Bot /bot/document orqali yuklaganda DocumentVerification ham yaratiladi."""
+    """Bot /bot/document orqali yuklaganda DocumentVerification ham yaratiladi.
+
+    Tekshiruv background thread'da ishlaydi (run_document_verification_async) —
+    haqiqiy commit (transaction=True) va thread.join() kerak, aks holda thread'ning
+    alohida DB ulanishi hali committed bo'lmagan test yozuvlarini ko'ra olmaydi.
+    """
     from common.auth import _hashed
     settings.SERVICE_TOKENS = {"bot2": _hashed("secret")}
 
@@ -198,7 +225,8 @@ def test_bot_upload_auto_creates_verification(settings, student):
                    "total_tokens": 15, "cost_usd": 0, "latency_ms": 5,
                    "model_name": "gemini-2.5-flash", "status": "success", "error_message": ""},
     }
-    with patch("ai_verification.orchestration.GeminiVerificationService") as M:
+    with patch("ai_verification.orchestration.GeminiVerificationService") as M, \
+         _joining_background_threads():
         M.return_value.verify.return_value = green
         resp = client.post(
             reverse("bot-document-upload"),

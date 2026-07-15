@@ -60,6 +60,8 @@ INSTALLED_APPS = [
     "crm",
     "documents",
     "ai_verification",
+    "vacancies",
+    "internships",
 ]
 
 MIDDLEWARE = [
@@ -164,8 +166,10 @@ REST_FRAMEWORK = {
         "django_filters.rest_framework.DjangoFilterBackend",
     ],
     "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.UserRateThrottle",
-        "rest_framework.throttling.AnonRateThrottle",
+        # Service-token'li (bot) so'rovlar throttle'dan ozod — bot bitta IP'dan
+        # ishlagani uchun default anon/user limitlari uni to'xtatib qo'ymasin.
+        "common.throttles.ServiceTokenExemptUserRateThrottle",
+        "common.throttles.ServiceTokenExemptAnonRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "user": "1000/day",
@@ -213,6 +217,11 @@ SERVICE_TOKENS = {
 }
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+
+# Vacancy kanal posting
+VACANCY_CHANNEL_ID   = os.getenv("VACANCY_CHANNEL_ID", "")
+VACANCY_CHANNEL_LINK = os.getenv("VACANCY_CHANNEL_LINK", "")
+VACANCY_REQUIRE_SURVEY = os.getenv("VACANCY_REQUIRE_SURVEY", "true").lower() == "true"
 
 # AI document-analysis service (ai_gateway -> ai_service). Stub by default.
 AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://ai_service:8100")

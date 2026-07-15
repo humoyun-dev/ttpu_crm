@@ -1,117 +1,207 @@
-# Turin Polytechnic University Marketing CRM (Backend)
+# TTPU Bandlik Markazi — Backend (Django)
 
-Django 5 + DRF asosidagi backend, PostgreSQL (yoki lokalda SQLite), SimpleJWT va drf-spectacular bilan ishlaydi. Telegram botlar (bot1, bot2) va ichki dashboard uchun API beradi.
+Django 5 + DRF asosidagi backend. PostgreSQL, SimpleJWT (cookie-based), drf-spectacular.
 
 ## Papka tuzilmasi (server/)
-- `crm_server/`: Django konfiguratsiyasi, `settings.py`, `urls.py`, ASGI/WSGI.
-- `authn/`: Custom user (`email` login, `role=admin/viewer`), JWT cookie auth (`/api/v1/auth/login|refresh|logout|me`), token blacklist.
-- `catalog/`: `CatalogItem` va `CatalogRelation` modellari; program/direction/track/subject/region katalogi, `seed_programs` management buyrug'i.
-- `bot1/`: Abiturientlar va arizalar (`Admissions2026Application`, `CampusTourRequest`, `FoundationRequest`, `PolitoAcademyRequest`), service endpointlar `X-SERVICE-TOKEN` bilan, dashboard uchun read-only viewsetlar.
-- `bot2/`: Talaba ro'yxati (`StudentRoster`), bot2 foydalanuvchilari (`Bot2Student`), so'rovnomalar (`Bot2SurveyResponse`), roster importi (API va CLI), service survey submit.
-- `analytics/`: Bot1/Bot2 va katalog ma'lumotlari bo'yicha agregatsiyalar (model yo'q, faqat viewlar).
-- `audit/`: `AuditLog` modeli va `audit.utils.log_audit` orqali barcha CRUD/auth hodisalarini yozib boradi.
-- `common/`: Baza modellari (`BaseModel`, `ServiceToken`), servis token tekshiruvi, permissionlar, pagination, vaqt va exception utilitlari; management buyruqlari (`create_mock_data`, `seed_ttpumock`).
-- `tests/`: Pytest testlari (auth, permissions, analytics, seed, bot2 survey va h.k.).
-- `Dockerfile`, `docker-compose.yml`, `entrypoint.sh`: container orkestratsiyasi; `sql-structure.sql` – DB sxemasi nusxasi; `staticfiles/` – `collectstatic` natijasi.
+
+| App | Maqsad |
+|-----|--------|
+| `authn/` | Custom user (email login, `admin`/`viewer` roli), JWT cookie auth, token blacklist |
+| `catalog/` | `CatalogItem` (program/direction/subject/track/region/other), `CatalogRelation` |
+| `bot2/` | `StudentRoster`, `Bot2Student`, `Bot2StudentAccount`, `Bot2SurveyResponse`, `Bot2Document`, `ProgramEnrollment`, `BotFsmState` |
+| `ai_gateway/` | AI servislariga proksi-gateway |
+| `ai_verification/` | Gemini 2.5 Flash orqali hujjat tekshiruvi (`DocumentVerification`, `AIUsageLog`) |
+| `vacancies/` | `Vacancy`, `VacancyChannelPost` — outbox pattern, Telegram kanal posting |
+| `employers/` | Employer profillari va bog'liq endpointlar |
+| `crm/` | Leads, followup xabarlari, employer access link (`/l/<uuid>/`) |
+| `documents/` | Hujjat boshqaruvi |
+| `analytics/` | Bot2 va catalog agregatsiyalari (alohida model yo'q) |
+| `audit/` | `AuditLog` — barcha CRUD/auth hodisalarini yozadi |
+| `common/` | `BaseModel` (UUID PK, timestamps), `ServiceToken`, permissionlar, pagination |
+| `crm_server/` | Django konfiguratsiyasi (`settings.py`, `urls.py`) |
+| `tests/` | Pytest testlari |
 
 ## Asosiy modellar
-- `authn.User`: UUID primary key, email bilan login, rollar (`admin`, `viewer`), cookie-based JWT. `RevokedToken` access/refresh jti larini bekor qiladi.
-- `common.ServiceToken`: botlar va boshqa servislar uchun sha256 hash saqlanadi; `X-SERVICE-TOKEN` headeri bilan tekshiriladi.
-- `catalog.CatalogItem`: type (`program`, `direction`, `subject`, `track`, `region`, `other`), ixtiyoriy `code`, `parent`, `is_active`, `metadata`, unique constraintlar. `CatalogRelation`: itemlar orasidagi bog'lanishlar (masalan program -> direction).
-- `bot1.Bot1Applicant`: Telegram user/chat ID, kontaktlar, region (catalog). `Admissions2026Application`, `CampusTourRequest`, `FoundationRequest`, `PolitoAcademyRequest` – umumiy statuslar (`new/submitted/in_progress/approved/rejected`), `answers` JSON, `submitted_at` avtomatik to'ldiriladi.
-- `bot2.StudentRoster`: tashqi ID, program (catalog `program`), kurs yili (1..4), `roster_campaign`, `is_active`. `Bot2Student`: roster bilan 1-1, gender/region/telegram ma'lumotlari. `Bot2SurveyResponse`: survey_campaign, employment maydonlari, consents/answers JSON, unique constraint (roster + campaign) va kurs/program tekshiruvlari.
-- `audit.AuditLog`: actor (user yoki service), action (create/update/delete/login/logout/other), entity table/id, old/new payload (PII maydonlar maskalanadi), IP va user-agent.
-- `analytics`: alohida model yo'q, Bot1/Bot2 dan `Count` asosida javoblar qaytaradi.
 
-## API lar va oqimlar
-- **Auth (cookie JWT)**: `/api/v1/auth/login`, `/refresh`, `/logout`, `/me`. Login refresh/access cookielarni HTTP-only sifatida o'rnatadi.
-- **Catalog**: `/api/v1/catalog/items|relations` (CRUD, yozish faqat admin), `/api/v1/catalog/programs` (read-only filtrlar: `level`, `track`).
-- **Bot1**: Dashboard uchun GET viewsetlar (`/api/v1/bot1/applicants`, `.../applications/*`). Bot servisi uchun POST endpointlar (token talab etiladi): `/api/v1/bot1/applicants/upsert`, `/bot1/admissions-2026/submit`, `/bot1/campus-tour/submit`, `/bot1/foundation/submit`, `/bot1/polito-academy/submit`.
-- **Bot2**: Dashboard uchun GET roster/students/surveys. Admin uchun roster import: `POST /api/v1/admin/roster/import` (CSV fayl yoki JSON ro'yxat). Bot servisi uchun survey submit: `POST /api/v1/bot2/surveys/submit` (`student_external_id` va token shart).
-- **Analytics**: `/api/v1/analytics/admissions-2026/by-direction|by-track`, `/analytics/polito-academy/by-subject`, `/analytics/bot2/course-year-coverage`, `/analytics/bot2/program-coverage`, `/analytics/bot2/program-course-matrix` (ko'pida `from`/`to` ISO datetime kerak).
-- **OpenAPI**: `/api/schema/` (JSON), `/api/docs/` (Swagger UI).
-- **Service tokens**: Botlar xom tokenni `X-SERVICE-TOKEN` headerida yuboradi; `.env` dagi sha256 hash bilan tekshiriladi.
+- **`authn.User`** — UUID PK, email login, `role=admin/viewer`. `RevokedToken` JWT jti larini bekor qiladi.
+- **`catalog.CatalogItem`** — type (`program`, `direction`, `subject`, `track`, `region`, `other`), ixtiyoriy `code`, `parent`, `is_active`, `metadata`.
+- **`bot2.StudentRoster`** — tashqi talaba ID, `program` (catalog), `course_year` (1–4, 5=bitiruvchi), `roster_campaign`.
+- **`bot2.Bot2Student`** — shaxsiy ma'lumotlar (ism/jins/telefon/hudud), `state` (FSM), `language`, `is_job_seeking`.
+- **`bot2.Bot2StudentAccount`** — bir talabaning bir nechta Telegram akkauntlari. `telegram_user_id` unique; `/logout` `is_active=False` qiladi, yozuv saqlanadi.
+- **`bot2.Bot2SurveyResponse`** — so'rovnoma javobi (append-only). `idempotency_key` ikki marta submit'dan himoya qiladi.
+- **`bot2.Bot2Document`** — bot orqali yuklangan hujjatlar (cv/certificate/employment).
+- **`bot2.ProgramEnrollment`** — program + course_year bo'yicha jami talaba soni.
+- **`bot2.BotFsmState`** — DB-based FSM storage (bot restartdan keyin davom etish uchun).
+- **`ai_verification.DocumentVerification`** — Gemini orqali tekshirilgan hujjat. `confidence_level` (green/yellow/red), `extracted_data`, `flags`, `ai_summary`.
+- **`ai_verification.AIUsageLog`** — har bir Gemini API chaqiruvi uchun token + xarajat yozuvi (append-only).
+- **`vacancies.Vacancy`** — vakansiya: `title`, `company_name`, `employment_type`, `work_format`, `schedule`, `experience`, `tags`, `address`, `image`, maosh, ariza usuli, `status` (draft/published/closed/archived).
+- **`vacancies.VacancyChannelPost`** — outbox: vakansiyani Telegram kanalga joylash navbati. `action` (create/edit/delete), `media_type` (text/photo), `idempotency_key`.
 
-## Ishga tushirish (.venv + requirements, Docker'siz)
-1. `cd server`
-2. Virtual environment yarating va yoqing:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-3. Paketlar o'rnating:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Konfiguratsiya:
-   ```bash
-   cp .env.example .env
-   ```
-   Lokal HTTP rejimda cookie ishlashi uchun `.env` ichida `JWT_COOKIE_SECURE=false` bo'lishi shart.
-5. SQLite bilan ishga tushirish (Docker'siz):
-   ```bash
-   export USE_SQLITE=1
-   python manage.py migrate
-   python manage.py runserver 0.0.0.0:8000
-   ```
+## API endpointlar
 
-## Ishga tushirish (Poetry)
-1. Python 3.12+ va [Poetry](https://python-poetry.org/) o'rnating.
-2. `cp .env.example .env` qilib DB va JWT sozlamalarini to'ldiring. Bot token hashlarini yaratish uchun:
-   ```bash
-   python - <<'PY'
-   import hashlib
-   print(hashlib.sha256(b'secret-token').hexdigest())
-   PY
-   ```
-   `SERVICE_TOKEN_BOT1_HASH`, `SERVICE_TOKEN_BOT2_HASH` ga qo'ying. Lokalda default `USE_SQLITE=1` bilan `db.sqlite3` ishlaydi; kerak bo'lsa Postgres uchun `USE_SQLITE=0` qiling.
-3. Bog'liqliklar: `poetry install`
-4. Migratsiyalar: `poetry run python manage.py migrate`
-5. Admin yaratish: `poetry run python manage.py create_admin --email admin@example.com --password pass1234`
-6. Demo ma'lumotlar (ixtiyoriy): `poetry run python manage.py create_mock_data` yoki katta hajm uchun `seed_ttpumock --scale medium --seed 1`
-7. Server: `poetry run python manage.py runserver 0.0.0.0:8000`
+### Auth
+```
+POST /api/v1/auth/login        # email + password → cookie set
+POST /api/v1/auth/refresh      # refresh token → yangi access
+POST /api/v1/auth/logout
+GET  /api/v1/auth/me
+```
 
+### Catalog
+```
+GET|POST|PATCH|DELETE /api/v1/catalog/items
+GET|POST|PATCH|DELETE /api/v1/catalog/relations
+GET                   /api/v1/catalog/programs
+```
 
-## Production sozlamalari
-- `DJANGO_DEBUG=false` qoldiring.
-- `DJANGO_ALLOWED_HOSTS` va `CSRF_TRUSTED_ORIGINS` ni production domen(lar)ga moslang.
-- HTTPS reverse proxy ortida quyidagilarni yoqing:
-  - `USE_X_FORWARDED_HOST=true`
-  - `SECURE_PROXY_SSL_HEADER_ENABLED=true`
-  - `SECURE_SSL_REDIRECT=true`
-  - `SESSION_COOKIE_SECURE=true`
-  - `CSRF_COOKIE_SECURE=true`
-  - `SECURE_HSTS_SECONDS=31536000` (+ `SECURE_HSTS_INCLUDE_SUBDOMAINS=true`, `SECURE_HSTS_PRELOAD=true`)
-- JWT cookie uchun productionda `JWT_COOKIE_SECURE=true` bo'lishi shart.
-- Gunicornni bir nechta worker bilan ishga tushiring (masalan CPU*2+1).
+### Bot2 — Dashboard
+```
+GET /api/v1/bot2/roster
+GET /api/v1/bot2/students
+GET /api/v1/bot2/surveys
+GET /api/v1/bot2/enrollments
+GET /api/v1/bot2/documents
+GET /api/v1/bot2/documents/<id>/download/
+```
 
-## Docker
-1. `.env` faylini to'ldiring.
-2. `docker compose up --build`
+### Bot2 — Bot servisi (X-SERVICE-TOKEN)
+```
+POST /api/v1/bot/verify              # student_external_id tekshirish
+POST /api/v1/bot/register            # ro'yxatdan o'tish
+POST /api/v1/bot/logout
+POST /api/v1/bot/followup-answer
+GET  /api/v1/bot/catalog/items
+GET  /api/v1/bot/profile
+GET  /api/v1/bot/fsm/<user_id>
+POST /api/v1/bot/document            # hujjat yuklash
 
-`entrypoint.sh` migratsiya, `collectstatic` va `gunicorn` (8000 port) ni ishga tushiradi.
+POST /api/v1/bot2/surveys/submit     # so'rovnoma submit (append-only)
+POST /api/v1/admin/roster/import     # roster import (CSV / JSON)
+```
+
+### Analytics
+```
+GET /api/v1/analytics/bot2/course-year-coverage
+GET /api/v1/analytics/bot2/program-coverage
+GET /api/v1/analytics/bot2/program-course-matrix
+GET /api/v1/analytics/bot2/program-details-by-year
+GET /api/v1/analytics/bot2/enrollments-overview
+GET /api/v1/analytics/bot2/academic-years
+GET /api/v1/analytics/students-by-direction
+GET /api/v1/analytics/students-by-direction.xlsx
+```
+
+### AI Tekshiruv
+```
+GET|POST /api/v1/ai-verification/   # hujjat tekshiruvi CRUD
+```
+
+### Vakansiyalar
+```
+GET|POST   /api/v1/vacancies/              # ro'yxat + yaratish
+GET|PATCH|DELETE /api/v1/vacancies/<id>   # bitta vakansiya
+POST       /api/v1/vacancies/<id>/publish  # e'lon qilish → outbox
+GET        /api/v1/vacancies/feed          # bot uchun (service token)
+```
+
+### Employer, CRM, Documents
+```
+/l/<uuid:token>/   # Employer access link (nginx /l/ proksi)
+/api/v1/           # employers.urls, crm.urls, documents.urls (yo'nalishlar ulardan)
+```
+
+### Tizim
+```
+GET /healthz
+GET /api/v1/healthz
+GET /api/schema/    # OpenAPI JSON
+GET /api/docs/      # Swagger UI
+GET /superadmin/    # Django admin
+```
+
+## Servis tokenlar
+
+Bot `X-SERVICE-TOKEN` headerida xom tokenni yuboradi. `settings.py` dagi `SERVICE_TOKENS` dict'da uning sha256 hashi saqlanadi:
+
+```python
+SERVICE_TOKENS = {
+    "bot2": os.getenv("SERVICE_TOKEN_BOT2_HASH", ""),
+}
+```
+
+`.env`:
+```env
+SERVICE_TOKEN_BOT2_HASH=<sha256 of raw token>
+SERVICE_TOKEN=<raw token>  # bot2 servisi o'qiydi
+```
+
+## Ishga tushirish (Docker — tavsiya etiladi)
+
+```bash
+# Root papkada
+cp .env.example .env   # sozlamalarni to'ldiring
+docker compose up --build
+```
+
+`docker-compose.yml` servislari:
+- `db` — PostgreSQL 15 (port 5432, localhost only)
+- `server` — Gunicorn, port 9006→8000
+- `bot2` — aiogram bot
+- `dashboard` — Next.js, port 3000
+- `followup_cron` — har 60s: `process_followups` + `post_pending_vacancies`
+
+## Ishga tushirish (lokal, `.venv`)
+
+```bash
+cd server
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+export USE_SQLITE=1   # SQLite (lokaldagi qulay variant)
+python manage.py migrate
+python manage.py create_admin --email admin@example.com --password pass1234
+python manage.py runserver 0.0.0.0:8000
+```
 
 ## Management buyruqlari
-- `create_admin --email ... --password ...` – admin user yaratadi.
-- `seed_programs [--deactivate-missing]` – katalogga bakalavr/master dasturlarini yuklaydi.
-- `import_roster --file roster.csv` – CSV orqali roster qo'shish/yangilash (server ichida ham API mavjud).
-- `create_mock_data [--admin-password ... --viewer-password ...]` – minimal demo foydalanuvchi, catalog va bot ma'lumotlari.
-- `seed_ttpumock [--scale small|medium|large] [--seed N] [--upsert]` – katta hajmli sintetik ma'lumot (bot1 arizalari, roster, survey).
+
+| Buyruq | Maqsad |
+|--------|--------|
+| `create_admin --email ... --password ...` | Admin user yaratadi |
+| `seed_programs [--deactivate-missing]` | Katalogga bakalavr/master dasturlarini yuklaydi |
+| `import_roster --file roster.csv` | CSV orqali roster qo'shish/yangilash |
+| `post_pending_vacancies` | Outbox draeni — pending VacancyChannelPost yozuvlarini Telegram kanalga joylaydi |
+| `process_followups` | Followup xabarlarini yuboradi |
+| `create_mock_data` | Minimal demo ma'lumotlar |
+| `seed_ttpumock [--scale small\|medium\|large]` | Katta hajmli sintetik ma'lumot |
+
+## Production sozlamalari
+
+```env
+DJANGO_DEBUG=0
+DJANGO_ALLOWED_HOSTS=yourdomain.com
+CSRF_TRUSTED_ORIGINS=https://yourdomain.com
+USE_X_FORWARDED_HOST=1
+SECURE_PROXY_SSL_HEADER_ENABLED=1
+SECURE_SSL_REDIRECT=1
+JWT_COOKIE_SECURE=1
+SESSION_COOKIE_SECURE=1
+CSRF_COOKIE_SECURE=1
+SECURE_HSTS_SECONDS=31536000
+```
 
 ## Testlar
-`poetry run pytest` – pytest-django bilan asosiy oqimlar va management buyruqlari tekshiruvlari.
 
+```bash
+cd server
+pytest
+```
 
-## Deploy (domain -> IP, Nginx, systemd)
-To'liq production yo'riqnoma (domaindan kelgan so'rovni IP/local portga yo'naltirish bilan): `../DEPLOYMENT.md`.
+## Gunicorn
 
-
-## Gunicorn tavsiya etilgan ishga tushirish
 ```bash
 cd server
 source .venv/bin/activate
 gunicorn crm_server.wsgi:application -c gunicorn.conf.py
 ```
 
-Agar `WORKER TIMEOUT` va `no URI read` ko'rsangiz, bu ko'pincha xom TCP probe/scanner yoki noto'g'ri health-check sababli bo'ladi.
-Nginx/monitoring health-check uchun `GET /api/v1/healthz` endpointdan foydalaning.
+Nginx health-check uchun `GET /api/v1/healthz` endpointdan foydalaning.

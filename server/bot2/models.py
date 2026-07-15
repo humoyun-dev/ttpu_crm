@@ -97,6 +97,10 @@ class Bot2Student(BaseModel):
         blank=True,
         related_name="bot2_students",
     )
+    # AI tomonidan CV'dan ajratilgan ko'nikma profili (matching/qidiruv uchun).
+    # {"skills": [...], "languages": [...], "experience_summary": "...", "level": "..."}
+    ai_skills = models.JSONField(default=dict, blank=True)
+    ai_skills_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ("student_external_id",)
@@ -237,6 +241,11 @@ class Bot2Document(BaseModel):
         blank=True,
         related_name="bot2_documents",
     )
+    # Survey-session identifier the bot generates once per survey run and sends on
+    # every upload. Documents are bound to their survey by this key at submit time,
+    # so the file→survey link no longer depends on round-tripping individual doc_ids
+    # through FSM state + the answers payload (which could silently drop a document).
+    survey_session_key = models.CharField(max_length=64, blank=True, db_index=True)
     doc_type = models.CharField(max_length=20, choices=DocType.choices)
     file = models.FileField(upload_to="bot2/docs/%Y/%m/")
     original_filename = models.CharField(max_length=255, blank=True)

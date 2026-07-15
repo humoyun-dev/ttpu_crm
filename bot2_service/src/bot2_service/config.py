@@ -16,6 +16,7 @@ class Settings:
     server_base_url: str
     service_token: str
     default_language: str
+    vacancy_channel_id: int | None  # VACANCY_CHANNEL_ID dan olinadi
 
 
 def _get_env(name: str, default: str | None = None) -> str | None:
@@ -32,11 +33,19 @@ def _validate_url(url: str) -> str:
     return url.rstrip("/")
 
 
+def _parse_channel_id(val: str | None) -> int | None:
+    try:
+        return int(val) if val else None
+    except (ValueError, TypeError):
+        return None
+
+
 settings = Settings(
     bot_token=_get_env("BOT_TOKEN", ""),
     server_base_url=_validate_url(_get_env("SERVER_BASE_URL", "http://localhost:8000/api/v1")),
     service_token=_get_env("SERVICE_TOKEN", ""),
     default_language=_get_env("DEFAULT_LANGUAGE", "uz"),
+    vacancy_channel_id=_parse_channel_id(_get_env("VACANCY_CHANNEL_ID")),
 )
 
 if not settings.bot_token:

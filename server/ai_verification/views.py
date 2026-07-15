@@ -20,7 +20,7 @@ from .serializers import (
     SubmitDocumentSerializer,
     ReviewSerializer,
 )
-from .orchestration import run_document_verification, rerun_verification
+from .orchestration import run_document_verification_async, rerun_verification
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +38,17 @@ def submit_document(request):
         student_id: UUID
         document_type: cv|ielts|certificate|diploma|other
         file: <fayl>
+
+    Gemini chaqiruvi background thread da ishlaydi — dashboard darhol
+    status=PROCESSING javobini oladi (bot orqali yuklashda qo'llanilgan
+    xuddi shu pattern; ilgari sinxron edi va so'rovni 20-30s ushlab turishi
+    mumkin edi).
     """
     serializer = SubmitDocumentSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
 
-    verification = run_document_verification(
+    verification = run_document_verification_async(
         student_id=data["student_id"],
         file=data["file"],
         doc_type=data["document_type"],
@@ -93,15 +98,27 @@ def retry_verification(request, pk):
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def student_verifications(request, student_id):
     """
-    Talabaning barcha hujjat tekshiruvlari.
+    Talabaning hujjat tekshiruvlari.
 
     GET /api/v1/ai-verification/student/{student_id}
+    GET /api/v1/ai-verification/student/{student_id}?survey=<survey_id>
+        → faqat shu so'rovnomaga tegishli hujjatlar:
+          source_document__survey=survey_id  (bot orqali yuklangan)
+          YO source_document=null            (admin yuklagan, student ga bog'liq)
     """
-    verifications = DocumentVerification.objects.filter(
+    from django.db.models import Q
+    qs = DocumentVerification.objects.filter(
         student_id=student_id
     ).select_related("student", "uploaded_by", "reviewed_by")
 
-    return Response(DocumentVerificationSerializer(verifications, many=True).data)
+    survey_id = request.query_params.get("survey")
+    if survey_id:
+        qs = qs.filter(
+            Q(source_document__survey_id=survey_id) |
+            Q(source_document__isnull=True)
+        )
+
+    return Response(DocumentVerificationSerializer(qs, many=True).data)
 
 
 @api_view(["PATCH"])
@@ -276,8 +293,11 @@ def verification_stats(request):
     dec = _counts("final_decision")
     st = _counts("status")
 
+    # Umumiy son holat bo'yicha sanoqlar yig'indisiga teng — qo'shimcha COUNT shart emas.
+    total = sum(st.values())
+
     return Response({
-        "total": qs.count(),
+        "total": total,
         "by_confidence": {
             "green": conf.get("green", 0),
             "yellow": conf.get("yellow", 0),

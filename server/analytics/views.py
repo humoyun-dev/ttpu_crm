@@ -8,9 +8,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from ai_verification.generation import generate_text
 from bot2.models import Bot2Student, Bot2SurveyResponse, ProgramEnrollment, StudentRoster
 from common.exceptions import build_error_response
-from common.permissions import IsViewerOrAdminReadOnly
+from common.permissions import IsAdminUserRole, IsViewerOrAdminReadOnly
 from common.time import parse_iso_datetime
 
 
@@ -319,7 +320,10 @@ def bot2_program_details_by_year(request):
     for row in employment:
         if row["program__id"] in total_map:
             emp_status = row["employment_status"].lower() if row["employment_status"] else ""
-            if "ishlayapman" in emp_status or "employed" in emp_status or "ишлаяпман" in emp_status:
+            # DIQQAT: "employed" — "unemployed" ning qism-satri, shuning uchun ingliz
+            # qiymati aniq tenglik bilan tekshiriladi (bot aynan "employed"/"unemployed"
+            # yozadi); uz/ru markerlari qism-satr sifatida to'qnashmaydi.
+            if emp_status == "employed" or "ishlayapman" in emp_status or "ишлаяпман" in emp_status:
                 total_map[row["program__id"]]["employed"] += row["count"]
             else:
                 total_map[row["program__id"]]["unemployed"] += row["count"]
@@ -500,7 +504,9 @@ def _students_by_direction_data(campaign: str) -> list:
     )
     registered_map = {row["roster__program_id"]: row["count"] for row in registered}
 
-    # Employed: latest survey per student, check employment_status
+    # Employed: latest survey per student, check employment_status.
+    # total/registered kabi bir xil kampaniya + faol roster bilan cheklanadi,
+    # aks holda employed soni total'dan oshib ketishi mumkin.
     latest_ids = (
         Bot2SurveyResponse.objects
         .filter(student_id=OuterRef("student_id"), submitted_at__isnull=False)
@@ -509,17 +515,20 @@ def _students_by_direction_data(campaign: str) -> list:
     )
     employed_count = (
         Bot2SurveyResponse.objects
+        .filter(roster__is_active=True, roster__roster_campaign=campaign)
         .annotate(latest_id=Subquery(latest_ids))
         .filter(id=F("latest_id"))
         .filter(
+            # "employed" — "unemployed" ning qism-satri, shuning uchun ingliz qiymati
+            # aniq (iexact) tekshiriladi; uz/ru markerlari to'qnashmaydi.
             Q(employment_status__icontains="ishlayapman")
-            | Q(employment_status__icontains="employed")
+            | Q(employment_status__iexact="employed")
             | Q(employment_status__icontains="ишлаяпман")
         )
-        .values("program_id")
+        .values("roster__program_id")
         .annotate(count=Count("student_id", distinct=True))
     )
-    employed_map = {row["program_id"]: row["count"] for row in employed_count}
+    employed_map = {row["roster__program_id"]: row["count"] for row in employed_count}
 
     result = []
     for program_id, info in total_map.items():
@@ -578,6 +587,7 @@ def students_by_direction_xlsx(request):
         employed = row["employed"] or 0
         reg_pct = round(registered * 100.0 / total, 1) if total else 0.0
         emp_pct = round(employed * 100.0 / total, 1) if total else 0.0
+        emp_pct = min(emp_pct, 100.0)
 
         ws.cell(row=row_idx, column=1, value=row["program_name"])
         ws.cell(row=row_idx, column=2, value=total)
@@ -598,3 +608,58 @@ def students_by_direction_xlsx(request):
     )
     response["Content-Disposition"] = f'attachment; filename="students-by-direction-{campaign}.xlsx"'
     return response
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsAdminUserRole])
+def survey_insights(request):
+    """POST /api/v1/analytics/survey-insights — AI tahlil (Gemini) talabalar
+    so'rovnomadagi erkin matnli takliflari bo'yicha mavzular + xulosa + tavsiyalar.
+
+    Aniq, hisoblanadigan (billable) amal: hech narsa saqlanmaydi, har chaqiruvda
+    so'nggi takliflar AI'ga yuboriladi."""
+    suggestions = list(
+        Bot2SurveyResponse.objects.exclude(suggestions="")
+        .exclude(suggestions__isnull=True)
+        .order_by("-submitted_at")
+        .values_list("suggestions", flat=True)[:200]
+    )
+    if not suggestions:
+        return Response({"summary": "Tahlil uchun yetarli fikr yo'q.", "themes": [], "recommendations": []})
+
+    # Raqamlangan ro'yxat, umumiy uzunlikni ~12000 belgiga cheklaymiz.
+    numbered = []
+    total_len = 0
+    for idx, text in enumerate(suggestions, start=1):
+        line = f"{idx}. {(text or '').strip()}"
+        if total_len + len(line) > 12000:
+            break
+        numbered.append(line)
+        total_len += len(line) + 1
+    feedback_block = "\n".join(numbered)
+
+    prompt = (
+        "Siz bandlik markazining tahlilchisisiz. Quyida universitet talabalarining "
+        "so'rovnomada qoldirgan erkin matnli fikr va takliflari raqamlangan ro'yxat "
+        "ko'rinishida berilgan. Ularni tahlil qiling va FAQAT o'zbek tilida JSON qaytaring.\n\n"
+        "JSON tuzilishi:\n"
+        '{\n'
+        '  "summary": "2-3 jumlalik umumiy xulosa (o\'zbekcha)",\n'
+        '  "themes": [{"title": "qisqa mavzu nomi", "description": "mavzu izohi"}],\n'
+        '  "recommendations": ["markaz uchun qisqa amaliy tavsiya", "..."]\n'
+        '}\n\n'
+        "themes — eng ko'p takrorlanadigan asosiy mavzular. recommendations — bandlik "
+        "markazi amalga oshirishi mumkin bo'lgan qisqa harakatlar.\n\n"
+        f"Talabalar fikrlari:\n{feedback_block}"
+    )
+
+    result = generate_text(
+        prompt,
+        operation="survey_insights",
+        json_mode=True,
+        temperature=0.3,
+        max_output_tokens=4096,
+    )
+    if not result["ok"] or result["json"] is None:
+        return Response({"error": "AI javob bermadi"}, status=502)
+    return Response(result["json"])

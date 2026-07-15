@@ -4,9 +4,9 @@ from .models import Employer
 
 
 class EmployerSerializer(serializers.ModelSerializer):
-    industry_name = serializers.CharField(
-        source="industry.name", read_only=True, allow_null=True
-    )
+    # industry endi erkin matn; industry_name'ni o'qish-aliasi sifatida saqlaymiz
+    # (dashboard jadvali e.industry_name'ni o'qiydi).
+    industry_name = serializers.CharField(source="industry", read_only=True)
 
     class Meta:
         model = Employer

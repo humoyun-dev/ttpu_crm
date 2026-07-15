@@ -64,10 +64,14 @@ def test_roster_without_program_serializes_program_id_as_null(api_client):
     """A roster with no program must serialize program_id as JSON null, NOT the
     literal string "None" — otherwise the bot stores "None" and re-submits it,
     crashing the UUID lookup in submit_survey (regression for the 500 storm)."""
-    StudentRoster.objects.create(student_external_id="np-1", course_year=1, is_active=True)
+    # birth_date roster'da bo'lishi shart (aks holda ID-only verifikatsiya xavfsizlik
+    # uchun rad etiladi); testning asl maqsadi — program_id ning JSON null bo'lishi.
+    StudentRoster.objects.create(
+        student_external_id="np-1", course_year=1, is_active=True, birth_date="2000-01-01"
+    )
     resp = api_client.post(
         reverse("bot-verify"),
-        {"student_id": "np-1"},
+        {"student_id": "np-1", "birth_date": "2000-01-01"},
         format="json",
         HTTP_X_SERVICE_TOKEN="secret",
     )

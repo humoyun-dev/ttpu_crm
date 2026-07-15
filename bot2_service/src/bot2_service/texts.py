@@ -42,11 +42,8 @@ PROMPTS = {
         "channels": "Quyidagi kanallarga a'zo bo'ling:",
         "ask_suggestions": "Universitet faoliyatini takomillashtirish bo'yicha takliflaringiz:",
         "suggestions_skip": "📭 Taklifim yo'q",
-        "ask_lang_select": "Til bilish darajangizni belgilang:",
         "lang_english": "🇬🇧 Ingliz tili",
         "lang_russian": "🇷🇺 Rus tili",
-        "ask_english_level": "Ingliz tili darajangizni kiriting (masalan: B2, Advanced):",
-        "ask_russian_level": "Rus tili darajangizni kiriting (masalan: B1, Intermediate):",
         "thanks": "Rahmat! Ma'lumotlaringiz qabul qilindi. ✅",
         "submission_failed": "Ma'lumotlarni yuborishda xatolik. /retry bilan qayta urinib ko'ring.",
         "use_buttons": "Iltimos, yuqoridagi tugmalardan birini tanlang.",
@@ -57,6 +54,12 @@ PROMPTS = {
         "welcome_back_anon": "Xush kelibsiz! 👋",
         "unknown_command": "Boshlash uchun /start bosing.",
         "retry_nothing": "Qayta yuboriladigan ma'lumot yo'q. /start bilan boshlang.",
+        "stale_button": "Bu tugma eskirgan.",
+        "profile_error": "Profilni yuklashda xatolik. Keyinroq urinib ko'ring.",
+        "contact_not_own": "Iltimos, o'zingizning raqamingizni «📱 Raqamni ulashish» tugmasi orqali yuboring.",
+        # File upload
+        "file_too_large": "Fayl hajmi 10 MB dan oshmasligi kerak.",
+        "upload_failed": "Faylni yuklab bo'lmadi. Qaytadan yuboring yoki o'tkazib yuboring.",
         # CV upload
         "ask_cv": "CV yoki rezyumengizni yuboring (PDF yoki rasm):",
         "cv_no": "📭 Menda CV yo'q",
@@ -105,6 +108,22 @@ PROMPTS = {
         "menu_survey": "📝 So'rovnoma",
         "menu_account": "👤 Akkaunt",
         "menu_support": "🆘 Support",
+        "menu_internship": "🎓 Amaliyot",
+        # Amaliyot (internship)
+        "intern_ask_source": "Qayerda amaliyot o'tmoqchisiz?",
+        "intern_src_registry": "🏢 Ro'yxatdan tanlash",
+        "intern_src_manual": "✍️ O'zim yozaman",
+        "intern_pick_prompt": "Kompaniyani tanlang:",
+        "intern_manual_from_list": "✍️ Ro'yxatda yo'q — o'zim yozaman",
+        "intern_type_prompt": "Kompaniya nomini yozing:",
+        "intern_ask_note": "Qo'shimcha izoh bo'lsa yozing (yoki o'tkazib yuboring):",
+        "intern_note_skip": "⏭ O'tkazib yuborish",
+        "intern_prev": "⬅️ Oldingi",
+        "intern_next": "Keyingi ➡️",
+        "intern_submitted": "✅ Arizangiz qabul qilindi, ko'rib chiqilmoqda.",
+        "intern_already_pending": "Sizda ko'rib chiqilayotgan ariza bor: <b>{company}</b>. Natija kutilmoqda.",
+        "intern_empty_employers": "Hozircha reestrda kompaniya yo'q. Kompaniya nomini o'zingiz yozing:",
+        "intern_error": "❌ Xatolik yuz berdi. Keyinroq urinib ko'ring.",
         "survey_has_previous": "📊 So'rovnomalar tarixi\n\nOxirgi topshirilgan: <b>{date}</b>\n\nNima qilmoqchisiz?",
         "survey_new": "📝 Yangi so'rovnoma to'ldirish",
         "survey_back_btn": "◀ Orqaga",
@@ -114,6 +133,15 @@ PROMPTS = {
             "Bandlik Markazi administratori ularni ko'rib chiqadi."
         ),
         "vacancy_info": "💼 <b>Vakansiya</b>\n\nYangi vakansiyalardan xabardor bo'lish uchun kanalimizga a'zo bo'ling:",
+        # Vakansiya sahifalari (bot ichidagi ro'yxat)
+        "vac_need_survey": "📋 Vakansiyalarni ko'rish uchun avval so'rovnomani to'ldiring.\n/start buyrug'ini bosing.",
+        "vac_load_failed": "❌ Vakansiyalarni yuklab bo'lmadi. Keyinroq urinib ko'ring.",
+        "vac_empty": "Hozircha ochiq vakansiyalar yo'q. 🙁",
+        "vac_title": "💼 <b>Vakansiyalar</b> (sahifa {page})",
+        "vac_deadline": "⏰ Muddat: {deadline}",
+        "vac_prev": "⬅️ Oldingi",
+        "vac_next": "Keyingi ➡️",
+        "vac_channel_btn": "📢 Kanalga obuna bo'lish",
         "support_info": (
             "🆘 <b>Yordam</b>\n\n"
             "📞 TTPU Bandlik Markazi\n"
@@ -172,11 +200,8 @@ PROMPTS = {
         "channels": "Подпишитесь на каналы:",
         "ask_suggestions": "Ваши предложения по улучшению деятельности университета:",
         "suggestions_skip": "📭 Нет предложений",
-        "ask_lang_select": "Укажите уровень владения языками:",
         "lang_english": "🇬🇧 Английский",
         "lang_russian": "🇷🇺 Русский",
-        "ask_english_level": "Введите уровень английского (например: B2, Advanced):",
-        "ask_russian_level": "Введите уровень русского (например: B1, Intermediate):",
         "thanks": "Спасибо! Ваши данные приняты. ✅",
         "submission_failed": "Ошибка при отправке данных. Нажмите /retry.",
         "use_buttons": "Пожалуйста, выберите один из вариантов.",
@@ -187,6 +212,12 @@ PROMPTS = {
         "welcome_back_anon": "Добро пожаловать! 👋",
         "unknown_command": "Нажмите /start для начала.",
         "retry_nothing": "Нет данных для повторной отправки. Начните с /start.",
+        "stale_button": "Эта кнопка устарела.",
+        "profile_error": "Ошибка при загрузке профиля. Попробуйте позже.",
+        "contact_not_own": "Пожалуйста, отправьте свой номер через кнопку «📱 Поделиться номером».",
+        # File upload
+        "file_too_large": "Размер файла не должен превышать 10 МБ.",
+        "upload_failed": "Не удалось загрузить файл. Отправьте ещё раз или пропустите.",
         # CV upload
         "ask_cv": "Отправьте ваше CV или резюме (PDF или фото):",
         "cv_no": "📭 У меня нет CV",
@@ -200,6 +231,13 @@ PROMPTS = {
         "ask_certificate": "Загрузите международный сертификат, подтверждающий знание языков (PDF или фото):",
         "cert_skip": "📭 Нет сертификата",
         "cert_received": "Сертификат принят ✅",
+        # Employment doc upload (employed branch)
+        "ask_employment_doc": (
+            "Отправьте официальный документ, подтверждающий ваше место работы:\n"
+            "(Справка с места работы, трудовой договор или государственный документ — PDF или фото)"
+        ),
+        "employment_doc_skip": "📭 Не могу отправить документ",
+        "employment_doc_received": "Документ о месте работы принят ✅",
         "confirm_send": "Отправить все ваши ответы?",
         "confirm_yes": "✅ Да, отправить",
         "confirm_no": "🔄 Нет, начать заново",
@@ -229,6 +267,22 @@ PROMPTS = {
         "menu_survey": "📝 Анкета",
         "menu_account": "👤 Аккаунт",
         "menu_support": "🆘 Поддержка",
+        "menu_internship": "🎓 Стажировка",
+        # Стажировка (internship)
+        "intern_ask_source": "Где вы хотите пройти стажировку?",
+        "intern_src_registry": "🏢 Выбрать из списка",
+        "intern_src_manual": "✍️ Напишу сам",
+        "intern_pick_prompt": "Выберите компанию:",
+        "intern_manual_from_list": "✍️ Нет в списке — напишу сам",
+        "intern_type_prompt": "Напишите название компании:",
+        "intern_ask_note": "Напишите комментарий, если есть (или пропустите):",
+        "intern_note_skip": "⏭ Пропустить",
+        "intern_prev": "⬅️ Назад",
+        "intern_next": "Далее ➡️",
+        "intern_submitted": "✅ Ваша заявка принята и рассматривается.",
+        "intern_already_pending": "У вас уже есть заявка на рассмотрении: <b>{company}</b>. Ожидайте результат.",
+        "intern_empty_employers": "Пока в реестре нет компаний. Напишите название компании сами:",
+        "intern_error": "❌ Произошла ошибка. Попробуйте позже.",
         "survey_has_previous": "📊 История анкет\n\nПоследняя отправлена: <b>{date}</b>\n\nЧто хотите сделать?",
         "survey_new": "📝 Заполнить новую анкету",
         "survey_back_btn": "◀ Назад",
@@ -238,6 +292,15 @@ PROMPTS = {
             "Администратор Центра трудоустройства рассмотрит их."
         ),
         "vacancy_info": "💼 <b>Вакансии</b>\n\nПодпишитесь на наш канал, чтобы не пропустить новые вакансии:",
+        # Страницы вакансий (список внутри бота)
+        "vac_need_survey": "📋 Чтобы посмотреть вакансии, сначала заполните анкету.\nНажмите /start.",
+        "vac_load_failed": "❌ Не удалось загрузить вакансии. Попробуйте позже.",
+        "vac_empty": "Пока нет открытых вакансий. 🙁",
+        "vac_title": "💼 <b>Вакансии</b> (страница {page})",
+        "vac_deadline": "⏰ Срок: {deadline}",
+        "vac_prev": "⬅️ Назад",
+        "vac_next": "Далее ➡️",
+        "vac_channel_btn": "📢 Подписаться на канал",
         "support_info": (
             "🆘 <b>Поддержка</b>\n\n"
             "📞 Центр трудоустройства TTPU\n"
@@ -263,6 +326,33 @@ CHANNELS = [
 
 def get_text(key: str, lang: str = "uz") -> str:
     return PROMPTS.get(lang, PROMPTS["uz"]).get(key, PROMPTS["uz"].get(key, key))
+
+
+_MENU_LABEL_KEYS = (
+    "menu_portfolio",
+    "menu_vacancy",
+    "menu_survey",
+    "menu_internship",
+    "menu_account",
+    "menu_support",
+)
+
+_MENU_LABELS = {
+    PROMPTS[lang][key]
+    for lang in PROMPTS
+    for key in _MENU_LABEL_KEYS
+    if key in PROMPTS[lang]
+}
+
+
+def is_menu_label(text: str) -> bool:
+    """Matn asosiy menyu tugmalaridan biriga tengmi (istalgan tilda)?
+
+    Erkin matn kutiladigan bosqichlarda (kompaniya nomi, izoh, taklif) doimiy
+    menyu reply-klaviaturasidan bosilgan tugma javob sifatida saqlanib
+    qolmasligi uchun ishlatiladi.
+    """
+    return (text or "").strip() in _MENU_LABELS
 
 
 def channels_text(lang: str = "uz") -> str:

@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+data/
+bot2_service/
+.git
+.gitignore
+.env
+.env.*
+README.md
+*.md

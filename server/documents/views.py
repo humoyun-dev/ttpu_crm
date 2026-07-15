@@ -1,6 +1,7 @@
 import logging
 
-from rest_framework import status, viewsets
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -19,7 +20,9 @@ class DocumentViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Document.objects.select_related("student", "reviewed_by").order_by("-created_at")
     serializer_class = DocumentSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ["status", "type"]
+    search_fields = ["student__student_external_id"]
 
     @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated, IsAdminUserRole])
     def review(self, request, pk=None):
@@ -51,8 +54,13 @@ class DocumentViewSet(viewsets.ReadOnlyModelViewSet):
 class BotDocumentUploadView(APIView):
     """
     POST /api/v1/bot/document — service token auth, multipart upload.
-    Creates Document(pending), triggers AI analysis (stub returns green → auto-verified).
+    Creates Document(pending), triggers AI analysis; only an explicit "green"
+    recommendation auto-verifies, anything else is flagged for review.
     CV/IELTS are PII: files stored in documents/ and NOT served via public /media/.
+
+    NOTE: this view is NOT currently routed (no urls.py references it) — the
+    live verification path is ai_verification. Kept as latent code; re-review
+    before wiring it up.
     """
 
     authentication_classes = []
@@ -70,8 +78,10 @@ class BotDocumentUploadView(APIView):
         try:
             from ai_gateway.client import analyze
             result = analyze(doc)
-            recommendation = result.get("recommendation", "green")
+            recommendation = result.get("recommendation") if isinstance(result, dict) else None
             doc.ai_result = result
+            # Fail closed: only an explicit "green" auto-verifies. A missing or
+            # malformed recommendation must NEVER auto-verify — flag for review.
             if recommendation == "green":
                 doc.status = Document.Status.VERIFIED
             else:

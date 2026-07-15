@@ -15,7 +15,7 @@ class CatalogItemViewSet(viewsets.ModelViewSet):
     queryset = CatalogItem.objects.all()
     permission_classes = [IsAdminCatalogWriter]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["name", "code"]
+    search_fields = ["name", "name_uz", "name_ru", "name_en", "code"]
     ordering_fields = ["sort_order", "name", "type"]
 
     def get_queryset(self):

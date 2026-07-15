@@ -20,6 +20,15 @@ class ApiResult:
     status: int | None = None
 
 
+class FsmStorageError(RuntimeError):
+    """FSM holat API'si ishlamayapti (bo'sh holat bilan adashtirmaslik kerak).
+
+    ApiStorage bu xatoni yutmaydi va kesh ham qilmaydi — aks holda bitta API
+    uzilishi foydalanuvchini bot qayta ishga tushgunga qadar "yopishib qolgan"
+    bo'sh holatda qoldirar edi.
+    """
+
+
 class CrmApiClient:
     def __init__(self):
         self.base_url = settings.server_base_url
@@ -146,31 +155,36 @@ class CrmApiClient:
         file_bytes: bytes,
         filename: str,
         mime_type: str = "application/octet-stream",
+        survey_session_key: str = "",
     ) -> ApiResult:
         headers = {"X-SERVICE-TOKEN": self.service_token}
+        data = {"student_external_id": student_external_id, "doc_type": doc_type}
+        # Binds the document to its survey run server-side (see bot_upload_document).
+        if survey_session_key:
+            data["survey_session_key"] = survey_session_key
         for attempt in (1, 2):
             try:
                 resp = await self.client.post(
                     "/bot/document",
-                    data={"student_external_id": student_external_id, "doc_type": doc_type},
+                    data=data,
                     files={"file": (filename, file_bytes, mime_type)},
                     headers=headers,
                 )
-            except httpx.TimeoutException as exc:
-                logger.warning("upload_document timeout (attempt %d): %s", attempt, exc)
-                if attempt == 1:
-                    continue
-                return ApiResult(ok=False, error=f"Timeout: {exc}")
-            except httpx.ConnectError as exc:
-                logger.warning("upload_document connect error (attempt %d): %s", attempt, exc)
+            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                # Connection-only retry: the request never reached the server,
+                # so retrying is safe even for this non-idempotent POST.
+                logger.warning("upload_document connection error (attempt %d): %s", attempt, exc)
                 if attempt == 1:
                     await asyncio.sleep(1)
                     continue
                 return ApiResult(ok=False, error=f"Connection error: {exc}")
+            except httpx.TimeoutException as exc:
+                # Read/write/pool timeout — the server may have already stored the
+                # document, so do NOT retry (would create duplicates).
+                logger.warning("upload_document timeout: %s", exc)
+                return ApiResult(ok=False, error=f"Timeout: {exc}")
             except Exception as exc:  # pragma: no cover
-                logger.exception("upload_document failed (attempt %d): %s", attempt, exc)
-                if attempt == 1:
-                    continue
+                logger.exception("upload_document failed: %s", exc)
                 return ApiResult(ok=False, error=str(exc))
 
             if 200 <= resp.status_code < 300:
@@ -179,10 +193,9 @@ class CrmApiClient:
                 except Exception:
                     return ApiResult(ok=True, data={}, status=resp.status_code)
 
-            logger.warning("upload_document %s (attempt %d): %s", resp.status_code, attempt, resp.text[:300])
-            if attempt == 1 and resp.status_code >= 500:
-                await asyncio.sleep(1)
-                continue
+            # A response (even 5xx) means the server received the request; do not
+            # retry non-idempotent POSTs on server errors.
+            logger.warning("upload_document %s: %s", resp.status_code, resp.text[:300])
             try:
                 err = resp.json()
             except Exception:
@@ -219,15 +232,78 @@ class CrmApiClient:
     async def submit_survey(self, payload: dict[str, Any]) -> ApiResult:
         return await self._post_service("/bot2/surveys/submit", payload)
 
+    # ── Amaliyot (internship) ─────────────────────────────────────────────────
+    async def create_internship(
+        self,
+        telegram_id: int,
+        *,
+        employer_id: str = "",
+        company_name: str = "",
+        note: str = "",
+    ) -> ApiResult:
+        payload: dict[str, Any] = {"telegram_id": telegram_id}
+        if employer_id:
+            payload["employer_id"] = employer_id
+        if company_name:
+            payload["company_name"] = company_name
+        if note:
+            payload["note"] = note
+        return await self._post_service("/bot/internship", payload)
+
+    async def internship_status(self, telegram_id: int) -> ApiResult:
+        headers = {"X-SERVICE-TOKEN": self.service_token}
+        try:
+            resp = await self.client.get(
+                "/bot/internship/status",
+                params={"telegram_id": telegram_id},
+                headers=headers,
+            )
+        except Exception as exc:
+            logger.warning("internship_status error: %s", exc)
+            return ApiResult(ok=False, error=str(exc))
+        if 200 <= resp.status_code < 300:
+            try:
+                return ApiResult(ok=True, data=resp.json(), status=resp.status_code)
+            except Exception:
+                return ApiResult(ok=True, data={}, status=resp.status_code)
+        return ApiResult(ok=False, error=resp.text, status=resp.status_code)
+
+    async def list_employers(self, q: str = "", limit: int = 8, offset: int = 0) -> ApiResult:
+        headers = {"X-SERVICE-TOKEN": self.service_token}
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if q:
+            params["q"] = q
+        try:
+            resp = await self.client.get("/bot/employers", params=params, headers=headers)
+        except Exception as exc:
+            logger.warning("list_employers error: %s", exc)
+            return ApiResult(ok=False, error=str(exc))
+        if 200 <= resp.status_code < 300:
+            try:
+                return ApiResult(ok=True, data=resp.json(), status=resp.status_code)
+            except Exception:
+                return ApiResult(ok=True, data={"results": [], "count": 0}, status=resp.status_code)
+        return ApiResult(ok=False, error=resp.text, status=resp.status_code)
+
     async def fsm_get(self, user_id: int) -> dict:
+        """Returns {state, data}. Raises FsmStorageError on ANY API failure —
+        an error must never be mistaken for (and cached as) an empty state."""
         headers = {"X-SERVICE-TOKEN": self.service_token}
         try:
             resp = await self.client.get(f"/bot/fsm/{user_id}", headers=headers)
-            if 200 <= resp.status_code < 300:
-                return resp.json()
         except Exception as exc:
             logger.warning("fsm_get error user=%s: %s", user_id, exc)
-        return {"state": None, "data": {}}
+            raise FsmStorageError(f"fsm_get failed for user {user_id}: {exc}") from exc
+        if 200 <= resp.status_code < 300:
+            try:
+                payload = resp.json()
+            except Exception as exc:
+                raise FsmStorageError(f"fsm_get invalid JSON for user {user_id}: {exc}") from exc
+            if isinstance(payload, dict):
+                return {"state": payload.get("state"), "data": payload.get("data") or {}}
+            raise FsmStorageError(f"fsm_get unexpected payload for user {user_id}")
+        logger.warning("fsm_get failed user=%s: %s %s", user_id, resp.status_code, resp.text[:200])
+        raise FsmStorageError(f"fsm_get HTTP {resp.status_code} for user {user_id}")
 
     async def fsm_put(self, user_id: int, state: str | None, data: dict) -> bool:
         headers = {"X-SERVICE-TOKEN": self.service_token}
@@ -256,3 +332,23 @@ class CrmApiClient:
             return True
         logger.warning("fsm_delete failed user=%s: %s %s", user_id, resp.status_code, resp.text[:200])
         return False
+
+    async def get_vacancies(
+        self, telegram_user_id: int, page: int = 1, page_size: int = 5
+    ) -> ApiResult:
+        headers = {"X-SERVICE-TOKEN": self.service_token}
+        try:
+            resp = await self.client.get(
+                "/vacancies/feed",
+                params={"telegram_user_id": telegram_user_id, "page": page, "page_size": page_size},
+                headers=headers,
+            )
+        except Exception as exc:
+            logger.warning("get_vacancies error: %s", exc)
+            return ApiResult(ok=False, error=str(exc))
+        if 200 <= resp.status_code < 300:
+            try:
+                return ApiResult(ok=True, data=resp.json(), status=resp.status_code)
+            except Exception:
+                return ApiResult(ok=True, data={})
+        return ApiResult(ok=False, error=resp.text, status=resp.status_code)

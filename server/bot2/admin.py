@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db.models import Count
 
 from bot2.models import (
     Bot2Student,
@@ -60,6 +61,7 @@ class Bot2StudentAdmin(ReadOnlyAdmin):
         "created_at",
     )
     list_filter = ("gender", "region")
+    list_select_related = ("roster", "region")
     search_fields = (
         "student_external_id", "username", "first_name", "last_name", "phone",
         "accounts__phone", "accounts__telegram_user_id",
@@ -67,9 +69,12 @@ class Bot2StudentAdmin(ReadOnlyAdmin):
     autocomplete_fields = ("roster", "region")
     inlines = (Bot2StudentAccountInline,)
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(_account_count=Count("accounts"))
+
     @admin.display(description="Accounts")
     def account_count(self, obj):
-        return obj.accounts.count()
+        return obj._account_count
 
 
 @admin.register(Bot2StudentAccount)
@@ -91,6 +96,7 @@ class Bot2SurveyResponseAdmin(ReadOnlyAdmin):
         "created_at",
     )
     list_filter = ("survey_campaign", "program", "course_year")
+    list_select_related = ("student", "roster", "program")
     search_fields = ("student__student_external_id", "student__username")
     autocomplete_fields = ("student", "roster", "program")
 
@@ -107,5 +113,6 @@ class ProgramEnrollmentAdmin(admin.ModelAdmin):
 class Bot2DocumentAdmin(admin.ModelAdmin):
     list_display = ["student", "doc_type", "original_filename", "file_size", "created_at"]
     list_filter = ["doc_type"]
+    list_select_related = ("student",)
     search_fields = ["student__student_external_id"]
     readonly_fields = ["file_size", "mime_type", "created_at", "updated_at"]

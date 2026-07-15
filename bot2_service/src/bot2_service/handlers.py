@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import re
 import uuid
@@ -14,7 +15,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from bot2_service.storage import ApiStorage
 from aiogram.methods import GetUpdates
-from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+from aiogram.types import CallbackQuery, ChatJoinRequest, Message, ReplyKeyboardRemove
 from aiogram.utils.backoff import Backoff, BackoffConfig
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -46,7 +47,7 @@ from bot2_service.keyboards import (
 )
 from bot2_service.single_instance import SingleInstanceLock
 from bot2_service.states import BotState
-from bot2_service.texts import channels_text, get_text
+from bot2_service.texts import channels_text, get_text, is_menu_label
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ async def cmd_start(message: Message, state: FSMContext):
             program_name=p.get("program_name", ""),
             course_year=p.get("course_year"),
         )
-        greeting = get_text("welcome_back", lang).format(name=first_name) if first_name else get_text("welcome_back_anon", lang)
+        greeting = get_text("welcome_back", lang).format(name=html.escape(first_name)) if first_name else get_text("welcome_back_anon", lang)
         await message.answer(greeting, reply_markup=NO_KB)
         await message.answer(get_text("menu_main", lang), reply_markup=main_menu_keyboard(lang))
         return
@@ -142,7 +143,12 @@ async def cmd_logout(message: Message, state: FSMContext):
 async def cmd_retry(message: Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "uz")
-    if not data.get("student_id"):
+    current = await state.get_state()
+    # /retry faqat HAQIQIY tugallanmagan yuborish uchun: foydalanuvchi tasdiqlash
+    # bosqichida turibdi VA _final_submit allaqachon urinib ko'rgan (idempotency_key
+    # mavjud). student_id menyu holatida ham saqlanadi — u yetarli emas: aks holda
+    # /retry bo'sh/soxta so'rovnoma yuborib, oxirgi haqiqiy javobni bosib qo'yardi.
+    if current != BotState.waiting_confirmation.state or not data.get("idempotency_key"):
         await message.answer(get_text("retry_nothing", lang))
         return
     await _final_submit(message, state)
@@ -285,9 +291,10 @@ async def _process_birth_date(message: Message, state: FSMContext, lang: str, is
     await state.update_data(**profile_update)
     await state.set_state(BotState.waiting_consent)
 
-    greeting = f"Salom, {first_name}!\n" if first_name else ""
+    safe_name = html.escape(first_name)
+    greeting = f"Salom, {safe_name}!\n" if first_name else ""
     if lang == "ru":
-        greeting = f"Привет, {first_name}!\n" if first_name else ""
+        greeting = f"Привет, {safe_name}!\n" if first_name else ""
     consent_text = greeting + get_text("verify_success", lang) + "\n\n" + get_text("consent_text", lang)
     await _reply(message, consent_text, state, reply_markup=consent_keyboard(lang))
 
@@ -322,6 +329,11 @@ async def handle_consent(call: CallbackQuery, state: FSMContext):
     if not result.ok:
         logger.warning("register API error for student_id=%s: %s", data.get("student_id"), result.error)
         await call.bot.send_message(call.message.chat.id, get_text("register_error", lang), reply_markup=NO_KB)
+        # Asl xabar (klaviaturasi bilan) o'chirilgan — foydalanuvchi qayta urinishi
+        # uchun rozilik tugmalarini qayta yuboramiz, aks holda u qotib qoladi.
+        await call.bot.send_message(
+            call.message.chat.id, get_text("consent_text", lang), reply_markup=consent_keyboard(lang)
+        )
         await call.answer()
         return
 
@@ -375,13 +387,29 @@ async def _continue_survey(chat_id: int, bot, state: FSMContext, lang: str) -> N
 
 # ── STEP 5: Contact ───────────────────────────────────────────────────────────
 
+_PHONE_CLEAN_RE = re.compile(r"[^\d+]")
+
+
+def _normalize_phone(raw: str) -> str:
+    """Bo'shliq/qavs/chiziqchalarni olib tashlab, + bilan boshlanadigan ko'rinishga keltiradi."""
+    cleaned = _PHONE_CLEAN_RE.sub("", (raw or "").strip())
+    if cleaned and not cleaned.startswith("+"):
+        cleaned = "+" + cleaned
+    return cleaned
+
+
 @router.message(BotState.waiting_contact, F.contact)
 async def set_contact(message: Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "uz")
     contact = message.contact
+    # Faqat foydalanuvchining O'Z raqamini qabul qilamiz — istalgan kontaktni
+    # forward qilib boshqa odamning raqamini yozdirib bo'lmasin.
+    if contact.user_id != message.from_user.id:
+        await _reply(message, get_text("contact_not_own", lang), state, reply_markup=contact_keyboard(lang))
+        return
     await state.update_data(
-        phone=contact.phone_number or "",
+        phone=_normalize_phone(contact.phone_number or ""),
         telegram_user_id=message.from_user.id,
         username=message.from_user.username or "",
     )
@@ -502,7 +530,12 @@ async def pick_employment(call: CallbackQuery, state: FSMContext):
 async def set_company(message: Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "uz")
-    await state.update_data(company=(message.text or "").strip()[:255])
+    company = (message.text or "").strip()
+    # Bo'sh (matn bo'lmagan xabar) yoki menyu tugmasi bosilgan bo'lsa — qayta so'raymiz.
+    if not company or is_menu_label(company):
+        await _reply(message, get_text("ask_company", lang), state, reply_markup=NO_KB)
+        return
+    await state.update_data(company=company[:255])
     await state.set_state(BotState.waiting_role)
     await _reply(message, get_text("ask_role", lang), state, reply_markup=NO_KB)
 
@@ -511,7 +544,11 @@ async def set_company(message: Message, state: FSMContext):
 async def set_role(message: Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "uz")
-    await state.update_data(role=(message.text or "").strip()[:255])
+    role = (message.text or "").strip()
+    if not role or is_menu_label(role):
+        await _reply(message, get_text("ask_role", lang), state, reply_markup=NO_KB)
+        return
+    await state.update_data(role=role[:255])
     await state.set_state(BotState.waiting_employment_doc)
     sent = await message.answer(
         get_text("ask_employment_doc", lang),
@@ -527,10 +564,22 @@ async def handle_employment_doc_file(message: Message, state: FSMContext):
     if data.get("_emp_doc_q_id"):
         with suppress(Exception):
             await message.bot.delete_message(message.chat.id, data["_emp_doc_q_id"])
-    doc_id = await _upload_file_to_server(message, data.get("student_id", ""), "employment", lang)
-    if doc_id:
-        await state.update_data(employment_doc_id=doc_id)
-        await message.answer(get_text("employment_doc_received", lang))
+    session_key = await _get_or_create_session_key(state)
+    doc_id = await _upload_file_to_server(message, data.get("student_id", ""), "employment", lang, session_key)
+    if not doc_id or doc_id == _UPLOAD_TOO_LARGE:
+        # Yuklash muvaffaqiyatsiz — jim davom etmaymiz: xabar berib, qayta so'raymiz
+        # (o'tkazib yuborish tugmasi saqlanadi). Hajm rad etilgan bo'lsa
+        # file_too_large allaqachon yuborilgan — takror bermaymiz.
+        if doc_id != _UPLOAD_TOO_LARGE:
+            await message.answer(get_text("upload_failed", lang))
+        sent = await message.answer(
+            get_text("ask_employment_doc", lang),
+            reply_markup=employment_doc_keyboard(lang),
+        )
+        await state.update_data(_emp_doc_q_id=sent.message_id)
+        return
+    await state.update_data(employment_doc_id=doc_id)
+    await message.answer(get_text("employment_doc_received", lang))
     await state.set_state(BotState.waiting_suggestions)
     await _reply(message, get_text("ask_suggestions", lang), state, reply_markup=suggestions_keyboard(lang))
 
@@ -594,10 +643,16 @@ async def pick_share(call: CallbackQuery, state: FSMContext):
 async def set_suggestions(message: Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "uz")
+    text = (message.text or "").strip()
+    # Menyu reply-tugmasi bosilgan bo'lsa — taklif sifatida saqlamaymiz.
+    if is_menu_label(text):
+        sent = await message.answer(get_text("ask_suggestions", lang), reply_markup=suggestions_keyboard(lang))
+        await state.update_data(_sug_q_id=sent.message_id)
+        return
     if data.get("_sug_q_id"):
         with suppress(Exception):
             await message.bot.delete_message(message.chat.id, data["_sug_q_id"])
-    await state.update_data(suggestions=(message.text or "").strip())
+    await state.update_data(suggestions=text)
     if data.get("employed"):
         await _ask_confirmation(message, state)
     else:
@@ -623,19 +678,37 @@ async def suggestions_skip_handler(call: CallbackQuery, state: FSMContext):
 # ── File upload helper ────────────────────────────────────────────────────────
 
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+# _upload_file_to_server hajm rad etilganini bildiruvchi sentinel (xabar allaqachon
+# yuborilgan) — None (umumiy xato) dan farqli, chaqiruvchi ikkinchi xato bermasligi uchun.
+_UPLOAD_TOO_LARGE = "__too_large__"
 
 
-def _file_too_large_text(lang: str) -> str:
-    text = get_text("file_too_large", lang)
-    if text == "file_too_large":  # key missing in texts.py — use a safe fallback
-        return "Fayl hajmi 10 MB dan oshmasligi kerak."
-    return text
+async def _get_or_create_session_key(state: FSMContext) -> str:
+    """Stable per-survey-run UUID that binds every uploaded document to this survey.
+
+    Generated once on the first upload of a run and reused for the rest (and echoed
+    back at submit) so the file→survey link no longer depends on each doc_id reaching
+    the answers payload. Cleared by _restart_survey/state.clear(), so a new survey run
+    gets a fresh key.
+    """
+    data = await state.get_data()
+    key = data.get("survey_session_key")
+    if not key:
+        key = str(uuid.uuid4())
+        await state.update_data(survey_session_key=key)
+    return key
 
 
 async def _upload_file_to_server(
-    message: Message, student_external_id: str, doc_type: str, lang: str = "uz"
+    message: Message, student_external_id: str, doc_type: str, lang: str = "uz",
+    session_key: str = "",
 ) -> str | None:
-    """Download file from Telegram and upload to CRM server. Returns doc_id or None on failure."""
+    """Download file from Telegram and upload to CRM server.
+
+    Returns doc_id on success, None on generic failure, or the sentinel
+    _UPLOAD_TOO_LARGE when the file was rejected for size (in which case the
+    file_too_large message has already been sent — caller must not double-message).
+    """
     try:
         if message.document:
             file_id = message.document.file_id
@@ -651,15 +724,20 @@ async def _upload_file_to_server(
             return None
 
         # Reject oversized files early to avoid buffering huge downloads.
+        # file_too_large xabari shu yerda yuboriladi va maxsus sentinel qaytadi —
+        # chaqiruvchi umumiy "upload_failed" ni QO'SHIMCHA yubormasligi uchun.
         if file_size and file_size > _MAX_UPLOAD_BYTES:
-            await message.answer(_file_too_large_text(lang))
-            return None
+            await message.answer(get_text("file_too_large", lang))
+            return _UPLOAD_TOO_LARGE
 
         tg_file = await message.bot.get_file(file_id)
         buf = await message.bot.download_file(tg_file.file_path)
         raw = buf.read() if hasattr(buf, "read") else bytes(buf)
 
-        result = await api_client.upload_document(student_external_id, doc_type, raw, filename, mime_type)
+        result = await api_client.upload_document(
+            student_external_id, doc_type, raw, filename, mime_type,
+            survey_session_key=session_key,
+        )
         if result.ok:
             return (result.data or {}).get("doc_id")
         logger.warning("upload_document failed for %s/%s: %s", student_external_id, doc_type, result.error)
@@ -685,8 +763,18 @@ async def handle_cv_file(message: Message, state: FSMContext):
     if data.get("_cv_q_id"):
         with suppress(Exception):
             await message.bot.delete_message(message.chat.id, data["_cv_q_id"])
-    doc_id = await _upload_file_to_server(message, data.get("student_id", ""), "cv", lang)
-    await state.update_data(cv_doc_id=doc_id or "")
+    session_key = await _get_or_create_session_key(state)
+    doc_id = await _upload_file_to_server(message, data.get("student_id", ""), "cv", lang, session_key)
+    if not doc_id or doc_id == _UPLOAD_TOO_LARGE:
+        # Yuklash muvaffaqiyatsiz — yolg'on "qabul qilindi" demaymiz: xabar berib,
+        # qayta so'raymiz (o'tkazib yuborish tugmasi saqlanadi). Hajm rad etilgan
+        # bo'lsa file_too_large allaqachon yuborilgan — takror upload_failed bermaymiz.
+        if doc_id != _UPLOAD_TOO_LARGE:
+            await message.answer(get_text("upload_failed", lang))
+        sent = await message.answer(get_text("ask_cv", lang), reply_markup=cv_keyboard(lang))
+        await state.update_data(_cv_q_id=sent.message_id)
+        return
+    await state.update_data(cv_doc_id=doc_id)
     await message.answer(get_text("cv_received", lang), reply_markup=NO_KB)
     await _ask_suggestions(message, state)
 
@@ -759,8 +847,16 @@ async def handle_certificate_file(message: Message, state: FSMContext):
     if data.get("_cert_q_id"):
         with suppress(Exception):
             await message.bot.delete_message(message.chat.id, data["_cert_q_id"])
-    doc_id = await _upload_file_to_server(message, data.get("student_id", ""), "certificate", lang)
-    await state.update_data(cert_doc_id=doc_id or "")
+    session_key = await _get_or_create_session_key(state)
+    doc_id = await _upload_file_to_server(message, data.get("student_id", ""), "certificate", lang, session_key)
+    if not doc_id or doc_id == _UPLOAD_TOO_LARGE:
+        # Hajm rad etilgan bo'lsa file_too_large allaqachon yuborilgan.
+        if doc_id != _UPLOAD_TOO_LARGE:
+            await message.answer(get_text("upload_failed", lang))
+        sent = await message.answer(get_text("ask_certificate", lang), reply_markup=certificate_keyboard(lang))
+        await state.update_data(_cert_q_id=sent.message_id)
+        return
+    await state.update_data(cert_doc_id=doc_id)
     await message.answer(get_text("cert_received", lang), reply_markup=NO_KB)
     await _ask_suggestions(message, state)
 
@@ -804,13 +900,26 @@ def _course_label(course_year, lang: str) -> str:
     return "—"
 
 
+_KNOWN_LANG_LABEL_KEYS = {"ru": "lang_russian", "en": "lang_english", "other": "lang_other"}
+
+
+def _known_lang_label(code, lang: str) -> str:
+    """'ru'/'en'/'other' kodini foydalanuvchi ko'radigan yorliqqa aylantiradi."""
+    key = _KNOWN_LANG_LABEL_KEYS.get(str(code))
+    return get_text(key, lang) if key else html.escape(str(code))
+
+
 def _build_review(data: dict, lang: str) -> str:
     """Human-readable summary of everything the student answered, shown right before
-    the send/restart confirmation so they can review their answers."""
+    the send/restart confirmation so they can review their answers.
+
+    Default parse_mode HTML — barcha foydalanuvchi/server qiymatlari escape qilinadi,
+    aks holda `<`, `&` kabi belgilar TelegramBadRequest keltirib chiqaradi."""
+    esc = html.escape
     lines = [get_text("review_title", lang)]
 
     if data.get("phone"):
-        lines.append(f"{get_text('account_phone', lang)} {data['phone']}")
+        lines.append(f"{get_text('account_phone', lang)} {esc(str(data['phone']))}")
 
     gender = data.get("gender")
     if gender == "male":
@@ -819,9 +928,9 @@ def _build_review(data: dict, lang: str) -> str:
         lines.append(f"{get_text('account_gender', lang)} {get_text('gender_female_label', lang)}")
 
     if data.get("region_label"):
-        lines.append(f"{get_text('account_region', lang)} {data['region_label']}")
+        lines.append(f"{get_text('account_region', lang)} {esc(str(data['region_label']))}")
     if data.get("program_name"):
-        lines.append(f"{get_text('review_direction', lang)} {data['program_name']}")
+        lines.append(f"{get_text('review_direction', lang)} {esc(str(data['program_name']))}")
 
     lines.append(f"{get_text('review_course', lang)} {_course_label(data.get('course_year'), lang)}")
 
@@ -832,17 +941,17 @@ def _build_review(data: dict, lang: str) -> str:
     )
     if employed:
         if data.get("company"):
-            lines.append(f"{get_text('review_company', lang)} {data['company']}")
+            lines.append(f"{get_text('review_company', lang)} {esc(str(data['company']))}")
         if data.get("role"):
-            lines.append(f"{get_text('review_role', lang)} {data['role']}")
+            lines.append(f"{get_text('review_role', lang)} {esc(str(data['role']))}")
         emp_doc = get_text("employment_doc_received", lang) if data.get("employment_doc_id") else get_text("employment_doc_skip", lang)
         lines.append(f"📎 {emp_doc}")
 
     langs = data.get("known_langs") or []
     if langs:
-        lines.append(f"{get_text('review_langs', lang)} {', '.join(str(x) for x in langs)}")
+        lines.append(f"{get_text('review_langs', lang)} {', '.join(_known_lang_label(x, lang) for x in langs)}")
     if data.get("suggestions"):
-        lines.append(f"{get_text('review_suggestions', lang)} {data['suggestions']}")
+        lines.append(f"{get_text('review_suggestions', lang)} {esc(str(data['suggestions']))}")
 
     yes, no = get_text("yes_short", lang), get_text("no_short", lang)
     lines.append(f"{get_text('review_help', lang)} {yes if data.get('want_help') else no}")
@@ -851,12 +960,14 @@ def _build_review(data: dict, lang: str) -> str:
 
 
 async def _restart_survey(chat_id: int, bot, state: FSMContext, lang: str) -> None:
-    """Re-run the survey from the first question, keeping the verified identity and
-    roster facts (program/course) but clearing the student's collected answers."""
+    """Re-run the survey from the first question, keeping the verified identity,
+    roster facts (program/course) and profile fields (phone/gender/region — refill
+    dizayni bo'yicha qayta so'ralmaydi), but clearing the survey answers."""
     data = await state.get_data()
     keep_keys = (
         "language", "tg_user_id", "telegram_user_id", "username", "student_id",
         "tg_first_name", "birth_date", "program_id", "program_name", "course_year",
+        "phone", "gender", "region_id", "region_code", "region_label", "_refill_mode",
     )
     preserved = {k: data.get(k) for k in keep_keys if data.get(k) is not None}
     await state.clear()
@@ -916,7 +1027,8 @@ async def handle_menu(message: Message, state: FSMContext):
         await message.answer(get_text("portfolio_info", lang), reply_markup=main_menu_keyboard(lang))
 
     elif text == get_text("menu_vacancy", lang):
-        await message.answer(get_text("vacancy_info", lang) + "\n" + channels_text(lang), reply_markup=main_menu_keyboard(lang))
+        from bot2_service.vacancy_handlers import send_vacancy_page
+        await send_vacancy_page(message, tg_id=message.from_user.id, lang=lang)
 
     elif text == get_text("menu_survey", lang):
         prof = await api_client.get_student_profile(message.from_user.id)
@@ -932,9 +1044,16 @@ async def handle_menu(message: Message, state: FSMContext):
             kb.button(text=get_text("survey_new", lang), callback_data="survey_choice:new")
             kb.button(text=get_text("survey_back_btn", lang), callback_data="survey_choice:back")
             kb.adjust(1)
-            await message.answer(get_text("survey_has_previous", lang).format(date=date_str), reply_markup=kb.as_markup())
+            await message.answer(
+                get_text("survey_has_previous", lang).format(date=html.escape(str(date_str))),
+                reply_markup=kb.as_markup(),
+            )
         else:
             await _start_refill(message.chat.id, message.bot, state, lang, message.from_user.id)
+
+    elif text == get_text("menu_internship", lang):
+        from bot2_service.internship_handlers import start_internship
+        await start_internship(message, state, lang)
 
     elif text == get_text("menu_account", lang):
         await _show_account(message, lang)
@@ -970,7 +1089,13 @@ async def _start_refill(chat_id: int, bot, state: FSMContext, lang: str, tg_user
     straight to the employment question.
     """
     prof = await api_client.get_student_profile(tg_user_id)
-    if not prof.ok or not (prof.data or {}).get("found"):
+    if not prof.ok:
+        # Vaqtinchalik API xatosi — foydalanuvchini qayta-verifikatsiyaga tushirmaymiz,
+        # menyuda qoldirib keyinroq urinishni so'raymiz.
+        logger.warning("get_student_profile error in _start_refill tg=%s: %s", tg_user_id, prof.error)
+        await bot.send_message(chat_id, get_text("profile_error", lang), reply_markup=main_menu_keyboard(lang))
+        return
+    if not (prof.data or {}).get("found"):
         await state.clear()
         await state.set_state(BotState.waiting_language)
         await bot.send_message(chat_id, get_text("ask_language", "uz"), reply_markup=language_keyboard())
@@ -1034,13 +1159,13 @@ async def _show_account(message: Message, lang: str) -> None:
 
     lines = [get_text("account_title", lang)]
     if full_name:
-        lines.append(f"{get_text('account_name', lang)} {full_name}")
+        lines.append(f"{get_text('account_name', lang)} {html.escape(full_name)}")
     if phone:
-        lines.append(f"{get_text('account_phone', lang)} {phone}")
+        lines.append(f"{get_text('account_phone', lang)} {html.escape(str(phone))}")
     if gender_label:
         lines.append(f"{get_text('account_gender', lang)} {gender_label}")
     if region:
-        lines.append(f"{get_text('account_region', lang)} {region}")
+        lines.append(f"{get_text('account_region', lang)} {html.escape(str(region))}")
     if last_survey:
         with suppress(Exception):
             from datetime import datetime, timezone
@@ -1073,8 +1198,15 @@ async def handle_followup_answer(call: CallbackQuery, state: FSMContext):
 
 
 # ── Fallback ──────────────────────────────────────────────────────────────────
+# Bare catch-all: lives on its OWN router that is included LAST, so it never
+# shadows message handlers in feature routers (vacancy/internship) that are
+# state-scoped. aiogram evaluates routers in include order and the first match
+# wins globally — a catch-all on the main router would eat every feature router's
+# text-input step.
+fallback_router = Router()
 
-@router.message()
+
+@fallback_router.message()
 async def fallback_handler(message: Message, state: FSMContext):
     current = await state.get_state()
     data = await state.get_data()
@@ -1083,6 +1215,19 @@ async def fallback_handler(message: Message, state: FSMContext):
         await message.answer(get_text("unknown_command", lang))
     else:
         await message.answer(get_text("use_buttons", lang))
+
+
+@fallback_router.callback_query()
+async def fallback_callback_handler(call: CallbackQuery, state: FSMContext):
+    """Hech bir handler'ga mos kelmagan callback (eskirgan inline tugmalar:
+    restart'dan keyingi consent:/survey_choice:/cal:, holat o'zgargandan keyingi
+    tugmalar va h.k.) — spinner abadiy aylanib qolmasligi uchun javob beramiz."""
+    lang = "uz"
+    with suppress(Exception):
+        data = await state.get_data()
+        lang = data.get("language", "uz")
+    with suppress(Exception):
+        await call.answer(get_text("stale_button", lang))
 
 
 # ── Survey Submission ─────────────────────────────────────────────────────────
@@ -1111,6 +1256,10 @@ async def _final_submit(message: Message, state: FSMContext):
 
     payload = {
         "idempotency_key": idempotency_key,
+        # Binds this run's uploaded documents to the survey server-side (primary path,
+        # independent of the cv_doc_id/cert_doc_id/employment_doc_id below). Empty when
+        # no document was uploaded in this run.
+        "survey_session_key": data.get("survey_session_key", "") or "",
         "student_external_id": str(student_id).strip(),
         "telegram_user_id": data.get("telegram_user_id"),
         "username": data.get("username", "") or "",
@@ -1136,6 +1285,7 @@ async def _final_submit(message: Message, state: FSMContext):
             "known_langs": data.get("known_langs", []),
             "cv_doc_id": data.get("cv_doc_id", ""),
             "cert_doc_id": data.get("cert_doc_id", ""),
+            "employment_doc_id": data.get("employment_doc_id", ""),
         },
     }
 
@@ -1155,7 +1305,70 @@ async def _final_submit(message: Message, state: FSMContext):
         return
 
     logger.error("Survey retry also failed student_id=%s: status=%s error=%s", student_id, res2.status, res2.error)
+    # Tasdiqlash tugmalari o'chirilgan edi — foydalanuvchi qotib qolmasligi uchun
+    # holatni saqlab, tasdiqlash klaviaturasini qayta yuboramiz (/retry ham ishlaydi).
+    await state.set_state(BotState.waiting_confirmation)
     await message.answer(get_text("submission_failed", lang), reply_markup=NO_KB)
+    await message.answer(get_text("confirm_send", lang), reply_markup=confirm_keyboard(lang))
+
+
+# ── Kanal a'zolik so'rovlari ──────────────────────────────────────────────────
+
+@router.chat_join_request()
+async def handle_channel_join_request(update: ChatJoinRequest, bot: Bot):
+    """
+    Kanalga kirish so'rovini avtomatik ko'rib chiqadi.
+    Botdan foydalangan va so'rovnoma to'ldirgan talabani qabul qiladi.
+    """
+    # Faqat vakansiya kanalidan kelgan so'rovlarni tekshiramiz
+    if settings.vacancy_channel_id and update.chat.id != settings.vacancy_channel_id:
+        return
+
+    user_id = update.from_user.id
+    result = await api_client.get_student_profile(user_id)
+
+    has_survey = (
+        result.ok
+        and result.data.get("found")
+        and result.data.get("last_survey_at") is not None
+    )
+
+    if has_survey:
+        try:
+            await bot.approve_chat_join_request(
+                chat_id=update.chat.id,
+                user_id=user_id,
+            )
+            logger.info("Kanal: a'zolik tasdiqlandi user_id=%s", user_id)
+        except Exception as exc:
+            logger.warning("approve_chat_join_request xatolik user_id=%s: %s", user_id, exc)
+    else:
+        try:
+            await bot.decline_chat_join_request(
+                chat_id=update.chat.id,
+                user_id=user_id,
+            )
+        except Exception as exc:
+            logger.warning("decline_chat_join_request xatolik user_id=%s: %s", user_id, exc)
+
+        # Foydalanuvchiga tushuntirish xabari
+        lang = result.data.get("language", "uz") if result.ok and result.data else "uz"
+        if lang == "ru":
+            msg = (
+                "Ваша заявка на вступление в канал отклонена.\n\n"
+                "Чтобы вступить в канал, пройдите опрос о трудоустройстве в боте. "
+                "После заполнения опроса снова отправьте заявку на вступление."
+            )
+        else:
+            msg = (
+                "Kanalga kirish so'rovingiz rad etildi.\n\n"
+                "Kanalga a'zo bo'lish uchun botda bandlik so'rovnomasini to'ldiring. "
+                "So'rovnomani to'ldirgandan so'ng qaytadan so'rov yuboring."
+            )
+        try:
+            await bot.send_message(chat_id=user_id, text=msg)
+        except Exception:
+            pass  # DM bloklanmishi mumkin
 
 
 # ── Bot startup ───────────────────────────────────────────────────────────────
@@ -1175,6 +1388,17 @@ async def start_bot():
     cache = CatalogCache(api=api)
     setup_dependencies(api, cache)
     dp.include_router(router)
+    # Feature router'lariga UMUMIY api klientini beramiz — modul darajasida alohida
+    # httpx pool ochilmasin va shutdown'da bitta close() hammasini yopsin.
+    from bot2_service.vacancy_handlers import router as vacancy_router, setup_api as setup_vacancy_api
+    setup_vacancy_api(api)
+    dp.include_router(vacancy_router)
+    from bot2_service.internship_handlers import router as internship_router, setup_api as setup_internship_api
+    setup_internship_api(api)
+    dp.include_router(internship_router)
+    # Bare catch-all router MUST be included last so it doesn't shadow the
+    # feature routers' state-scoped message handlers (e.g. internship text steps).
+    dp.include_router(fallback_router)
 
     try:
         await bot.delete_webhook(drop_pending_updates=True)
@@ -1192,6 +1416,37 @@ async def start_bot():
         with suppress(Exception):
             await bot.session.close()
         lock.release()
+
+
+def _update_user_id(update) -> int | None:
+    """Update'dan foydalanuvchi id'sini oladi (per-user navbat va FSM kesh eviction uchun)."""
+    try:
+        user = getattr(update.event, "from_user", None)
+    except Exception:
+        return None
+    return getattr(user, "id", None)
+
+
+async def _handle_update(dp: Dispatcher, bot: Bot, update, prev: asyncio.Task | None) -> None:
+    """Bitta update'ni ishlaydi: avval shu foydalanuvchining oldingi update'i
+    tugashini kutadi (per-user tartib, FSM poygasiz), oxirida FSM bufferini
+    tozalaydi (ApiStorage.evict — kesh sizib ketmasin/eskirmasin)."""
+    if prev is not None:
+        # asyncio.wait istisnolarni tarqatmaydi — oldingi update xato bilan
+        # tugagan bo'lsa ham bu update ishlanadi.
+        await asyncio.wait({prev})
+    try:
+        await dp.feed_update(bot, update)
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("aiogram.dispatcher").exception(
+            "Error handling update id=%s: %s", update.update_id, e
+        )
+    finally:
+        storage = dp.storage
+        if isinstance(storage, ApiStorage):
+            storage.evict(_update_user_id(update))
 
 
 async def _polling_exit_on_conflict(
@@ -1222,41 +1477,60 @@ async def _polling_exit_on_conflict(
     if bot.session.timeout:
         kwargs["request_timeout"] = int(bot.session.timeout + polling_timeout)
 
+    # Har bir update alohida task'da ishlanadi (aiogram'ning handle_as_tasks
+    # uslubida) — bitta foydalanuvchining sekin so'rovi butun botni to'xtatib
+    # qo'ymaydi. Bir foydalanuvchining update'lari esa zanjir orqali ketma-ket
+    # bajariladi (FSM holati poygasiz qoladi).
+    pending_tasks: set[asyncio.Task] = set()
+    user_chain: dict[int, asyncio.Task] = {}
+
+    def _schedule(update) -> None:
+        uid = _update_user_id(update)
+        prev = user_chain.get(uid) if uid is not None else None
+        task = asyncio.create_task(_handle_update(dp, bot, update, prev))
+        pending_tasks.add(task)
+        task.add_done_callback(pending_tasks.discard)
+        if uid is not None:
+            user_chain[uid] = task
+
+            def _clear_chain(t: asyncio.Task, _uid: int = uid) -> None:
+                if user_chain.get(_uid) is t:
+                    user_chain.pop(_uid, None)
+
+            task.add_done_callback(_clear_chain)
+
     failed = False
-    while True:
-        try:
-            updates = await bot(get_updates, **kwargs)
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:  # noqa: BLE001
-            if _is_conflict(e):
-                logger.error(
-                    "Polling stopped: %s. Another instance is polling this token. Stop it and restart.", e
-                )
-                return
-            failed = True
-            logging.getLogger("aiogram.dispatcher").error("Failed to fetch updates - %s: %s", type(e).__name__, e)
-            logging.getLogger("aiogram.dispatcher").warning(
-                "Sleep %.1fs and retry (attempt=%d bot_id=%d)", backoff.next_delay, backoff.counter, bot.id
-            )
-            await backoff.asleep()
-            continue
-
-        if failed:
-            logging.getLogger("aiogram.dispatcher").info(
-                "Connection re-established (attempt=%d bot_id=%d)", backoff.counter, bot.id
-            )
-            backoff.reset()
-            failed = False
-
-        for update in updates:
+    try:
+        while True:
             try:
-                await dp.feed_update(bot, update)
+                updates = await bot(get_updates, **kwargs)
             except asyncio.CancelledError:
                 raise
             except Exception as e:  # noqa: BLE001
-                logging.getLogger("aiogram.dispatcher").exception(
-                    "Error handling update id=%s: %s", update.update_id, e
+                if _is_conflict(e):
+                    logger.error(
+                        "Polling stopped: %s. Another instance is polling this token. Stop it and restart.", e
+                    )
+                    return
+                failed = True
+                logging.getLogger("aiogram.dispatcher").error("Failed to fetch updates - %s: %s", type(e).__name__, e)
+                logging.getLogger("aiogram.dispatcher").warning(
+                    "Sleep %.1fs and retry (attempt=%d bot_id=%d)", backoff.next_delay, backoff.counter, bot.id
                 )
-            finally:
+                await backoff.asleep()
+                continue
+
+            if failed:
+                logging.getLogger("aiogram.dispatcher").info(
+                    "Connection re-established (attempt=%d bot_id=%d)", backoff.counter, bot.id
+                )
+                backoff.reset()
+                failed = False
+
+            for update in updates:
                 get_updates.offset = update.update_id + 1
+                _schedule(update)
+    finally:
+        # Ishlanayotgan update'larni tugatib chiqamiz (graceful shutdown).
+        if pending_tasks:
+            await asyncio.gather(*pending_tasks, return_exceptions=True)

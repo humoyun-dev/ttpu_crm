@@ -5,6 +5,7 @@ Admin-only. submit -> Gemini (mock qilingan) -> DocumentVerification yozuvi
 chaqirilmaydi — GeminiVerificationService mock qilinadi.
 """
 
+import threading
 from unittest.mock import patch
 
 import pytest
@@ -13,6 +14,7 @@ from rest_framework import status
 from rest_framework.reverse import reverse
 from rest_framework.test import APIClient
 
+from ai_verification import orchestration
 from ai_verification.models import DocumentVerification
 from bot2.models import Bot2Student, StudentRoster
 
@@ -50,34 +52,75 @@ def _png(name="cv.png"):
     return SimpleUploadedFile(name, b"\x89PNG\r\n\x1a\n" + b"0" * 64, content_type="image/png")
 
 
-def test_submit_creates_done_verification(api_client, admin_user, student):
+@pytest.mark.django_db(transaction=True)
+def test_submit_starts_background_verification(api_client, admin_user, student):
+    """submit endi background thread'da ishlaydi (run_document_verification_async,
+    xuddi bot /bot/document dagi kabi) — HTTP so'rovni Gemini javobini kutib
+    bloklamaydi. Javob darhol status=processing bilan, to'g'ri turdagi yozuv
+    bilan qaytadi; Gemini natijasini xaritalash (green/red/xatolik) mantig'i
+    _process_verification ustida alohida sinaladi (orchestration darajasida).
+
+    transaction=True + thread.join(): background thread o'z DB ulanishida
+    yozadi, shuning uchun oddiy (rollback qilinadigan) test tranzaksiyasi buni
+    ko'ra olmaydi va testdan keyin ham ishlab turishi mumkin. Haqiqiy commit va
+    threadni tugashini kutish shu muammoni oldini oladi.
+    """
+    created_threads = []
+    real_thread_init = threading.Thread.__init__
+
+    def _tracking_init(self, *a, **kw):
+        real_thread_init(self, *a, **kw)
+        created_threads.append(self)
+
     api_client.force_authenticate(user=admin_user)
-    with patch("ai_verification.orchestration.GeminiVerificationService") as M:
+    with patch("ai_verification.orchestration.GeminiVerificationService") as M, \
+         patch.object(threading.Thread, "__init__", _tracking_init):
         M.return_value.verify.return_value = GREEN_RESULT
         resp = api_client.post(
             SUBMIT_URL,
             {"student_id": str(student.id), "document_type": "cv", "file": _png()},
             format="multipart",
         )
+        # The background thread's target may not actually run until after this
+        # `with` block would otherwise exit — join it here, still inside the
+        # patch scope, so the mock is still active when it executes.
+        for t in created_threads:
+            t.join(timeout=5)
 
     assert resp.status_code == status.HTTP_201_CREATED
-    assert resp.data["status"] == "done"
-    assert resp.data["confidence_level"] == "green"
-    assert resp.data["confidence_score"] == 0.9
-    assert resp.data["extracted_data"]["full_name"] == "Ali Valiyev"
-    assert resp.data["student_name"] == "Ali Valiyev"
+    assert resp.data["status"] == "processing"
+    assert resp.data["document_type"] == "cv"
     assert resp.data["file_name"] == "cv.png"
-    assert resp.data["final_decision"] == "pending"
 
     v = DocumentVerification.objects.get(pk=resp.data["id"])
-    assert v.status == DocumentVerification.Status.DONE
+    assert v.student_id == student.id
     assert v.uploaded_by_id == admin_user.id
+    assert v.status == DocumentVerification.Status.DONE
+    assert v.confidence_level == "green"
+    assert v.final_decision == DocumentVerification.FinalDecision.ACCEPTED
+
+
+def test_process_verification_marks_done_on_green_result(student):
+    """Gemini natijasini done/green/accepted final_decision ga xaritalash mantig'i —
+    orchestration darajasida to'g'ridan-to'g'ri sinaladi (submit endi background
+    thread'da ishlagani uchun HTTP orqali sinxron kutib bo'lmaydi). Yashil (>=0.75)
+    avtomatik qabul qilinadi (_process_verification)."""
+    with patch("ai_verification.orchestration.GeminiVerificationService") as M:
+        M.return_value.verify.return_value = GREEN_RESULT
+        v = orchestration.run_document_verification(
+            student=student, file=_png(), doc_type="cv",
+        )
+
+    assert v.status == DocumentVerification.Status.DONE
+    assert v.confidence_level == "green"
+    assert v.confidence_score == 0.9
+    assert v.extracted_data["full_name"] == "Ali Valiyev"
+    assert v.final_decision == DocumentVerification.FinalDecision.ACCEPTED
     assert v.processed_at is not None
 
 
-def test_submit_error_result_marks_failed(api_client, admin_user, student):
-    """AI _error qaytarsa: yozuv yaratiladi (201) lekin status=failed."""
-    api_client.force_authenticate(user=admin_user)
+def test_process_verification_error_result_marks_failed(student):
+    """AI _error qaytarsa: yozuv yaratiladi lekin status=failed."""
     with patch("ai_verification.orchestration.GeminiVerificationService") as M:
         M.return_value.verify.return_value = {
             "confidence_score": 0.0,
@@ -87,31 +130,25 @@ def test_submit_error_result_marks_failed(api_client, admin_user, student):
             "summary": "Xatolik: Javobni o'qib bo'lmadi",
             "_error": True,
         }
-        resp = api_client.post(
-            SUBMIT_URL,
-            {"student_id": str(student.id), "document_type": "ielts", "file": _png()},
-            format="multipart",
+        v = orchestration.run_document_verification(
+            student=student, file=_png(), doc_type="ielts",
         )
 
-    assert resp.status_code == status.HTTP_201_CREATED
-    assert resp.data["status"] == "failed"
-    assert resp.data["error_message"]
+    assert v.status == DocumentVerification.Status.FAILED
+    assert v.error_message
 
 
-def test_submit_service_exception_marks_failed(api_client, admin_user, student):
-    """Service istisno tashlasa view uni ushlab status=failed qiladi (500 emas)."""
-    api_client.force_authenticate(user=admin_user)
+def test_process_verification_service_exception_marks_failed(student):
+    """Service istisno tashlasa _process_verification uni ushlab status=failed
+    qiladi (hech qachon exception ko'tarmaydi)."""
     with patch("ai_verification.orchestration.GeminiVerificationService") as M:
         M.return_value.verify.side_effect = RuntimeError("boom")
-        resp = api_client.post(
-            SUBMIT_URL,
-            {"student_id": str(student.id), "document_type": "cv", "file": _png()},
-            format="multipart",
+        v = orchestration.run_document_verification(
+            student=student, file=_png(), doc_type="cv",
         )
 
-    assert resp.status_code == status.HTTP_201_CREATED
-    assert resp.data["status"] == "failed"
-    assert "boom" in resp.data["error_message"]
+    assert v.status == DocumentVerification.Status.FAILED
+    assert "boom" in v.error_message
 
 
 def test_submit_rejects_bad_file_type(api_client, admin_user, student):
