@@ -75,10 +75,13 @@ def parse_roster_payload(row: dict, program_cache: Optional[dict] = None) -> dic
 
     campaign = row.get("campaign") or "default"
     birth_date = parse_birth_date(row.get("birth_date"))
+    # Bo'sh katak = "qiymat berilmadi" (None), "" emas. Shunda qayta importda
+    # bo'sh ism ustuni mavjud (to'ldirilgan) ismni o'chirib yubormaydi —
+    # Excel faqat qiymat BERGANDA g'olib (upsert'dagi `is not None` filtri).
     return {
         "student_external_id": student_external_id,
-        "first_name": str(row.get("first_name") or "").strip(),
-        "last_name": str(row.get("last_name") or "").strip(),
+        "first_name": (str(row.get("first_name") or "").strip() or None),
+        "last_name": (str(row.get("last_name") or "").strip() or None),
         "program": program,
         "course_year": course_year,
         "is_active": bool(row.get("is_active", True) not in [False, "false", "False", "0"]),

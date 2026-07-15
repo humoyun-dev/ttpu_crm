@@ -241,6 +241,56 @@ def test_response_lists_imported_students(api_client, admin_user, program_item):
     assert s["status"] == "created"
 
 
+def test_reimport_matching_id_overwrites_in_place(api_client, admin_user):
+    """Re-importing a row with an existing student_external_id lets Excel win: the
+    stale name/birth_date are overwritten **in place** (same PK — the row is updated,
+    not deleted+recreated, so CASCADE-linked students/surveys keep their FK)."""
+    api_client.force_authenticate(user=admin_user)
+    stale = StudentRoster.objects.create(student_external_id="DUP-1")  # prod-like: no name/birth
+    old_pk = stale.pk
+
+    resp = api_client.post(
+        URL,
+        [{
+            "student_external_id": "DUP-1",
+            "first_name": "Ali",
+            "last_name": "Valiyev",
+            "birth_date": "15.05.2000",
+        }],
+        format="json",
+    )
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.data["created"] == 0
+    assert resp.data["updated"] == 1
+    fresh = StudentRoster.objects.get(student_external_id="DUP-1")
+    assert fresh.pk == old_pk  # in-place update, FK links preserved
+    assert fresh.first_name == "Ali"
+    assert fresh.last_name == "Valiyev"
+    assert str(fresh.birth_date) == "2000-05-15"
+    assert StudentRoster.objects.filter(student_external_id="DUP-1").count() == 1
+
+
+def test_reimport_blank_cells_do_not_wipe_existing(api_client, admin_user):
+    """A blank Excel cell means "no value supplied", not "clear this field": a
+    re-import that omits name/birth must leave the already-filled values intact."""
+    api_client.force_authenticate(user=admin_user)
+    StudentRoster.objects.create(
+        student_external_id="KEEP-1", first_name="Ali", last_name="Valiyev"
+    )
+
+    resp = api_client.post(
+        URL,
+        [{"student_external_id": "KEEP-1", "first_name": "", "last_name": ""}],
+        format="json",
+    )
+
+    assert resp.status_code == status.HTTP_200_OK
+    fresh = StudentRoster.objects.get(student_external_id="KEEP-1")
+    assert fresh.first_name == "Ali"  # not wiped by the empty cell
+    assert fresh.last_name == "Valiyev"
+
+
 def test_response_marks_updated_students_and_keeps_existing_program(api_client, admin_user, program_item):
     """An update is reported with status='updated' and the response reflects the TRUE
     post-upsert state — the program is preserved even though the row omitted it."""
