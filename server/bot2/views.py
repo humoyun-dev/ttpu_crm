@@ -55,7 +55,7 @@ class Bot2StudentRosterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsViewerOrAdminReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = StudentRosterFilterSet
-    search_fields = ["student_external_id"]
+    search_fields = ["student_external_id", "first_name", "last_name"]
     ordering_fields = ["student_external_id", "course_year", "created_at"]
 
     def get_serializer_class(self):

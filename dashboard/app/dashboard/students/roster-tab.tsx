@@ -125,7 +125,7 @@ export function RosterTab() {
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            placeholder="ID bo'yicha qidirish..."
+            placeholder="ID yoki ism bo'yicha qidirish..."
             value={searchTerm}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="h-9 pl-8 text-sm"
