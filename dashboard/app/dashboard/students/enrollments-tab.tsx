@@ -39,11 +39,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { PageHeader } from "@/components/page-header";
 
 const PAGE_SIZE = 50;
 
-export default function EnrollmentsPage() {
+export function EnrollmentsTab() {
   const router = useRouter();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -141,26 +140,19 @@ export default function EnrollmentsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Talabalar / Ro'yxatga olish"
-        title="Ro'yxatga olish"
-        description="Dasturlar va kurslar bo'yicha talabalar soni hamda so'rovnoma qamrovi."
-        actions={
-          <>
-            <Button variant="outline" size="sm" onClick={reload}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Yangilash
-            </Button>
-            {isAdmin && (
-              <Button size="sm" onClick={() => router.push("/dashboard/enrollments/new")}>
-                <Plus className="mr-2 h-4 w-4" />
-                Qo&apos;shish
-              </Button>
-            )}
-          </>
-        }
-      />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={reload}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Yangilash
+        </Button>
+        {isAdmin && (
+          <Button size="sm" onClick={() => router.push("/dashboard/enrollments/new")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Qo&apos;shish
+          </Button>
+        )}
+      </div>
 
       {/* Reestr-uslubidagi umumiy statistika */}
       <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-border">
@@ -243,7 +235,11 @@ export default function EnrollmentsPage() {
                       </TableRow>
                     ) : (
                       items.map((it) => (
-                        <TableRow key={it.id} className="hover:bg-muted/40">
+                        <TableRow
+                          key={it.id}
+                          className="cursor-pointer hover:bg-muted/40"
+                          onClick={() => router.push(`/dashboard/enrollments/${it.id}`)}
+                        >
                           <TableCell className="pl-4 text-sm font-medium">
                             {it.program_details?.name_uz || it.program_details?.name || it.program}
                           </TableCell>
@@ -262,19 +258,21 @@ export default function EnrollmentsPage() {
                           </TableCell>
                           <TableCell className="text-center font-mono tabular-nums text-xs text-muted-foreground">{it.academic_year}</TableCell>
                           <TableCell className="text-center">
-                            <Badge variant={it.is_active ? "default" : "destructive"} className="text-xs">
+                            <Badge variant={it.is_active ? "default" : "secondary"} className="text-xs">
                               {it.is_active ? "Aktiv" : "Noaktiv"}
                             </Badge>
                           </TableCell>
                           {isAdmin && (
-                            <TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
                                 <Button variant="ghost" size="icon" className="h-7 w-7"
-                                  onClick={() => router.push(`/dashboard/enrollments/${it.id}`)}>
+                                  aria-label="Tahrirlash" title="Tahrirlash"
+                                  onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/enrollments/${it.id}`); }}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button variant="ghost" size="icon" className="h-7 w-7"
-                                  onClick={() => setDeletingId(it.id)}>
+                                  aria-label="O'chirish" title="O'chirish"
+                                  onClick={(e) => { e.stopPropagation(); setDeletingId(it.id); }}>
                                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                                 </Button>
                               </div>

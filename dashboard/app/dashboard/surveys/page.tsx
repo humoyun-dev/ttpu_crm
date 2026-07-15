@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -12,6 +12,7 @@ import {
   CalendarIcon,
   Filter,
   X,
+  Inbox,
 } from "lucide-react";
 import {
   Table,
@@ -30,8 +31,9 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { TableLoading } from "@/components/loading";
+import { DocStatusBadge, EmploymentBadge } from "@/components/status-badge";
+import { EmptyStateRow } from "@/components/empty-state";
 import { ErrorDisplay } from "@/components/error-display";
 import {
   Select,
@@ -46,40 +48,17 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { bot2Api, catalogApi, Bot2SurveyResponse, DocVerificationStatus, formatDate } from "@/lib/api";
+import { bot2Api, catalogApi, Bot2SurveyResponse, formatDate } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSearch } from "@/lib/hooks/use-search";
-import { formatCourseYearLabel, cn } from "@/lib/utils";
+import { cn, toLocalDateString, addDaysToDateString } from "@/lib/utils";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
-import { EMPLOYMENT_LABELS } from "@/lib/constants";
+import { EMPLOYMENT_LABELS, courseYearLabel } from "@/lib/constants";
 import { PaginationBar } from "@/components/ui/pagination-bar";
 import { PageHeader } from "@/components/page-header";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 const FETCH_ALL_PAGE_SIZE = 500;
-
-function DocStatusBadge({ status }: { status: DocVerificationStatus }) {
-  if (status === "verified") {
-    return (
-      <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
-        Tasdiqlangan
-      </Badge>
-    );
-  }
-  if (status === "pending") {
-    return (
-      <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 dark:text-amber-400">
-        Ko&apos;rib chiqilmoqda
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="outline" className="text-xs text-rose-500 border-rose-300 dark:text-rose-400">
-      Hujjat yo&apos;q
-    </Badge>
-  );
-}
 
 type DatePreset = "all" | "today" | "week" | "month" | "year" | "custom";
 
@@ -191,6 +170,9 @@ interface SurveyFilters {
   latest_only: string;
   want_help: string;
   share_with_employers: string;
+  doc_status: string;
+  from: string;
+  to: string;
 }
 
 const EMPTY_FILTERS: SurveyFilters = {
@@ -201,6 +183,9 @@ const EMPTY_FILTERS: SurveyFilters = {
   latest_only: "",
   want_help: "",
   share_with_employers: "",
+  doc_status: "",
+  from: "",
+  to: "",
 };
 
 function hasActiveFilters(f: SurveyFilters): boolean {
@@ -225,9 +210,13 @@ export default function SurveysPage() {
   const [filters, setFilters] = useState<SurveyFilters>(EMPTY_FILTERS);
   const [programs, setPrograms] = useState<ProgramOption[]>([]);
 
-  // Full dataset for stats + export (always unfiltered for correct totals)
-  const [allSurveys, setAllSurveys] = useState<Bot2SurveyResponse[]>([]);
-  const [allLoaded, setAllLoaded] = useState(false);
+  // Server tomonida hisoblangan statistika (har bir talabaning eng oxirgi javobi)
+  const [stats, setStats] = useState<{
+    unique_students: number;
+    employed: number;
+    unemployed: number;
+  } | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   // Date range export
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
@@ -260,13 +249,23 @@ export default function SurveysPage() {
       if (filters.latest_only) params.latest_only = filters.latest_only;
       if (filters.want_help) params.want_help = filters.want_help;
       if (filters.share_with_employers) params.share_with_employers = filters.share_with_employers;
+      if (filters.doc_status) params.doc_status = filters.doc_status;
+      // Server naive sanani UTC deb qabul qiladi (parse_iso_datetime) — bare
+      // YYYY-MM-DD yuborsak Toshkent (UTC+5) uchun chegara 05:00 ga suriladi.
+      // Shuning uchun MAHALLIY yarim tunni to'liq ISO instant sifatida yuboramiz.
+      if (filters.from) params.from = new Date(filters.from + "T00:00:00").toISOString();
+      // `to` — tanlangan kun to'liq qamralishi uchun keyingi kun (exclusive) mahalliy
+      // yarim tuni.
+      if (filters.to) params.to = new Date(addDaysToDateString(filters.to, 1) + "T00:00:00").toISOString();
       return params;
     },
     [debouncedSearch, filters],
   );
 
   /* ── load current page from server ── */
+  const fetchSeq = useRef(0);
   const fetchPage = useCallback(async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     setError(null);
     const params = buildFilterParams({
@@ -274,6 +273,8 @@ export default function SurveysPage() {
       page_size: String(pageSize),
     });
     const res = await bot2Api.listSurveys(params);
+    // Eskirgan javob — yangiroq so'rov yuborilgan, natijani e'tiborsiz qoldiramiz.
+    if (seq !== fetchSeq.current) return;
     if (res.error) {
       setError(
         Array.isArray(res.error.message)
@@ -290,30 +291,34 @@ export default function SurveysPage() {
     setLoading(false);
   }, [currentPage, pageSize, buildFilterParams]);
 
-  /* ── load whole dataset (stats + export) — always unfiltered ── */
-  const fetchAll = useCallback(async () => {
-    setAllLoaded(false);
-    try {
-      const all = await fetchAllSurveys({ ordering: "-submitted_at" });
-      setAllSurveys(all);
-      setAllLoaded(true);
-    } catch {
-      setAllLoaded(false);
+  /* ── stats: serverdagi tayyor endpoint (har bir talabaning oxirgi javobi) ── */
+  const fetchStats = useCallback(async () => {
+    setStatsError(null);
+    const res = await bot2Api.surveyStats();
+    if (res.error) {
+      setStats(null);
+      setStatsError(
+        Array.isArray(res.error.message)
+          ? res.error.message.join(", ")
+          : res.error.message,
+      );
+      return;
     }
+    setStats(res.data ?? null);
   }, []);
 
   const refresh = useCallback(() => {
     fetchPage();
-    fetchAll();
-  }, [fetchPage, fetchAll]);
+    fetchStats();
+  }, [fetchPage, fetchStats]);
 
   useEffect(() => {
     fetchPage();
   }, [fetchPage]);
 
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+    fetchStats();
+  }, [fetchStats]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -330,50 +335,44 @@ export default function SurveysPage() {
     setCurrentPage(1);
   };
 
-  /* ── whole-dataset stats (unique students only) ── */
-  const uniqueSurveys = dedupeLatestByStudent(allSurveys);
-  const uniqueStudentsCount = uniqueSurveys.length;
-  const employedCount = uniqueSurveys.filter(
-    (s) => s.employment_status === "employed",
-  ).length;
-  const unemployedCount = uniqueSurveys.filter(
-    (s) => s.employment_status === "unemployed",
-  ).length;
-
-  /* ── date-filtered surveys for export (from full dataset) ── */
-  const exportSurveys = (() => {
-    let range: { from: Date | null; to: Date | null };
-    if (datePreset === "custom") {
-      range = {
-        from: customFrom ?? null,
-        to: customTo ? new Date(customTo.getTime() + 86400000) : null,
-      };
-    } else {
-      range = getDateRange(datePreset);
-    }
-
-    const inRange = allSurveys.filter((s) => {
-      if (!range.from && !range.to) return true;
-      const d = new Date(s.submitted_at || s.created_at);
-      if (range.from && d < range.from) return false;
-      if (range.to && d >= range.to) return false;
-      return true;
-    });
-    return dedupeLatestByStudent(inRange);
-  })();
-
-  /* ── export to Excel ── */
-  const handleExport = () => {
-    if (!allLoaded) {
-      toast.error("Ma'lumotlar hali yuklanmoqda, biroz kuting");
-      return;
-    }
-    if (exportSurveys.length === 0) {
-      toast.error("Eksport qilish uchun ma'lumot topilmadi");
-      return;
-    }
+  /* ── export to Excel — to'liq ma'lumot faqat bosilganda yuklanadi ── */
+  const handleExport = async () => {
     setExporting(true);
     try {
+      let range: { from: Date | null; to: Date | null };
+      if (datePreset === "custom") {
+        range = {
+          from: customFrom ?? null,
+          to: customTo ? new Date(customTo.getTime() + 86400000) : null,
+        };
+      } else {
+        range = getDateRange(datePreset);
+      }
+
+      // Sana oralig'ini serverga ham beramiz (yuklanadigan hajmni kamaytiradi).
+      // Mahalliy Date'larni to'liq ISO instant sifatida yuboramiz — server naive
+      // sanani UTC deb qabul qilgani uchun aks holda 5 soatlik siljish bo'lardi.
+      // (Yakuniy filtr baribir quyidagi client-side inRange — bu faqat optimizatsiya.)
+      const params: Record<string, string> = { ordering: "-submitted_at" };
+      if (range.from) params.from = range.from.toISOString();
+      if (range.to) params.to = range.to.toISOString();
+
+      const all = await fetchAllSurveys(params);
+      const inRange = all.filter((s) => {
+        if (!range.from && !range.to) return true;
+        const d = new Date(s.submitted_at || s.created_at);
+        if (range.from && d < range.from) return false;
+        if (range.to && d >= range.to) return false;
+        return true;
+      });
+      const exportSurveys = dedupeLatestByStudent(inRange);
+
+      if (exportSurveys.length === 0) {
+        toast.error("Eksport qilish uchun ma'lumot topilmadi");
+        return;
+      }
+
+      const XLSX = await import("xlsx");
       const rows = exportSurveys.map((survey) => {
         const student = survey.student_details;
         const consents = (survey.consents as Record<string, boolean>) || {};
@@ -436,11 +435,15 @@ export default function SurveysPage() {
         year: "yillik",
         custom: "maxsus",
       };
-      const fileName = `sorovnomalar_${presetLabels[datePreset]}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const fileName = `sorovnomalar_${presetLabels[datePreset]}_${toLocalDateString(new Date())}.xlsx`;
       XLSX.writeFile(wb, fileName);
       toast.success(`${exportSurveys.length} ta yozuv eksport qilindi`);
     } catch (err) {
-      toast.error("Eksport qilishda xatolik yuz berdi");
+      toast.error(
+        err instanceof Error && err.message
+          ? `Eksport qilishda xatolik: ${err.message}`
+          : "Eksport qilishda xatolik yuz berdi",
+      );
       console.error(err);
     } finally {
       setExporting(false);
@@ -462,32 +465,46 @@ export default function SurveysPage() {
       />
 
       {/* Reestr-uslubidagi statistika */}
-      <section className="grid grid-cols-2 overflow-hidden rounded-lg border border-border lg:grid-cols-4">
+      <section className="grid grid-cols-3 overflow-hidden rounded-lg border border-border">
         <div className="px-4 py-3.5">
           <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-            {allLoaded ? uniqueStudentsCount.toLocaleString() : "…"}
+            {stats ? stats.unique_students.toLocaleString() : "…"}
           </p>
           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             Unikal talabalar
           </p>
         </div>
-        <div className="border-l border-border px-4 py-3.5 max-lg:border-t">
-          <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-500">
-            {allLoaded ? employedCount.toLocaleString() : "…"}
+        <div className="border-l border-border px-4 py-3.5">
+          <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-success">
+            {stats ? stats.employed.toLocaleString() : "…"}
           </p>
           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             Ishlamoqda
           </p>
         </div>
-        <div className="border-l border-border px-4 py-3.5 max-lg:border-t">
+        <div className="border-l border-border px-4 py-3.5">
           <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-            {allLoaded ? unemployedCount.toLocaleString() : "…"}
+            {stats ? stats.unemployed.toLocaleString() : "…"}
           </p>
           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             Ishlamaydi
           </p>
         </div>
       </section>
+
+      {statsError && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <span>Statistikani yuklab bo&apos;lmadi: {statsError}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 font-mono text-[10px] uppercase tracking-wider"
+            onClick={fetchStats}
+          >
+            Qayta urinish
+          </Button>
+        </div>
+      )}
 
       {/* Export section */}
       <Card>
@@ -582,24 +599,12 @@ export default function SurveysPage() {
 
             <Button
               onClick={handleExport}
-              disabled={exporting || !allLoaded || exportSurveys.length === 0}
+              disabled={exporting}
               size="sm"
               className="h-9 w-full sm:w-auto"
             >
               <Download className="mr-2 h-4 w-4" />
-              {exporting ? (
-                "Yuklanmoqda..."
-              ) : !allLoaded ? (
-                "Yuklanmoqda..."
-              ) : (
-                <>
-                  Eksport (
-                  <span className="font-mono tabular-nums">
-                    {exportSurveys.length}
-                  </span>
-                  )
-                </>
-              )}
+              {exporting ? "Yuklanmoqda..." : "Eksport"}
             </Button>
           </div>
         </CardContent>
@@ -768,12 +773,109 @@ export default function SurveysPage() {
                   <SelectItem value="false">Rozi emas</SelectItem>
                 </SelectContent>
               </Select>
+
+              {/* Hujjat holati */}
+              <Select
+                value={filters.doc_status || "_all"}
+                onValueChange={(v) =>
+                  handleFilterChange("doc_status", v === "_all" ? "" : v)
+                }
+              >
+                <SelectTrigger className="h-8 w-44 text-xs">
+                  <SelectValue placeholder="Hujjat holati" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Hujjat (hammasi)</SelectItem>
+                  <SelectItem value="verified">Tasdiqlangan</SelectItem>
+                  <SelectItem value="pending">Ko&apos;rib chiqilmoqda</SelectItem>
+                  <SelectItem value="rejected">Rad etildi</SelectItem>
+                  <SelectItem value="no_docs">Hujjat yo&apos;q</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Sana: dan */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-8 w-36 justify-start text-left text-xs font-normal",
+                      !filters.from && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-1.5 h-3 w-3" />
+                    {filters.from ? filters.from : "Dan (sana)"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={filters.from ? new Date(filters.from) : undefined}
+                    onSelect={(d) =>
+                      handleFilterChange("from", d ? toLocalDateString(d) : "")
+                    }
+                    initialFocus
+                  />
+                  {filters.from && (
+                    <div className="border-t p-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-xs"
+                        onClick={() => handleFilterChange("from", "")}
+                      >
+                        <X className="mr-1 h-3 w-3" />
+                        Tozalash
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+
+              {/* Sana: gacha */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-8 w-36 justify-start text-left text-xs font-normal",
+                      !filters.to && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-1.5 h-3 w-3" />
+                    {filters.to ? filters.to : "Gacha (sana)"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={filters.to ? new Date(filters.to) : undefined}
+                    onSelect={(d) =>
+                      handleFilterChange("to", d ? toLocalDateString(d) : "")
+                    }
+                    initialFocus
+                  />
+                  {filters.to && (
+                    <div className="border-t p-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-xs"
+                        onClick={() => handleFilterChange("to", "")}
+                      >
+                        <X className="mr-1 h-3 w-3" />
+                        Tozalash
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-6"><TableLoading /></div>
+            <div className="p-6"><TableLoading rows={8} cols={7} /></div>
           ) : error ? (
             <div className="p-6"><ErrorDisplay message={error} onRetry={fetchPage} /></div>
           ) : (
@@ -797,14 +899,11 @@ export default function SurveysPage() {
                   </TableHeader>
                   <TableBody>
                     {surveys.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={7}
-                          className="text-center text-muted-foreground"
-                        >
-                          Ma&apos;lumot topilmadi
-                        </TableCell>
-                      </TableRow>
+                      <EmptyStateRow
+                        colSpan={7}
+                        icon={Inbox}
+                        title="Ma'lumot topilmadi"
+                      />
                     ) : (
                       surveys.map((survey) => {
                         const student = survey.student_details;
@@ -835,21 +934,10 @@ export default function SurveysPage() {
                               {programName}
                             </TableCell>
                             <TableCell className="hidden sm:table-cell font-mono text-xs tabular-nums">
-                              {formatCourseYearLabel(survey.course_year)}
+                              {courseYearLabel(survey.course_year)}
                             </TableCell>
                             <TableCell>
-                              <Badge
-                                variant={
-                                  survey.employment_status === "employed"
-                                    ? "default"
-                                    : "secondary"
-                                }
-                                className="text-xs whitespace-nowrap"
-                              >
-                                {EMPLOYMENT_LABELS[survey.employment_status] ||
-                                  survey.employment_status ||
-                                  "-"}
-                              </Badge>
+                              <EmploymentBadge status={survey.employment_status} />
                             </TableCell>
                             <TableCell className="hidden sm:table-cell">
                               <DocStatusBadge status={survey.doc_verification_status ?? "no_docs"} />

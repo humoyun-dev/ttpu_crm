@@ -56,10 +56,7 @@ export default function LoginPage() {
     <div className="w-full max-w-sm">
       {/* Mobile-only logo */}
       <div className="mb-10 text-center lg:hidden">
-        <div
-          className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-md font-display text-lg font-semibold"
-          style={{ backgroundColor: "oklch(0.19 0.13 264)", color: "white" }}
-        >
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-md bg-primary font-display text-lg font-semibold text-primary-foreground">
           T
         </div>
         <h1 className="font-display text-xl font-semibold tracking-tight text-primary">TTPU</h1>

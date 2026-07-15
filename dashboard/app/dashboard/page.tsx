@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Users,
@@ -14,6 +14,7 @@ import {
 import { bot2Api, catalogApi, employerApi, leadApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { PageHeader } from "@/components/page-header";
+import { ErrorDisplay } from "@/components/error-display";
 
 interface Stats {
   surveys: number;
@@ -31,7 +32,6 @@ const cards = [
     key: "surveys" as keyof Stats,
     icon: Users,
     href: "/dashboard/surveys",
-    color: "oklch(0.42 0.20 263)",
   },
   {
     title: "Talabalar",
@@ -39,15 +39,13 @@ const cards = [
     key: "students" as keyof Stats,
     icon: GraduationCap,
     href: "/dashboard/students",
-    color: "oklch(0.32 0.17 265)",
   },
   {
     title: "Ro'yxatga olish",
     description: "Dasturlar bo'yicha",
     key: "enrollments" as keyof Stats,
     icon: BookOpen,
-    href: "/dashboard/enrollments",
-    color: "oklch(0.42 0.20 263)",
+    href: "/dashboard/students?tab=enrollments",
   },
   {
     title: "Katalog",
@@ -55,7 +53,6 @@ const cards = [
     key: "catalog" as keyof Stats,
     icon: Library,
     href: "/dashboard/catalog",
-    color: "oklch(0.52 0.15 148)",
   },
   {
     title: "Ish beruvchilar",
@@ -63,7 +60,6 @@ const cards = [
     key: "employers" as keyof Stats,
     icon: Building2,
     href: "/dashboard/employers",
-    color: "oklch(0.76 0.165 76)",
   },
   {
     title: "Leadlar",
@@ -71,7 +67,6 @@ const cards = [
     key: "leads" as keyof Stats,
     icon: Briefcase,
     href: "/dashboard/leads",
-    color: "oklch(0.76 0.165 76)",
   },
 ];
 
@@ -86,34 +81,46 @@ export default function DashboardPage() {
     leads: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStats = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const responses = await Promise.all([
+        bot2Api.listSurveys({ page_size: "1" }),
+        bot2Api.listStudents({ page_size: "1" }),
+        bot2Api.listEnrollments({ page_size: "1" }),
+        catalogApi.list(undefined, { page_size: "1", is_active: "true" }),
+        employerApi.list({ page_size: "1" }),
+        leadApi.list({ page_size: "1" }),
+      ]);
+      const [surveys, students, enrollments, catalog, employers, leads] = responses;
+      const errored = responses.find((r) => r.error);
+      if (errored?.error) {
+        const msg = errored.error.message;
+        setError(Array.isArray(msg) ? msg.join(", ") : msg);
+        return;
+      }
+      setStats({
+        surveys: surveys.data?.count ?? 0,
+        students: students.data?.count ?? 0,
+        enrollments: enrollments.data?.count ?? 0,
+        catalog: catalog.data?.count ?? 0,
+        employers: employers.data?.count ?? 0,
+        leads: leads.data?.count ?? 0,
+      });
+    } catch (e) {
+      console.error(e);
+      setError("Ma'lumotlarni yuklab bo'lmadi. Iltimos, qayta urinib ko'ring.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const [surveys, students, enrollments, catalog, employers, leads] = await Promise.all([
-          bot2Api.listSurveys({ page_size: "1" }),
-          bot2Api.listStudents({ page_size: "1" }),
-          bot2Api.listEnrollments({ page_size: "1" }),
-          catalogApi.list(undefined, { page_size: "1", is_active: "true" }),
-          employerApi.list(),
-          leadApi.list(),
-        ]);
-        setStats({
-          surveys: surveys.data?.count ?? 0,
-          students: students.data?.count ?? 0,
-          enrollments: enrollments.data?.count ?? 0,
-          catalog: catalog.data?.count ?? 0,
-          employers: employers.data?.count ?? 0,
-          leads: leads.data?.count ?? 0,
-        });
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchStats();
-  }, []);
+  }, [fetchStats]);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -142,6 +149,9 @@ export default function DashboardPage() {
       />
 
       {/* Institutional register: each figure as a hairline-ruled row */}
+      {error ? (
+        <ErrorDisplay message={error} onRetry={fetchStats} />
+      ) : (
       <section className="overflow-hidden rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-5 py-2.5">
           <span className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -182,6 +192,7 @@ export default function DashboardPage() {
           })}
         </div>
       </section>
+      )}
     </div>
   );
 }

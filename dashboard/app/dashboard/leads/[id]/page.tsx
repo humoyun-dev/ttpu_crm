@@ -7,13 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Copy, Check, UserPlus, RefreshCw } from "lucide-react";
+import { ArrowLeft, Copy, Check, UserPlus, Users, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
+import { ErrorDisplay } from "@/components/error-display";
+import { PageLoading } from "@/components/loading";
+import { EmptyStateRow } from "@/components/empty-state";
+import { useAuth } from "@/lib/auth-context";
+import { LeadAddStudentsDialog } from "../lead-add-students-dialog";
 
 const STATUS_BADGE: Record<LeadStatus, "default" | "secondary" | "destructive" | "outline"> = {
   created: "outline",
@@ -25,21 +27,31 @@ const STATUS_BADGE: Record<LeadStatus, "default" | "secondary" | "destructive" |
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [studentId, setStudentId] = useState("");
-  const [adding, setAdding] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await leadApi.get(id);
-      if (res.error) throw new Error();
+      if (res.error) {
+        setError(
+          Array.isArray(res.error.message)
+            ? res.error.message.join(", ")
+            : res.error.message,
+        );
+        return;
+      }
       setLead(res.data!);
     } catch {
-      toast.error("Ma'lumotlarni yuklashda xatolik");
+      setError("Ma'lumotlarni yuklashda xatolik");
     } finally {
       setLoading(false);
     }
@@ -59,27 +71,27 @@ export default function LeadDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleAddStudent = async () => {
-    if (!studentId.trim()) { toast.error("Student ID kiritilmadi"); return; }
-    setAdding(true);
-    try {
-      const res = await leadApi.addStudent(id, studentId.trim());
-      if (res.error) throw new Error(res.error.message as string);
-      toast.success("Talaba qo'shildi");
-      setShowAdd(false);
-      setStudentId("");
-      load();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Talaba qo'shishda xatolik");
-    } finally {
-      setAdding(false);
+  const handleGenerateSummaries = async () => {
+    setGenerating(true);
+    const res = await leadApi.generateSummaries(id);
+    if (res.error) {
+      toast.error("Xatolik yuz berdi");
+      setGenerating(false);
+      return;
     }
+    toast.success("AI tavsiflar yaratilmoqda — bir necha soniyada tayyor bo'ladi");
+    setTimeout(async () => { await load(); setGenerating(false); }, 15000);
   };
 
-  if (loading) {
+  if (loading) return <PageLoading />;
+
+  if (error) {
     return (
-      <div className="flex items-center justify-center py-20 text-muted-foreground">
-        <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Yuklanmoqda...
+      <div className="mx-auto max-w-3xl py-10">
+        <ErrorDisplay message={error} onRetry={load} />
+        <p className="text-center text-sm text-muted-foreground">
+          <Link href="/dashboard/leads" className="underline">Leadlar ro&apos;yxatiga qaytish</Link>
+        </p>
       </div>
     );
   }
@@ -149,9 +161,17 @@ export default function LeadDetailPage() {
               {students.length}
             </span>
           </CardTitle>
-          <Button size="sm" onClick={() => setShowAdd(true)}>
-            <UserPlus className="mr-2 h-3.5 w-3.5" /> Qo&apos;shish
-          </Button>
+          {isAdmin && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleGenerateSummaries} disabled={generating || students.length === 0}>
+                {generating ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-2 h-3.5 w-3.5" />}
+                AI tavsif
+              </Button>
+              <Button size="sm" onClick={() => setShowAdd(true)}>
+                <UserPlus className="mr-2 h-3.5 w-3.5" /> Qo&apos;shish
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -159,22 +179,24 @@ export default function LeadDetailPage() {
               <TableRow>
                 <TableHead>Student ID</TableHead>
                 <TableHead>Ismi</TableHead>
+                <TableHead>AI tavsif</TableHead>
                 <TableHead className="text-center">Qiziqish</TableHead>
                 <TableHead className="text-center">Yo&apos;naltirildi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {students.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
-                    Hali talaba qo&apos;shilmagan
-                  </TableCell>
-                </TableRow>
+                <EmptyStateRow colSpan={5} icon={Users} title="Hali talaba qo'shilmagan" />
               ) : (
                 students.map(s => (
                   <TableRow key={s.id} className="hover:bg-muted/40">
                     <TableCell className="font-mono text-xs tabular-nums">{s.student_external_id}</TableCell>
                     <TableCell className="text-sm">{s.student_name || "—"}</TableCell>
+                    <TableCell className="max-w-sm">
+                      {s.ai_summary
+                        ? <span className="line-clamp-2 text-xs text-muted-foreground" title={s.ai_summary}>{s.ai_summary}</span>
+                        : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
                     <TableCell className="text-center">
                       <Badge variant={s.employer_interested ? "default" : "outline"} className="text-[11px]">
                         {s.employer_interested ? "Ha" : "Yo'q"}
@@ -193,26 +215,7 @@ export default function LeadDetailPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Talaba qo'shish</DialogTitle>
-          </DialogHeader>
-          <div>
-            <Label>Student ID (tashqi)</Label>
-            <Input
-              value={studentId}
-              onChange={e => setStudentId(e.target.value)}
-              placeholder="Masalan: u2101234"
-              onKeyDown={e => e.key === "Enter" && handleAddStudent()}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdd(false)}>Bekor</Button>
-            <Button onClick={handleAddStudent} disabled={adding}>{adding ? "Qo'shilmoqda..." : "Qo'shish"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <LeadAddStudentsDialog lead={lead} open={showAdd} onOpenChange={setShowAdd} onAdded={load} />
     </div>
   );
 }

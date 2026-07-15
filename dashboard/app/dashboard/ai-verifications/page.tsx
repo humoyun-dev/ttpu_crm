@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ShieldCheck, RefreshCw, Upload, Search, FileText, Check, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -17,33 +17,32 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { TableLoading } from "@/components/loading";
+import { EmptyState } from "@/components/empty-state";
 import { ErrorDisplay } from "@/components/error-display";
 import { PageHeader } from "@/components/page-header";
+import { PaginationBar } from "@/components/ui/pagination-bar";
 import { useAuth } from "@/lib/auth-context";
+import { useSearch } from "@/lib/hooks/use-search";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/api";
 import {
   aiVerifyApi, bot2Api, DocumentVerification, AIVerifyStats,
   AIConfidence, AIDecision, AIDocumentType, Bot2Student,
 } from "@/lib/api";
+import { DOC_TYPE_SHORT_LABELS, AI_STATUS_LABELS } from "@/lib/constants";
 
 const CONF: Record<string, { label: string; cls: string; dot: string }> = {
-  green: { label: "Tasdiqlandi", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300", dot: "bg-emerald-500" },
-  yellow: { label: "Shubhali", cls: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300", dot: "bg-amber-500" },
-  red: { label: "Ko'rib chiqilsin", cls: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300", dot: "bg-red-500" },
+  green: { label: "Tasdiqlandi", cls: "bg-success/15 text-success", dot: "bg-success" },
+  yellow: { label: "Shubhali", cls: "bg-warning/15 text-warning", dot: "bg-warning" },
+  red: { label: "Ko'rib chiqilsin", cls: "bg-destructive/10 text-destructive", dot: "bg-destructive" },
 };
 const DECISION: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending: { label: "Kutilmoqda", variant: "outline" },
   accepted: { label: "Tasdiqlandi", variant: "default" },
   rejected: { label: "Rad etildi", variant: "destructive" },
 };
-const DOCTYPE: Record<string, string> = {
-  cv: "CV", ielts: "IELTS", certificate: "Sertifikat", diploma: "Diplom", other: "Boshqa",
-};
-const STATUS: Record<string, string> = {
-  pending: "Navbatda", processing: "Tahlilda", done: "Tayyor", failed: "Xatolik",
-};
 const ALL = "__all__";
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
 // Texnik maydon nomlarini o'qishli yorliqqa aylantirish (CV / IELTS / sertifikat / diplom).
 const FIELD_LABELS: Record<string, string> = {
@@ -127,46 +126,81 @@ export default function AIVerificationsPage() {
 
   const [stats, setStats] = useState<AIVerifyStats | null>(null);
   const [items, setItems] = useState<DocumentVerification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isAdmin);
   const [error, setError] = useState<string | null>(null);
 
   const [confFilter, setConfFilter] = useState<string>(ALL);
   const [decisionFilter, setDecisionFilter] = useState<string>(ALL);
   const [typeFilter, setTypeFilter] = useState<string>(ALL);
-  const [search, setSearch] = useState("");
+  const { searchTerm, debouncedSearch, setSearch } = useSearch();
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalCount, setTotalCount] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const [selected, setSelected] = useState<DocumentVerification | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const reload = () => setReloadKey((k) => k + 1);
 
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = {
+      page: String(page),
+      page_size: String(pageSize),
+    };
     if (confFilter !== ALL) params.confidence_level = confFilter;
     if (decisionFilter !== ALL) params.final_decision = decisionFilter;
     if (typeFilter !== ALL) params.document_type = typeFilter;
-    if (search.trim()) params.search = search.trim();
+    if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
 
-    const [listRes, statsRes] = await Promise.all([
-      aiVerifyApi.list(params),
-      aiVerifyApi.getStats(),
-    ]);
+    const listRes = await aiVerifyApi.list(params);
+    // Eskirgan javob — yangiroq so'rov yuborilgan, natijani e'tiborsiz qoldiramiz.
+    if (seq !== loadSeq.current) return;
     if (listRes.error) {
+      // Ko'rib chiqilgach ro'yxat qisqaradi va oxirgi sahifa DRF 404 "Invalid page"
+      // qaytaradi — tupik ErrorDisplay o'rniga amaldagi sahifaga tushamiz.
+      if (listRes.error.status === 404 && page > 1) {
+        setPage((p) => Math.max(1, p - 1));
+        return;
+      }
       setError(Array.isArray(listRes.error.message) ? listRes.error.message.join(", ") : listRes.error.message);
       setLoading(false);
       return;
     }
     setItems(listRes.data?.results ?? []);
-    setStats(statsRes.data ?? null);
+    setTotalCount(listRes.data?.count ?? 0);
     setLoading(false);
-  }, [confFilter, decisionFilter, typeFilter, search]);
+  }, [confFilter, decisionFilter, typeFilter, debouncedSearch, page, pageSize]);
 
   useEffect(() => {
-    if (isAdmin) load();
-    else setLoading(false);
+    if (!isAdmin) return;
+    // Filtr/sahifa o'zgarganda ro'yxatni qayta yuklash — load o'zi loading
+    // holatini boshqaradi (eskirgan javoblar seq orqali tashlab yuboriladi).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
   }, [isAdmin, load, reloadKey]);
+
+  // Stats are independent of filters/search — fetch separately so a keystroke
+  // doesn't re-request them. Refreshes on explicit reload (review/upload).
+  useEffect(() => {
+    if (!isAdmin) return;
+    let ignore = false;
+    aiVerifyApi.getStats().then((res) => {
+      if (ignore) return;
+      if (res.error) {
+        toast.error(
+          Array.isArray(res.error.message) ? res.error.message.join(", ") : res.error.message,
+        );
+      }
+      setStats(res.data ?? null);
+    });
+    return () => { ignore = true; };
+  }, [isAdmin, reloadKey]);
 
   if (!isAdmin) return <ErrorDisplay message="Bu bo'lim faqat administratorlar uchun." />;
 
@@ -193,7 +227,7 @@ export default function AIVerificationsPage() {
         {(["green", "yellow", "red"] as const).map((lvl) => (
           <button
             key={lvl}
-            onClick={() => setConfFilter(confFilter === lvl ? ALL : lvl)}
+            onClick={() => { setConfFilter(confFilter === lvl ? ALL : lvl); setPage(1); }}
             className={`rounded-lg border px-4 py-3 text-left transition-colors ${
               confFilter === lvl ? "border-accent-gold bg-accent-gold/5" : "border-border hover:bg-muted/40"
             }`}
@@ -220,17 +254,17 @@ export default function AIVerificationsPage() {
         <div className="relative w-full sm:w-56">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchTerm}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Talaba ismi yoki ID..."
             className="h-9 pl-8 text-sm"
           />
         </div>
-        <FilterSelect value={confFilter} onChange={setConfFilter} placeholder="Toifa"
+        <FilterSelect value={confFilter} onChange={(v) => { setConfFilter(v); setPage(1); }} placeholder="Toifa"
           options={[["green", "Tasdiqlandi"], ["yellow", "Shubhali"], ["red", "Ko'rib chiqilsin"]]} />
-        <FilterSelect value={decisionFilter} onChange={setDecisionFilter} placeholder="Qaror"
+        <FilterSelect value={decisionFilter} onChange={(v) => { setDecisionFilter(v); setPage(1); }} placeholder="Qaror"
           options={[["pending", "Kutilmoqda"], ["accepted", "Tasdiqlandi"], ["rejected", "Rad etildi"]]} />
-        <FilterSelect value={typeFilter} onChange={setTypeFilter} placeholder="Hujjat turi"
+        <FilterSelect value={typeFilter} onChange={(v) => { setTypeFilter(v); setPage(1); }} placeholder="Hujjat turi"
           options={[["cv", "CV"], ["ielts", "IELTS"], ["certificate", "Sertifikat"], ["diploma", "Diplom"], ["other", "Boshqa"]]} />
       </div>
 
@@ -242,8 +276,9 @@ export default function AIVerificationsPage() {
           ) : error ? (
             <div className="p-6"><ErrorDisplay message={error} onRetry={reload} /></div>
           ) : items.length === 0 ? (
-            <p className="py-16 text-center text-sm text-muted-foreground">Hujjat topilmadi</p>
+            <EmptyState icon={FileText} title="Hujjat topilmadi" />
           ) : (
+            <>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -265,7 +300,7 @@ export default function AIVerificationsPage() {
                       <TableCell className="text-sm">
                         <span className="flex items-center gap-1.5">
                           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                          {DOCTYPE[v.document_type] ?? v.document_type}
+                          {DOC_TYPE_SHORT_LABELS[v.document_type] ?? v.document_type}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -289,6 +324,19 @@ export default function AIVerificationsPage() {
                 </TableBody>
               </Table>
             </div>
+
+            {totalCount > pageSize && (
+              <PaginationBar
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
+                onPageChange={setPage}
+                onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+              />
+            )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -380,7 +428,7 @@ function DetailDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4" />
-            {v.student_name || "Hujjat"} — {DOCTYPE[v.document_type] ?? v.document_type}
+            {v.student_name || "Hujjat"} — {DOC_TYPE_SHORT_LABELS[v.document_type] ?? v.document_type}
           </DialogTitle>
         </DialogHeader>
 
@@ -392,7 +440,7 @@ function DetailDialog({
             <Badge variant="secondary" className="text-xs">
               {v.confidence_score != null ? `Ishonch: ${(v.confidence_score * 100).toFixed(0)}%` : "—"}
             </Badge>
-            <Badge variant="outline" className="text-xs">{STATUS[v.status]}</Badge>
+            <Badge variant="outline" className="text-xs">{AI_STATUS_LABELS[v.status]}</Badge>
             <Badge variant={DECISION[v.final_decision].variant} className="text-xs">
               {DECISION[v.final_decision].label}
             </Badge>
@@ -418,7 +466,7 @@ function DetailDialog({
             </div>
           )}
           {v.error_message && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive">
               {v.error_message}
             </div>
           )}
@@ -426,7 +474,7 @@ function DetailDialog({
           {v.flags?.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {v.flags.map((f) => (
-                <Badge key={f} variant="outline" className="border-amber-300 text-xs text-amber-700 dark:text-amber-400">
+                <Badge key={f} variant="outline" className="border-warning/40 text-xs text-warning">
                   ⚠ {f}
                 </Badge>
               ))}
@@ -488,7 +536,7 @@ function DetailDialog({
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
               Rad etish
             </Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={saving} onClick={() => review({ final_decision: "accepted" })}>
+            <Button className="bg-success text-success-foreground hover:bg-success/90" disabled={saving} onClick={() => review({ final_decision: "accepted" })}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
               Tasdiqlash
             </Button>
@@ -513,9 +561,12 @@ function UploadDialog({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!q.trim()) { setResults([]); return; }
     let ignore = false;
     const t = setTimeout(async () => {
+      if (!q.trim()) {
+        if (!ignore) setResults([]);
+        return;
+      }
       const res = await bot2Api.listStudents({ search: q.trim(), page_size: "8" });
       if (!ignore && res.data) setResults(res.data.results);
     }, 300);
@@ -572,7 +623,7 @@ function UploadDialog({
             <Select value={docType} onValueChange={(v) => setDocType(v as AIDocumentType)}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Object.entries(DOCTYPE).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                {Object.entries(DOC_TYPE_SHORT_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

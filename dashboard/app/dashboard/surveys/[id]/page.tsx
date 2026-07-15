@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, User, GraduationCap, FileText,
-  Phone, MapPin, MessageSquare, Pencil, Save, X, Briefcase,
-  Send, Languages, Calendar, Hash, Download, File, ShieldCheck,
-  CheckCircle2, XCircle,
+  MessageSquare, Pencil, Save, X,
+  Languages, Download, File,
+  CheckCircle2, XCircle, RefreshCw, Bot, Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,32 +21,18 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  bot2Api, catalogApi, Bot2SurveyResponse, Bot2Student, Bot2Document, CatalogItem, formatDate,
+  bot2Api, catalogApi, aiVerifyApi, downloadFile,
+  Bot2SurveyResponse, Bot2Student, Bot2Document, CatalogItem, DocumentVerification, formatDate,
 } from "@/lib/api";
 import { formatUzPhone, cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { CONSENT_LABELS, LABEL_TRANSLATIONS, courseYearLabel } from "@/lib/constants";
-
-// Detail sahifasida aniqroq yorliqlar ("Ha"/"Yo'q" emas)
-const EMPLOYMENT_STATUS: Record<string, string> = {
-  employed: "Ishlamoqda",
-  unemployed: "Ishlamaydi",
-};
-
-/* ── Vertical labeled field ── */
-function Field({ label, children, className }: {
-  label: string; children: React.ReactNode; className?: string;
-}) {
-  return (
-    <div className={cn("space-y-1", className)}>
-      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </p>
-      <div className="text-sm font-medium leading-snug text-foreground">{children}</div>
-    </div>
-  );
-}
+import {
+  CONSENT_LABELS, LABEL_TRANSLATIONS, courseYearLabel,
+  EMPLOYMENT_STATUS_LABELS, GENDER_LABELS,
+} from "@/lib/constants";
+import { EmploymentBadge, DocStatusBadge } from "@/components/status-badge";
+import { VerificationCard, Field } from "@/components/verification-card";
 
 /* ── Edit field ── */
 function EditField({ label, value, onChange, type = "text", placeholder }: {
@@ -84,11 +70,30 @@ export default function SurveyDetailPage() {
   const [editConsents, setEditConsents] = useState<Record<string, boolean>>({ want_help: false, share_with_employers: false });
   const [editAnswers, setEditAnswers] = useState<Record<string, string>>({});
 
+  const [verifications, setVerifications] = useState<DocumentVerification[]>([]);
+  const [loadingVerifs, setLoadingVerifs] = useState(false);
+
+  const loadVerifications = useCallback(async (studentId: string, surveyId: string) => {
+    setLoadingVerifs(true);
+    try {
+      const res = await aiVerifyApi.byStudent(studentId, surveyId);
+      if (res.error) return;
+      const list = res.data || [];
+      setVerifications(list);
+    } finally {
+      setLoadingVerifs(false);
+    }
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const surveyRes = await bot2Api.getSurvey(id);
+      // Survey + documents are independent — fetch concurrently.
+      const [surveyRes, docsRes] = await Promise.all([
+        bot2Api.getSurvey(id),
+        bot2Api.listDocuments({ survey: id }),
+      ]);
       if (surveyRes.error) throw new Error(surveyRes.error.message as string);
       if (!surveyRes.data) throw new Error("So'rovnoma topilmadi");
       setSurvey(surveyRes.data);
@@ -96,11 +101,15 @@ export default function SurveyDetailPage() {
       if (surveyRes.data.student_details) {
         setStudent(surveyRes.data.student_details);
         populateStudentForm(surveyRes.data.student_details);
+        loadVerifications(surveyRes.data.student_details.id, id);
       } else if (surveyRes.data.student) {
         const studentRes = await bot2Api.getStudent(surveyRes.data.student);
-        if (studentRes.data) { setStudent(studentRes.data); populateStudentForm(studentRes.data); }
+        if (studentRes.data) {
+          setStudent(studentRes.data);
+          populateStudentForm(studentRes.data);
+          loadVerifications(studentRes.data.id, id);
+        }
       }
-      const docsRes = await bot2Api.listDocuments({ survey: id });
       if (docsRes.data?.results) {
         const seen = new Set<string>();
         setDocuments(docsRes.data.results.filter((d) => {
@@ -109,14 +118,12 @@ export default function SurveyDetailPage() {
           return true;
         }));
       }
-      const regionsRes = await catalogApi.list("region");
-      if (regionsRes.data?.results) setRegions(regionsRes.data.results);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ma'lumotni yuklab bo'lmadi");
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, loadVerifications]);
 
   function populateSurveyForm(s: Bot2SurveyResponse) {
     setEditSurvey({ employment_status: s.employment_status || "", employment_company: s.employment_company || "", employment_role: s.employment_role || "", suggestions: s.suggestions || "", survey_campaign: s.survey_campaign || "", course_year: s.course_year || 1 });
@@ -131,6 +138,15 @@ export default function SurveyDetailPage() {
   }
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Regions are only used by the edit form — fetch lazily when edit mode is
+  // entered (avoids a request on every read-only view).
+  useEffect(() => {
+    if (!editing || regions.length > 0) return;
+    catalogApi.list("region").then((res) => {
+      if (res.data?.results) setRegions(res.data.results);
+    });
+  }, [editing, regions.length]);
 
   const handleSave = async () => {
     if (!survey) return;
@@ -153,6 +169,15 @@ export default function SurveyDetailPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  /* ── Autentifikatsiyalangan hujjat yuklab olish (token yangilanishi bilan) ── */
+  const handleDownload = async (doc: Bot2Document) => {
+    const { error: dlError } = await downloadFile(
+      bot2Api.documentDownloadUrl(doc.id),
+      doc.original_filename || undefined,
+    );
+    if (dlError) toast.error(dlError);
   };
 
   if (loading) return <PageLoading />;
@@ -182,7 +207,7 @@ export default function SurveyDetailPage() {
     if (isNaN(num)) return <span>{String(value)}</span>;
     return (
       <div className="flex items-center gap-0.5">
-        {[1,2,3,4,5].map(s => <span key={s} className={num >= s ? "text-amber-400" : "text-muted-foreground/30"}>★</span>)}
+        {[1,2,3,4,5].map(s => <span key={s} className={num >= s ? "text-accent-gold" : "text-muted-foreground/30"}>★</span>)}
         <span className="ml-1 font-mono text-xs tabular-nums text-muted-foreground">({num}/5)</span>
       </div>
     );
@@ -231,22 +256,8 @@ export default function SurveyDetailPage() {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-lg font-semibold tracking-tight">{studentFullName || "—"}</span>
-            <Badge
-              variant={isEmployed ? "default" : "secondary"}
-              className={cn("text-xs", isEmployed && "bg-emerald-600 hover:bg-emerald-600 dark:bg-emerald-700")}
-            >
-              {EMPLOYMENT_STATUS[survey.employment_status] || survey.employment_status || "—"}
-            </Badge>
-            {docStatus === "verified" && (
-              <Badge className="gap-1 bg-sky-600 hover:bg-sky-600 text-xs dark:bg-sky-700">
-                <ShieldCheck className="h-3 w-3" />Tasdiqlangan
-              </Badge>
-            )}
-            {docStatus === "pending" && (
-              <Badge variant="outline" className="gap-1 text-xs text-amber-600 border-amber-300">
-                Ko&apos;rib chiqilmoqda
-              </Badge>
-            )}
+            <EmploymentBadge status={survey.employment_status} />
+            {docStatus !== "no_docs" && <DocStatusBadge status={docStatus} />}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
             {student?.student_external_id && (
@@ -309,7 +320,7 @@ export default function SurveyDetailPage() {
             ) : (
               <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                 <Field label="Jins">
-                  {student?.gender === "male" ? "Erkak" : student?.gender === "female" ? "Ayol" : "—"}
+                  {GENDER_LABELS[student?.gender || "unspecified"] || "—"}
                 </Field>
                 <Field label="Viloyat">{regionName || "—"}</Field>
                 <Field label="Telefon" className="col-span-2">
@@ -342,9 +353,11 @@ export default function SurveyDetailPage() {
                 )}
                 <Field label="Hujjat holati">
                   {docStatus === "verified" ? (
-                    <span className="font-medium text-emerald-600 dark:text-emerald-400">✓ Tasdiqlangan</span>
+                    <span className="font-medium text-success">✓ Tasdiqlangan</span>
                   ) : docStatus === "pending" ? (
-                    <span className="font-medium text-amber-600">Ko&apos;rib chiqilmoqda</span>
+                    <span className="font-medium text-warning">Ko&apos;rib chiqilmoqda</span>
+                  ) : docStatus === "rejected" ? (
+                    <span className="font-medium text-destructive">✗ Rad etildi</span>
                   ) : (
                     <span className="text-muted-foreground">Hujjat yo&apos;q</span>
                   )}
@@ -394,7 +407,7 @@ export default function SurveyDetailPage() {
                 <div className={cn(
                   "rounded-lg border px-4 py-3",
                   isEmployed
-                    ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30"
+                    ? "border-success/30 bg-success/10"
                     : "border-border bg-muted/40",
                 )}>
                   <p className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
@@ -402,9 +415,9 @@ export default function SurveyDetailPage() {
                   </p>
                   <p className={cn(
                     "text-base font-semibold",
-                    isEmployed ? "text-emerald-700 dark:text-emerald-400" : "text-foreground",
+                    isEmployed ? "text-success" : "text-foreground",
                   )}>
-                    {EMPLOYMENT_STATUS[survey.employment_status] || survey.employment_status || "—"}
+                    {EMPLOYMENT_STATUS_LABELS[survey.employment_status] || survey.employment_status || "—"}
                   </p>
                 </div>
 
@@ -460,7 +473,7 @@ export default function SurveyDetailPage() {
                 {Object.entries(editConsents).map(([key, value]) => (
                   <div key={key} className="flex items-center justify-between rounded-lg border px-3 py-2.5">
                     <span className="text-sm">{CONSENT_LABELS[key] || key.replace(/_/g, " ")}</span>
-                    <Button variant={value ? "default" : "outline"} size="sm" className={cn("h-7 min-w-14 text-xs", value && "bg-emerald-600 hover:bg-emerald-700")}
+                    <Button variant={value ? "default" : "outline"} size="sm" className={cn("h-7 min-w-14 text-xs", value && "bg-success text-success-foreground hover:bg-success/90")}
                       onClick={() => setEditConsents(p => ({ ...p, [key]: !value }))}>
                       {value ? "Ha" : "Yo'q"}
                     </Button>
@@ -479,18 +492,18 @@ export default function SurveyDetailPage() {
                       <div className={cn(
                         "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
                         value
-                          ? "bg-emerald-100 dark:bg-emerald-950"
+                          ? "bg-success/15"
                           : "bg-muted",
                       )}>
                         {value
-                          ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                          ? <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                           : <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
                         }
                       </div>
                       <span className="flex-1 text-sm">{label}</span>
                       <span className={cn(
                         "font-mono text-xs font-semibold tabular-nums",
-                        value ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+                        value ? "text-success" : "text-muted-foreground",
                       )}>
                         {value ? "Ha" : "Yo'q"}
                       </span>
@@ -502,11 +515,11 @@ export default function SurveyDetailPage() {
                   .filter(([k]) => !["want_help", "share_with_employers"].includes(k))
                   .map(([key, value]) => (
                     <div key={key} className="flex items-center gap-3 py-3">
-                      <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full", value ? "bg-emerald-100 dark:bg-emerald-950" : "bg-muted")}>
-                        {value ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <XCircle className="h-3.5 w-3.5 text-muted-foreground" />}
+                      <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full", value ? "bg-success/15" : "bg-muted")}>
+                        {value ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <XCircle className="h-3.5 w-3.5 text-muted-foreground" />}
                       </div>
                       <span className="flex-1 text-sm">{CONSENT_LABELS[key] || key.replace(/_/g, " ")}</span>
-                      <span className={cn("font-mono text-xs font-semibold", value ? "text-emerald-600" : "text-muted-foreground")}>{value ? "Ha" : "Yo'q"}</span>
+                      <span className={cn("font-mono text-xs font-semibold", value ? "text-success" : "text-muted-foreground")}>{value ? "Ha" : "Yo'q"}</span>
                     </div>
                   ))}
               </div>
@@ -588,11 +601,10 @@ export default function SurveyDetailPage() {
                   : doc.doc_type === "employment" ? "Ish joyi hujjati"
                   : "Til sertifikati";
                 const emoji = doc.doc_type === "cv" ? "📄" : doc.doc_type === "employment" ? "🏢" : "📜";
-                const downloadUrl = bot2Api.documentDownloadUrl(doc.id);
                 const sizeKb = doc.file_size ? Math.round(doc.file_size / 1024) : null;
                 return (
-                  <a key={doc.id} href={downloadUrl} target="_blank" rel="noreferrer"
-                    className="group flex items-center gap-3 rounded-lg border bg-muted/20 p-3 transition-colors hover:bg-muted/40">
+                  <button key={doc.id} type="button" onClick={() => handleDownload(doc)}
+                    className="group flex items-center gap-3 rounded-lg border bg-muted/20 p-3 text-left transition-colors hover:bg-muted/40">
                     <FileText className="h-8 w-8 shrink-0 text-primary/60" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{emoji} {label}</p>
@@ -602,7 +614,7 @@ export default function SurveyDetailPage() {
                       <p className="text-xs text-muted-foreground">{formatDate(doc.created_at)}</p>
                     </div>
                     <Download className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
-                  </a>
+                  </button>
                 );
               })}
             </div>
@@ -646,6 +658,57 @@ export default function SurveyDetailPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Hujjat tekshiruvi (AI Verification) ── */}
+      {student && (
+        <Card>
+          <CardHeader className="pb-3 pt-4 px-5">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                <Bot className="h-3.5 w-3.5" />Hujjat tekshiruvi
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                disabled={loadingVerifs}
+                aria-label="Yangilash"
+                title="Yangilash"
+                onClick={() => loadVerifications(student.id, id)}
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", loadingVerifs && "animate-spin")} />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="px-5 pb-5">
+            {loadingVerifs ? (
+              <div className="flex items-center justify-center py-8 gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />Yuklanmoqda…
+              </div>
+            ) : verifications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-2 text-sm text-muted-foreground">
+                <FileText className="h-8 w-8 opacity-30" />
+                <span>Hujjat tekshiruvi topilmadi</span>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {verifications.map((v) => (
+                  <VerificationCard
+                    key={v.id}
+                    verification={v}
+                    canReview={isAdmin}
+                    onReviewed={(updated) =>
+                      setVerifications((prev) =>
+                        prev.map((x) => (x.id === updated.id ? updated : x)),
+                      )
+                    }
+                  />
+                ))}
               </div>
             )}
           </CardContent>

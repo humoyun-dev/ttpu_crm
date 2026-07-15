@@ -10,15 +10,15 @@ import {
   Loader2,
   BarChart3,
   GraduationCap,
-  BookOpen,
   Building2,
   Briefcase,
   FileText,
   TrendingUp,
   LayoutDashboard,
-  Upload,
   Coins,
   ShieldCheck,
+  Megaphone,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -49,8 +49,6 @@ const NAV_SECTIONS = [
       { title: "So'rovnomalar", href: "/dashboard/surveys", icon: Users },
       { title: "Talabalar", href: "/dashboard/students", icon: GraduationCap },
       { title: "AI Tekshiruv", href: "/dashboard/ai-verifications", icon: ShieldCheck },
-      { title: "Ro'yxatga olish", href: "/dashboard/enrollments", icon: BookOpen },
-      { title: "Import", href: "/dashboard/import", icon: Upload },
     ],
   },
   {
@@ -68,6 +66,9 @@ const NAV_SECTIONS = [
       { title: "Katalog", href: "/dashboard/catalog", icon: FolderTree },
       { title: "Ish beruvchilar", href: "/dashboard/employers", icon: Building2 },
       { title: "Leadlar", href: "/dashboard/leads", icon: Briefcase },
+      // Vakansiyalar API'si to'liq admin-only — viewer'ga ko'rsatilmaydi.
+      { title: "Vakansiyalar", href: "/dashboard/vacancies", icon: Megaphone, adminOnly: true },
+      { title: "Amaliyot", href: "/dashboard/internships", icon: ClipboardList },
       { title: "Hujjatlar", href: "/dashboard/documents", icon: FileText },
     ],
   },
@@ -76,6 +77,7 @@ const NAV_SECTIONS = [
 function SidebarContent() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [loggingOut, setLoggingOut] = useState(false);
 
   const handleLogout = async () => {
@@ -106,13 +108,18 @@ function SidebarContent() {
 
       {/* Nav sections */}
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-        {NAV_SECTIONS.map((section) => (
+        {NAV_SECTIONS.map((section) => {
+          const visibleItems = section.items.filter(
+            (item) => !(item as { adminOnly?: boolean }).adminOnly || isAdmin,
+          );
+          if (visibleItems.length === 0) return null;
+          return (
           <div key={section.label}>
             <p className="mb-1.5 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/40">
               {section.label}
             </p>
             <div className="space-y-0.5">
-              {section.items.map((item) => {
+              {visibleItems.map((item) => {
                 const isActive = (item as { exact?: boolean }).exact
                   ? pathname === item.href
                   : pathname === item.href || pathname.startsWith(item.href + "/");
@@ -138,7 +145,8 @@ function SidebarContent() {
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* User */}

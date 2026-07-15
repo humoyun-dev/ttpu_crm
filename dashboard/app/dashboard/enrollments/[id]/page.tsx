@@ -25,6 +25,7 @@ import { useAuth } from "@/lib/auth-context";
 import { ArrowLeft, Save } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { PageLoading } from "@/components/loading";
 
 function currentAcademicYear(): string {
   const now = new Date();
@@ -100,7 +101,7 @@ export default function EnrollmentFormPage() {
           ? res.error.message.join(", ")
           : res.error.message,
       );
-      router.push("/dashboard/enrollments");
+      router.push("/dashboard/students?tab=enrollments");
     }
     setLoading(false);
   };
@@ -142,16 +143,8 @@ export default function EnrollmentFormPage() {
       return;
     }
 
-    router.push("/dashboard/enrollments");
+    router.push("/dashboard/students?tab=enrollments");
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
@@ -163,7 +156,7 @@ export default function EnrollmentFormPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => router.push("/dashboard/enrollments")}
+            onClick={() => router.push("/dashboard/students?tab=enrollments")}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Orqaga
@@ -171,6 +164,10 @@ export default function EnrollmentFormPage() {
         }
       />
 
+      {loading ? (
+        <PageLoading />
+      ) : (
+        <>
       {!isNew && (
         <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-border bg-card">
           <div className="px-4 py-3">
@@ -336,7 +333,7 @@ export default function EnrollmentFormPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push("/dashboard/enrollments")}
+                onClick={() => router.push("/dashboard/students?tab=enrollments")}
               >
                 Bekor qilish
               </Button>
@@ -350,6 +347,8 @@ export default function EnrollmentFormPage() {
           </form>
         </CardContent>
       </Card>
+        </>
+      )}
     </div>
   );
 }

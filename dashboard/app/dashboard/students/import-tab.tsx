@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { rosterApi, RosterImportResult } from "@/lib/api";
-import { PageHeader } from "@/components/page-header";
 
 type ImportResult = RosterImportResult;
 
@@ -29,7 +28,7 @@ const COLUMNS: { name: string; required?: boolean; desc: string; example: string
   { name: "is_active", desc: "Aktivmi — true / false", example: "true" },
 ];
 
-export default function ImportPage() {
+export function ImportTab() {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -73,7 +72,10 @@ export default function ImportPage() {
       }
       setResult(data);
       if (data.errors?.length === 0) {
-        toast.success(`✓ Import yakunlandi: ${data.created} yangi, ${data.updated} yangilandi`);
+        toast.success(
+          `✓ Import yakunlandi: ${data.created} yangi, ${data.updated} yangilandi` +
+          (data.skipped ? `, ${data.skipped} o'tkazib yuborildi` : ""),
+        );
       } else {
         toast.warning(`Import yakunlandi, lekin ${data.errors.length} ta xato bor`);
       }
@@ -86,12 +88,6 @@ export default function ImportPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
-      <PageHeader
-        eyebrow="Talabalar / Import"
-        title="Talabalar importi"
-        description="Excel (.xlsx / .xls) yoki CSV fayldan talabalar ro'yxatini bazaga yuklang."
-      />
-
       {/* Upload — asosiy amal */}
       <section className="space-y-3">
         <div
@@ -145,18 +141,18 @@ export default function ImportPage() {
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               {result.errors.length === 0 ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
+                <CheckCircle2 className="h-5 w-5 text-success" />
               ) : (
-                <AlertCircle className="h-5 w-5 text-amber-500" />
+                <AlertCircle className="h-5 w-5 text-warning" />
               )}
               <CardTitle>Import natijasi</CardTitle>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
             {/* Reestr-uslubidagi statistika */}
-            <div className="grid grid-cols-3 overflow-hidden rounded-md border border-border">
+            <div className={`grid ${result.skipped ? "grid-cols-4" : "grid-cols-3"} overflow-hidden rounded-md border border-border`}>
               <div className="px-4 py-3 text-center">
-                <p className="font-mono text-2xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-500">
+                <p className="font-mono text-2xl font-semibold tabular-nums text-success">
                   {result.created}
                 </p>
                 <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Yangi</p>
@@ -165,6 +161,12 @@ export default function ImportPage() {
                 <p className="font-mono text-2xl font-semibold tabular-nums text-foreground">{result.updated}</p>
                 <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Yangilandi</p>
               </div>
+              {result.skipped ? (
+                <div className="border-l border-border px-4 py-3 text-center">
+                  <p className="font-mono text-2xl font-semibold tabular-nums text-muted-foreground">{result.skipped}</p>
+                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">O&apos;tkazildi</p>
+                </div>
+              ) : null}
               <div className="border-l border-border px-4 py-3 text-center">
                 <p
                   className={`font-mono text-2xl font-semibold tabular-nums ${

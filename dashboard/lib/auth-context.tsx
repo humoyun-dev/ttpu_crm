@@ -34,6 +34,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
 
+    const pathname =
+      typeof window !== "undefined" ? window.location.pathname : "";
+    // Ommaviy sahifalar: /l/<token> (ish beruvchi havolasi) — bu yerda
+    // token talab qilinmaydi, /auth/me chaqirilmaydi va redirect bo'lmaydi.
+    const isPublicAccessLink = pathname === "/l" || pathname.startsWith("/l/");
+    // Faqat himoyalangan /dashboard yo'llaridan /login ga yo'naltiramiz.
+    const isProtectedPath = pathname.startsWith("/dashboard");
+
+    if (isPublicAccessLink) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     // Skip the /auth/me call entirely when there are no stored tokens
     // to avoid a guaranteed 401 console error.
     const hasToken =
@@ -44,8 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!hasToken) {
       setUser(null);
       setLoading(false);
-      const pathname = window?.location?.pathname ?? "";
-      if (pathname !== "/login") {
+      if (isProtectedPath) {
         router.replace("/login");
       }
       return;
@@ -58,8 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(res.data);
     } else {
       setUser(null);
-      // Token invalid yoki 401 - login sahifasiga yo'naltirish
-      if (res.error?.code === "UNAUTHORIZED") {
+      // Token invalid yoki 401 - faqat himoyalangan sahifadan yo'naltirish
+      if (res.error?.code === "UNAUTHORIZED" && isProtectedPath) {
         router.replace("/login");
       }
     }

@@ -5,6 +5,7 @@ import { Coins, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageLoading } from "@/components/loading";
+import { EmptyState } from "@/components/empty-state";
 import { ErrorDisplay } from "@/components/error-display";
 import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/lib/auth-context";
@@ -25,11 +26,7 @@ function usd(value: string | number, dp = 4): string {
 /* Yengil inline SVG ustun grafik — tashqi kutubxonasiz. */
 function CostBars({ days }: { days: AIUsageDaily["days"] }) {
   if (days.length === 0) {
-    return (
-      <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-        Hali ma&apos;lumot yo&apos;q
-      </div>
-    );
+    return <EmptyState icon={Coins} title="Hali ma'lumot yo'q" />;
   }
   const costs = days.map((d) => parseFloat(d.cost_usd || "0"));
   const max = Math.max(...costs, 0.0000001);
@@ -72,7 +69,7 @@ function CostBars({ days }: { days: AIUsageDaily["days"] }) {
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="border-l border-border px-4 py-3.5 first:border-l-0">
+    <div className="bg-card px-4 py-3.5">
       <p
         className={`font-mono text-2xl font-semibold tabular-nums tracking-tight ${
           accent ? "text-accent-gold" : "text-foreground"
@@ -98,6 +95,7 @@ export default function AICostsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!isAdmin) return;
     setLoading(true);
     setError(null);
     const [s, d, e] = await Promise.all([
@@ -114,12 +112,15 @@ export default function AICostsPage() {
     setDaily(d.data ?? null);
     setEstimate(e.data ?? null);
     setLoading(false);
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (isAdmin) load();
-    else setLoading(false);
-  }, [isAdmin, load]);
+    // Sahifa yuklanganda bir marta ma'lumot olamiz. load() o'zida admin
+    // tekshiruvi bor; non-adminlar pastda `!isAdmin` shohobchasida qaytariladi.
+    // (fetch-on-mount — bu qoida uchun ma'lum "false positive".)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
   if (!isAdmin) {
     return (
@@ -146,7 +147,7 @@ export default function AICostsPage() {
       />
 
       {/* Asosiy ko'rsatkichlar */}
-      <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-border md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-5">
         <Stat label="Jami" value={usd(s?.total_cost_usd ?? "0", 4)} accent />
         <Stat label="Bu oy" value={usd(s?.this_month_cost_usd ?? "0", 4)} />
         <Stat label="Bugun" value={usd(s?.today_cost_usd ?? "0", 4)} />
@@ -178,7 +179,7 @@ export default function AICostsPage() {
           </CardHeader>
           <CardContent>
             {(s?.by_model?.length ?? 0) === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Ma&apos;lumot yo&apos;q</p>
+              <EmptyState icon={Coins} title="Hali ma'lumot yo'q" />
             ) : (
               <div className="divide-y">
                 {s!.by_model.map((m) => (
