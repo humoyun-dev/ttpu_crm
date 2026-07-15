@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   ArrowLeft, User, GraduationCap, FileText, MessageSquare,
-  ShieldCheck, Bot, Loader2, Download, ExternalLink, Pencil, RefreshCw, Sparkles,
+  ShieldCheck, Bot, Loader2, Download, ExternalLink, Pencil, RefreshCw, Sparkles, AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -200,6 +200,11 @@ export default function StudentDetailPage() {
                 Rad etildi
               </Badge>
             )}
+            {!roster.birth_date && (
+              <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-xs">
+                <AlertTriangle className="h-3 w-3" />Tug&apos;ilgan sana yo&apos;q
+              </Badge>
+            )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="font-mono text-xs text-muted-foreground tabular-nums">
@@ -239,7 +244,11 @@ export default function StudentDetailPage() {
                 {GENDER_LABELS[student?.gender || "unspecified"] || "—"}
               </Field>
               <Field label="Tug'ilgan sana">
-                {roster.birth_date ? formatDate(roster.birth_date) : "—"}
+                {roster.birth_date ? formatDate(roster.birth_date) : (
+                  <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-xs">
+                    <AlertTriangle className="h-3 w-3" />Kiritilmagan
+                  </Badge>
+                )}
               </Field>
               <Field label="Telefon" className="col-span-2">
                 {student?.phone ? (
