@@ -24,6 +24,8 @@ import { bot2Api, catalogApi, CatalogItem, ProgramEnrollment } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { ArrowLeft, Save } from "lucide-react";
 import { toast } from "sonner";
+import { PageHeader } from "@/components/page-header";
+import { PageLoading } from "@/components/loading";
 
 function currentAcademicYear(): string {
   const now = new Date();
@@ -99,7 +101,7 @@ export default function EnrollmentFormPage() {
           ? res.error.message.join(", ")
           : res.error.message,
       );
-      router.push("/dashboard/enrollments");
+      router.push("/dashboard/students?tab=enrollments");
     }
     setLoading(false);
   };
@@ -141,75 +143,72 @@ export default function EnrollmentFormPage() {
       return;
     }
 
-    router.push("/dashboard/enrollments");
+    router.push("/dashboard/students?tab=enrollments");
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.push("/dashboard/enrollments")}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Orqaga
-        </Button>
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">
-            {isNew ? "Yangi talabalar soni" : "Tahrirlash"}
-          </h2>
-          <p className="text-muted-foreground">
-            Program va kurs bo'yicha umumiy talabalar sonini kiriting
-          </p>
+    <div className="mx-auto max-w-3xl space-y-8">
+      <PageHeader
+        eyebrow="Talabalar / Ro'yxatga olish"
+        title={isNew ? "Yangi ro'yxat" : "Ro'yxatni tahrirlash"}
+        description="Yo'nalish va kurs bo'yicha umumiy talabalar sonini kiriting — analitika shu raqamlardan hisoblanadi."
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push("/dashboard/students?tab=enrollments")}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Orqaga
+          </Button>
+        }
+      />
+
+      {loading ? (
+        <PageLoading />
+      ) : (
+        <>
+      {!isNew && (
+        <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-border bg-card">
+          <div className="px-4 py-3">
+            <p className="font-mono text-2xl font-semibold tabular-nums text-foreground">
+              {form.student_count ?? 0}
+            </p>
+            <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              Jami talabalar
+            </p>
+          </div>
+          <div className="border-l border-border px-4 py-3">
+            <p className="font-mono text-2xl font-semibold tabular-nums text-accent-gold">
+              {form.responded_count ?? 0}
+            </p>
+            <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              Ishtirok etganlar
+            </p>
+          </div>
+          <div className="border-l border-border px-4 py-3">
+            <p className="font-mono text-2xl font-semibold tabular-nums text-foreground">
+              {(form.coverage_percent === undefined
+                ? 0
+                : form.coverage_percent
+              ).toFixed(1)}
+              %
+            </p>
+            <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              Qamrov
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       <Card>
         <CardHeader>
           <CardTitle>Ma&apos;lumot</CardTitle>
           <CardDescription>
-            Analytics shu raqamlardan hisoblanadi
+            Yo&apos;nalish, kurs va talabalar sonini belgilang
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!isNew && (
-            <div className="mb-6 grid gap-4 md:grid-cols-3">
-              <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">Jami talabalar</p>
-                <p className="text-2xl font-semibold">
-                  {form.student_count ?? 0}
-                </p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">
-                  Ishtirok etganlar
-                </p>
-                <p className="text-2xl font-semibold text-primary">
-                  {form.responded_count ?? 0}
-                </p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">Qamrov</p>
-                <p className="text-2xl font-semibold">
-                  {(form.coverage_percent === undefined
-                    ? 0
-                    : form.coverage_percent
-                  ).toFixed(1)}
-                  %
-                </p>
-              </div>
-            </div>
-          )}
-
           <form onSubmit={submit} className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-2">
@@ -275,6 +274,7 @@ export default function EnrollmentFormPage() {
                   id="student_count"
                   type="number"
                   min={0}
+                  className="font-mono tabular-nums"
                   value={String(form.student_count ?? 0)}
                   onChange={(e) =>
                     setForm((s) => ({
@@ -289,23 +289,12 @@ export default function EnrollmentFormPage() {
                 <Label htmlFor="academic_year">O&apos;quv yili</Label>
                 <Input
                   id="academic_year"
+                  className="font-mono tabular-nums"
                   value={String(form.academic_year ?? currentAcademicYear())}
                   onChange={(e) =>
                     setForm((s) => ({ ...s, academic_year: e.target.value }))
                   }
                   placeholder={currentAcademicYear()}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="campaign">Kampaniya</Label>
-                <Input
-                  id="campaign"
-                  value={String(form.campaign ?? "default")}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, campaign: e.target.value }))
-                  }
-                  placeholder="default"
                 />
               </div>
 
@@ -344,7 +333,7 @@ export default function EnrollmentFormPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push("/dashboard/enrollments")}
+                onClick={() => router.push("/dashboard/students?tab=enrollments")}
               >
                 Bekor qilish
               </Button>
@@ -358,6 +347,8 @@ export default function EnrollmentFormPage() {
           </form>
         </CardContent>
       </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -44,6 +44,11 @@ class LeadStudent(BaseModel):
     )
     employer_interested = models.BooleanField(default=False)
     forwarded = models.BooleanField(default=False)
+    # Korxona sahifasi uchun AI tahlil (Gemini) — fon-jarayonda yaratiladi.
+    # ai_summary = qisqa sarlavha (jadval uchun); ai_profile = strukturali (HR uchun).
+    ai_summary = models.TextField(blank=True)
+    ai_profile = models.JSONField(default=dict, blank=True)
+    ai_summary_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -57,7 +62,8 @@ class LeadStudent(BaseModel):
 class AccessLink(BaseModel):
     lead = models.OneToOneField(Lead, on_delete=models.CASCADE, related_name="access_link")
     token = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True)
-    expires_at = models.DateTimeField()
+    # Har bir ochiq (public) so'rovda filtrlanadi — indeks kerak.
+    expires_at = models.DateTimeField(db_index=True)
     revoked = models.BooleanField(default=False)
 
     def is_valid(self) -> bool:
@@ -108,6 +114,15 @@ class FollowUp(BaseModel):
         indexes = [
             models.Index(fields=["next_send_at"]),
             models.Index(fields=["stage"]),
+        ]
+        constraints = [
+            # Bitta lead_student uchun bir vaqtda faqat bitta faol (DONE bo'lmagan)
+            # follow-up bo'lishi mumkin — dublikat savollar oldini oladi.
+            models.UniqueConstraint(
+                fields=["lead_student"],
+                condition=~models.Q(stage="done"),
+                name="uq_followup_active_per_lead_student",
+            ),
         ]
 
     def __str__(self) -> str:

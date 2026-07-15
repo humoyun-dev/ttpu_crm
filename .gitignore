@@ -63,3 +63,13 @@ bot2_service/data/*.json
 local_settings.py
 staticfiles/
 media/
+
+# Data exports — student rosters etc. contain PII, never commit
+# (e.g. "All Students.xlsx"). Force-add a specific fixture if ever needed.
+*.xlsx
+*.xls
+*.csv
+
+# Next.js build output (stray root-level artifact; dashboard/.next is ignored separately)
+.next/
+

@@ -16,6 +16,9 @@ def drop_constraints_safe(apps, schema_editor):
                 cursor.execute(
                     f"ALTER TABLE catalog_catalogitem DROP CONSTRAINT IF EXISTS {name};"
                 )
+                # UniqueConstraint(condition=…) creates a partial index in PostgreSQL,
+                # not a regular constraint — must also drop it as an index.
+                cursor.execute(f"DROP INDEX IF EXISTS {name};")
         elif conn.vendor == "sqlite":
             # SQLite uses partial indexes for UniqueConstraint(condition=…);
             # DROP INDEX IF EXISTS removes them without erroring when absent.

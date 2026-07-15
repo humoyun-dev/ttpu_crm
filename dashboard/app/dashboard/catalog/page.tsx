@@ -61,11 +61,13 @@ import {
   CatalogItem,
   CatalogType,
   CATALOG_TYPES_INFO,
-  CatalogTypeInfo,
   formatDate,
 } from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { useSearch } from "@/lib/hooks/use-search";
+import { PageHeader } from "@/components/page-header";
+import { PaginationBar } from "@/components/ui/pagination-bar";
 import {
   Select,
   SelectContent,
@@ -84,14 +86,20 @@ interface CatalogFormData {
   meta: string;
 }
 
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
+
 export default function CatalogPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  const [activeTab, setActiveTab] = useState<CatalogType>("program");
+  const [activeTab, setActiveTab] = useState<CatalogType>("direction");
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [reloadKey, setReloadKey] = useState(0);
+  const { searchTerm, debouncedSearch, setSearch, reset: resetSearch } = useSearch();
 
   // Dialog states
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -99,7 +107,7 @@ export default function CatalogPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
   const [formData, setFormData] = useState<CatalogFormData>({
-    type: "program",
+    type: "direction",
     name: "",
     name_uz: "",
     name_ru: "",
@@ -112,40 +120,39 @@ export default function CatalogPage() {
     CATALOG_TYPES_INFO.find((t) => t.value === formData.type) ||
     CATALOG_TYPES_INFO[0];
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await catalogApi.list(activeTab);
-      if (res.error) throw new Error(res.error.message as string);
-      setItems(res.data?.results || []);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const fetchData = useCallback(() => setReloadKey((k) => k + 1), []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    let ignore = false;
+    const params: Record<string, string> = {
+      page: String(page),
+      page_size: String(pageSize),
+    };
+    if (debouncedSearch) params.search = debouncedSearch;
 
-  const filteredItems = items.filter((item) => {
-    if (!search) return true;
-    const searchLower = search.toLowerCase();
-    return (
-      item.name?.toLowerCase().includes(searchLower) ||
-      item.name_uz?.toLowerCase().includes(searchLower) ||
-      item.name_ru?.toLowerCase().includes(searchLower) ||
-      item.name_en?.toLowerCase().includes(searchLower) ||
-      item.description?.toLowerCase().includes(searchLower)
-    );
-  });
+    (async () => {
+      setLoading(true);
+      setError(null);
+      const res = await catalogApi.list(activeTab, params);
+      if (ignore) return;
+      if (res.error) {
+        setError(
+          Array.isArray(res.error.message)
+            ? res.error.message.join(", ")
+            : res.error.message || "Ma'lumotlarni yuklab bo'lmadi",
+        );
+        setLoading(false);
+        return;
+      }
+      setItems(res.data?.results || []);
+      setTotalCount(res.data?.count ?? 0);
+      setLoading(false);
+    })();
+    return () => { ignore = true; };
+  }, [activeTab, page, pageSize, debouncedSearch, reloadKey]);
 
-  const resetForm = (type: CatalogType = "program") => {
+  const resetForm = (type: CatalogType = "direction") => {
     setFormData({
       type,
       name: "",
@@ -178,8 +185,7 @@ export default function CatalogPage() {
         }
       }
 
-      const payload: Record<string, unknown> = {
-        type: formData.type,
+      const payload: Parameters<typeof catalogApi.create>[1] = {
         name: formData.name_uz,
         name_uz: formData.name_uz,
         name_ru: formData.name_ru,
@@ -190,20 +196,13 @@ export default function CatalogPage() {
         payload.meta = metadata;
       }
 
-      const res = await catalogApi.create(formData.type, payload as any);
+      const res = await catalogApi.create(formData.type, payload);
 
       if (res.error) {
-        const details = (res.error as any).details;
-        if (details && typeof details === "object") {
-          const msgs = Object.entries(details)
-            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-            .join("; ");
-          throw new Error(msgs || String(res.error.message));
-        }
         throw new Error(String(res.error.message || "Xatolik yuz berdi"));
       }
 
-      toast.success("✓ Muvaffaqiyatli yaratildi");
+      toast.success("Muvaffaqiyatli yaratildi");
       setCreateDialogOpen(false);
       resetForm(activeTab);
       fetchData();
@@ -236,7 +235,7 @@ export default function CatalogPage() {
         }
       }
 
-      const updatePayload: Record<string, unknown> = {
+      const updatePayload: Parameters<typeof catalogApi.update>[2] = {
         name: formData.name_uz,
         name_uz: formData.name_uz,
         name_ru: formData.name_ru,
@@ -250,21 +249,14 @@ export default function CatalogPage() {
       const res = await catalogApi.update(
         formData.type,
         selectedItem.id,
-        updatePayload as any,
+        updatePayload,
       );
 
       if (res.error) {
-        const details = (res.error as any).details;
-        if (details && typeof details === "object") {
-          const msgs = Object.entries(details)
-            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-            .join("; ");
-          throw new Error(msgs || String(res.error.message));
-        }
         throw new Error(String(res.error.message || "Xatolik yuz berdi"));
       }
 
-      toast.success("✓ Muvaffaqiyatli yangilandi");
+      toast.success("Muvaffaqiyatli yangilandi");
       setEditDialogOpen(false);
       resetForm(activeTab);
       fetchData();
@@ -316,30 +308,33 @@ export default function CatalogPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Katalog</h1>
-          <p className="text-muted-foreground">Ma'lumotlar bazasi katalogi</p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={fetchData} variant="outline" size="sm">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Yangilash
-          </Button>
-          {isAdmin && (
-            <Button onClick={() => setCreateDialogOpen(true)} size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Yangi qo'shish
+      <PageHeader
+        eyebrow="Boshqaruv / Katalog"
+        title="Katalog"
+        description="Ma'lumotlar bazasi katalogi — yo'nalishlar, dasturlar va boshqa elementlar."
+        actions={
+          <>
+            <Button onClick={fetchData} variant="outline" size="sm">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Yangilash
             </Button>
-          )}
-        </div>
-      </div>
+            {isAdmin && (
+              <Button onClick={() => setCreateDialogOpen(true)} size="sm">
+                <Plus className="mr-2 h-4 w-4" />
+                Yangi qo'shish
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <Tabs
         value={activeTab}
         onValueChange={(v) => {
           setActiveTab(v as CatalogType);
           resetForm(v as CatalogType);
+          setPage(1);
+          resetSearch();
         }}
       >
         <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
@@ -357,15 +352,16 @@ export default function CatalogPage() {
                 <div className="flex-1">
                   <CardTitle className="text-base">{currentTypeInfo.label}</CardTitle>
                   <CardDescription className="text-xs">
-                    {currentTypeInfo.description} · {items.length} ta
+                    {currentTypeInfo.description} ·{" "}
+                    <span className="font-mono tabular-nums">{totalCount.toLocaleString()}</span> ta
                   </CardDescription>
                 </div>
                 <div className="relative w-full sm:w-56">
                   <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     placeholder="Qidirish..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    value={searchTerm}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     className="pl-8 h-9 text-sm"
                   />
                 </div>
@@ -376,26 +372,31 @@ export default function CatalogPage() {
                 <div className="p-6"><TableLoading /></div>
               ) : error ? (
                 <div className="p-6"><ErrorDisplay message={error} onRetry={fetchData} /></div>
-              ) : filteredItems.length === 0 ? (
+              ) : items.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
                   <Search className="h-8 w-8 opacity-20" />
                   <p className="text-sm">Ma&apos;lumot topilmadi</p>
                 </div>
               ) : (
+                <>
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/30 hover:bg-muted/30">
-                      <TableHead className="pl-4 text-xs font-semibold">#</TableHead>
-                      <TableHead className="text-xs font-semibold">Nomlar</TableHead>
-                      <TableHead className="text-xs font-semibold">Sana</TableHead>
+                    <TableRow>
+                      <TableHead className="pl-4">#</TableHead>
+                      <TableHead>Nomlar</TableHead>
+                      <TableHead>Sana</TableHead>
                       {isAdmin && <TableHead className="w-10" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredItems.map((item, idx) => (
-                      <TableRow key={item.id} className="group align-top">
-                        <TableCell className="pl-4 text-xs text-muted-foreground tabular-nums">
-                          {idx + 1}
+                    {items.map((item, idx) => (
+                      <TableRow
+                        key={item.id}
+                        className="group relative align-top transition-colors hover:bg-muted/40"
+                      >
+                        <TableCell className="relative pl-4 font-mono text-xs tabular-nums text-muted-foreground">
+                          <span className="absolute left-0 top-0 h-full w-0.5 bg-accent-gold opacity-0 transition-opacity group-hover:opacity-100" />
+                          {(page - 1) * pageSize + idx + 1}
                         </TableCell>
                         <TableCell>
                           <p className="font-medium text-sm leading-snug">
@@ -403,25 +404,25 @@ export default function CatalogPage() {
                           </p>
                           {item.name_ru && (
                             <p className="mt-0.5 text-xs text-muted-foreground">
-                              🇷🇺 {item.name_ru}
+                              <span className="font-mono text-muted-foreground">RU</span> {item.name_ru}
                             </p>
                           )}
                           {item.name_en && (
                             <p className="mt-0.5 text-xs text-muted-foreground">
-                              🇬🇧 {item.name_en}
+                              <span className="font-mono text-muted-foreground">EN</span> {item.name_en}
                             </p>
                           )}
                           {item.metadata && Object.keys(item.metadata).length > 0 && (
                             <div className="mt-1 flex flex-wrap gap-1">
                               {Object.entries(item.metadata).slice(0, 3).map(([k, v]) => (
-                                <Badge key={k} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                                <Badge key={k} variant="outline" className="px-1.5 py-0 font-mono text-[10px] font-normal">
                                   {k}: {String(v)}
                                 </Badge>
                               ))}
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
                           {formatDate(item.created_at)}
                         </TableCell>
                         {isAdmin && (
@@ -456,6 +457,19 @@ export default function CatalogPage() {
                     ))}
                   </TableBody>
                 </Table>
+
+                {totalCount > pageSize && (
+                  <PaginationBar
+                    page={page}
+                    totalPages={totalPages}
+                    totalCount={totalCount}
+                    pageSize={pageSize}
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    onPageChange={setPage}
+                    onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+                  />
+                )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -504,7 +518,7 @@ export default function CatalogPage() {
 
             {/* Uzbek Name - Required */}
             <div className="space-y-2">
-              <Label htmlFor="name_uz">🇺🇿 O&apos;zbekcha nomi *</Label>
+              <Label htmlFor="name_uz"><span className="font-mono text-muted-foreground">UZ</span> O&apos;zbekcha nomi *</Label>
               <Input
                 id="name_uz"
                 value={formData.name_uz}
@@ -517,7 +531,7 @@ export default function CatalogPage() {
 
             {/* Russian Name */}
             <div className="space-y-2">
-              <Label htmlFor="name_ru">🇷🇺 Ruscha nomi</Label>
+              <Label htmlFor="name_ru"><span className="font-mono text-muted-foreground">RU</span> Ruscha nomi</Label>
               <Input
                 id="name_ru"
                 value={formData.name_ru}
@@ -530,7 +544,7 @@ export default function CatalogPage() {
 
             {/* English Name */}
             <div className="space-y-2">
-              <Label htmlFor="name_en">🇬🇧 Inglizcha nomi</Label>
+              <Label htmlFor="name_en"><span className="font-mono text-muted-foreground">EN</span> Inglizcha nomi</Label>
               <Input
                 id="name_en"
                 value={formData.name_en}
@@ -542,7 +556,7 @@ export default function CatalogPage() {
             </div>
 
             {/* Generic JSON metadata */}
-            {formData.type !== "program" && (
+            {(
               <div className="space-y-2">
                 <Label htmlFor="meta">Meta (JSON) - Ixtiyoriy</Label>
                 <Textarea
@@ -587,7 +601,7 @@ export default function CatalogPage() {
           <div className="space-y-4">
             {/* Uzbek Name - Required */}
             <div className="space-y-2">
-              <Label htmlFor="edit-name_uz">🇺🇿 O&apos;zbekcha nomi *</Label>
+              <Label htmlFor="edit-name_uz"><span className="font-mono text-muted-foreground">UZ</span> O&apos;zbekcha nomi *</Label>
               <Input
                 id="edit-name_uz"
                 value={formData.name_uz}
@@ -600,7 +614,7 @@ export default function CatalogPage() {
 
             {/* Russian Name */}
             <div className="space-y-2">
-              <Label htmlFor="edit-name_ru">🇷🇺 Ruscha nomi</Label>
+              <Label htmlFor="edit-name_ru"><span className="font-mono text-muted-foreground">RU</span> Ruscha nomi</Label>
               <Input
                 id="edit-name_ru"
                 value={formData.name_ru}
@@ -613,7 +627,7 @@ export default function CatalogPage() {
 
             {/* English Name */}
             <div className="space-y-2">
-              <Label htmlFor="edit-name_en">🇬🇧 Inglizcha nomi</Label>
+              <Label htmlFor="edit-name_en"><span className="font-mono text-muted-foreground">EN</span> Inglizcha nomi</Label>
               <Input
                 id="edit-name_en"
                 value={formData.name_en}
@@ -625,7 +639,7 @@ export default function CatalogPage() {
             </div>
 
             {/* Generic JSON metadata */}
-            {formData.type !== "program" && (
+            {(
               <div className="space-y-2">
                 <Label htmlFor="edit-meta">Meta (JSON)</Label>
                 <Textarea
@@ -658,7 +672,7 @@ export default function CatalogPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>O'chirishni tasdiqlang</AlertDialogTitle>
             <AlertDialogDescription>
-              Siz haqiqatan ham "{selectedItem?.name}" ni o'chirmoqchimisiz? Bu
+              Siz haqiqatan ham "{selectedItem?.name_uz || selectedItem?.name}" ni o'chirmoqchimisiz? Bu
               amalni qaytarib bo'lmaydi.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -667,7 +681,7 @@ export default function CatalogPage() {
             <AlertDialogAction
               onClick={handleDelete}
               disabled={submitting}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {submitting ? "O'chirilmoqda..." : "O'chirish"}
             </AlertDialogAction>

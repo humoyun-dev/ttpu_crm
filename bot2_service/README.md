@@ -1,214 +1,205 @@
-# BOT2 Service - TTPU Alumni Survey Bot
+# BOT2 Service — TTPU Bandlik Markazi Survey & Vakansiya Bot
 
-## Umumiy Ma'lumot
-
-BOT2 - bu Turin Politexnika Universiteti Toshkentdagi bitiruvchilar va hozirgi talabalar uchun so'rovnoma botdir. Bot Telegram orqali ishlaydi va talabalarning ish bilan bandligi, taklif va fikrlari haqida ma'lumot to'playdi.
+aiogram 3 asosidagi Telegram bot. Talabalar so'rovnomasini to'ldiradi, vakansiyalarni ko'radi.
 
 ## Arxitektura
 
 ```
 bot2_service/
 ├── src/bot2_service/
-│   ├── main.py          # Asosiy kirish nuqtasi
-│   ├── handlers.py      # Telegram event handlerlar
-│   ├── states.py        # FSM (Finite State Machine) holatlari
-│   ├── keyboards.py     # Telegram klaviatura generatorlari
-│   ├── texts.py         # Ko'p tillik matnlar
-│   ├── api.py           # Server bilan aloqa (HTTP client)
-│   ├── catalog_cache.py # Katalog ma'lumotlarini keshlash
-│   └── config.py        # Konfiguratsiya (environment variables)
+│   ├── main.py              # Asosiy kirish nuqtasi, router'lar ulanadi
+│   ├── handlers.py          # So'rovnoma handlerlari (FSM)
+│   ├── vacancy_handlers.py  # Vakansiya ko'rish handlerlari
+│   ├── states.py            # FSM holatlari
+│   ├── keyboards.py         # Telegram klaviatura generatorlari
+│   ├── texts.py             # Ko'p tillik matnlar (uz/ru)
+│   ├── api.py               # Server bilan HTTP aloqa (httpx)
+│   ├── catalog_cache.py     # Katalog ma'lumotlarini keshlash (15 daqiqa TTL)
+│   ├── config.py            # Konfiguratsiya (environment variables)
+│   ├── storage.py           # DB-based FSM storage (BotFsmState orqali)
+│   └── single_instance.py   # Bir bot instance cheklov
 ```
 
 ## Database Modellari
 
-### 1. StudentRoster
+### StudentRoster
 
-**Maqsad**: Talabalaning ro'yxatga olish ma'lumotlari (yo'nalish, kurs).
+Talabaning ro'yxatga olish ma'lumotlari (yo'nalish, kurs).
 
-**Maydonlar**:
-
-- `student_external_id` (str, unique) - Talaba ID (masalan: sen7115)
-- `roster_campaign` (str) - Ro'yxatga olish kampaniyasi nomi (default: "default")
-- `program` (FK → CatalogItem) - Yo'nalish/dastur (masalan: Production Engineering)
-- `course_year` (int, 1-4) - Kurs (1, 2, 3, yoki 4)
-- `is_active` (bool) - Faol talaba yoki yo'qligi
-- `metadata` (JSON) - Qo'shimcha ma'lumotlar
-
-**Qanday ishlaydi**:
-
-- Har bir talaba uchun bitta asosiy roster yozuv mavjud
-- Bot survey boshlanganda, agar roster topilmasa va `program_id` berilsa - avtomatik yaratiladi
-- Roster yozuvi talabaning hozirgi holati (qaysi yo'nalishda, nechanchi kursda) ni saqlaydi
-
-**Misol**:
-
-```json
-{
-  "student_external_id": "sen7115",
-  "program": "direction:Production Engineering",
-  "course_year": 4,
-  "is_active": true,
-  "roster_campaign": "bot2_auto"
-}
-```
+| Maydon | Tur | Izoh |
+|--------|-----|------|
+| `student_external_id` | str, unique | Talaba ID (masalan: `sen7115`) |
+| `roster_campaign` | str | Kampaniya nomi (default: `"default"`) |
+| `program` | FK → CatalogItem | Yo'nalish/dastur |
+| `course_year` | int (1–5) | Kurs; 5 = bitiruvchi |
+| `is_active` | bool | Faol talaba |
+| `birth_date` | date | Tug'ilgan sana (ixtiyoriy) |
+| `metadata` | JSON | Qo'shimcha ma'lumotlar |
 
 ---
 
-### 2. Bot2Student
+### Bot2Student
 
-**Maqsad**: Talabaning shaxsiy ma'lumotlari va Telegram profili.
+Talabaning shaxsiy profili va Telegram ma'lumotlari.
 
-**Maydonlar**:
-
-- `student_external_id` (str, unique) - Talaba ID
-- `roster` (FK → StudentRoster) - Bog'langan roster yozuvi
-- `telegram_user_id` (int, unique) - Telegram user ID
-- `username` (str) - Telegram username (@...)
-- `first_name` (str) - Ism
-- `last_name` (str) - Familiya
-- `gender` (choice) - Jins: male, female, other, unspecified
-- `phone` (str) - Telefon raqam
-- `region` (FK → CatalogItem) - Hudud (viloyat)
-
-**Qanday ishlaydi**:
-
-- Har safar talaba botga murojaat qilganda `Bot2Student` yozuvi `update_or_create` orqali yangilanadi
-- `student_external_id` va `roster` unique bo'lishi kerak
-- Gender va region so'rovnoma jarayonida to'ldiriladi
-
-**Misol**:
-
-```json
-{
-  "student_external_id": "sen7115",
-  "telegram_user_id": 123456789,
-  "username": "john_doe",
-  "first_name": "John",
-  "last_name": "Doe",
-  "gender": "male",
-  "phone": "+998901234567",
-  "region": "region:Toshkent"
-}
-```
+| Maydon | Tur | Izoh |
+|--------|-----|------|
+| `student_external_id` | str, unique | Talaba ID |
+| `roster` | FK → StudentRoster | Bog'langan roster |
+| `telegram_user_id` | BigInt | Eng so'nggi faol akkaunt (denormalized) |
+| `first_name`, `last_name` | str | Ism-familiya |
+| `gender` | choice | `male/female/other/unspecified` |
+| `phone` | str | Telefon raqam |
+| `language` | choice | `uz` / `ru` |
+| `state` | str | Hozirgi FSM holati (DB'da saqlanadi) |
+| `consent` | bool | Ma'lumot ulashish roziligi |
+| `is_job_seeking` | bool | Ish qidirmoqdami |
+| `region` | FK → CatalogItem (region) | Hudud |
 
 ---
 
-### 3. Bot2SurveyResponse
+### Bot2StudentAccount
 
-**Maqsad**: So'rovnoma javobi - har safar talaba surveyni yakunlaganda yaratiladi.
+Bir talabaning bir nechta Telegram akkauntlarini saqlaydi. Manba to'g'rilik shu yerda.
 
-**Maydonlar**:
+| Maydon | Tur | Izoh |
+|--------|-----|------|
+| `student` | FK → Bot2Student | Kimga tegishli |
+| `telegram_user_id` | BigInt, unique | Bir Telegram akkaunt → bitta talaba |
+| `is_active` | bool | `/logout` → `False`, yozuv o'chirilmaydi |
+| `last_seen_at` | datetime | Oxirgi faollik |
 
-- `student` (FK → Bot2Student) - Javob beruvchi talaba
-- `roster` (FK → StudentRoster) - Talaba rosteri
-- `program` (FK → CatalogItem) - Yo'nalish
-- `course_year` (int, 1-4) - Kurs
-- `survey_campaign` (str) - So'rovnoma kampaniyasi (default: "default")
-- `employment_status` (str) - Ish holati (ishlayman/o'qiyaman/ishsizman)
-- `employment_company` (str) - Ish joyi nomi
-- `employment_role` (str) - Lavozimi/kasbi
-- `suggestions` (text) - Taklif va fikrlar
-- `consents` (JSON) - Roziliklar (masalan: ma'lumotlardan foydalanish)
-- `answers` (JSON) - Qo'shimcha javoblar
-- `submitted_at` (datetime) - Yuborilgan vaqt
+---
 
-**Muhim**: Yozuv `(student, survey_campaign)` bo'yicha idempotent yangilanadi.
+### Bot2SurveyResponse
 
-**Qanday ishlaydi**:
+**Append-only** — har safar yangi yozuv yaratiladi. `idempotency_key` (UUIDv4) ikki marta submit qilishdan himoya qiladi.
 
-- Talaba bir xil kampaniya (`survey_campaign`) bo'yicha qayta yuborsa, mavjud `Bot2SurveyResponse` yozuvi yangilanadi.
-- Bu duplicate yozuvlarni kamaytiradi va production analytics natijalarini barqaror qiladi.
-- `roster` mavjud bo'lsa, `course_year` rosterdan olinadi (source of truth).
+| Maydon | Tur | Izoh |
+|--------|-----|------|
+| `student` | FK → Bot2Student | Javob beruvchi |
+| `roster` | FK → StudentRoster | Talaba rosteri |
+| `program` | FK → CatalogItem | Yo'nalish |
+| `course_year` | int (1–5) | Kurs |
+| `survey_campaign` | str | Kampaniya (default: `"default"`) |
+| `idempotency_key` | str, unique | UUIDv4 — dedup kalit |
+| `employment_status` | str | Ishlaydimi/yo'qmi |
+| `employment_company` | str | Ish joyi nomi |
+| `employment_role` | str | Lavozim |
+| `suggestions` | text | Taklif va fikrlar |
+| `consents` | JSON | Roziliklar |
+| `answers` | JSON | Qo'shimcha javoblar |
+| `submitted_at` | datetime | Yuborilgan vaqt |
 
-**Misol**:
+---
 
-```json
-{
-  "student": "Bot2Student<sen7115>",
-  "roster": "StudentRoster<sen7115>",
-  "program": "direction:Production Engineering",
-  "course_year": 4,
-  "survey_campaign": "default",
-  "employment_status": "Ishlayman",
-  "employment_company": "Tech Company",
-  "employment_role": "Software Engineer",
-  "suggestions": "Amaliyot dasturlarini kuchaytirish kerak",
-  "consents": { "data_usage": true },
-  "answers": { "channel": "instagram" },
-  "submitted_at": "2026-01-19T04:21:59Z"
-}
-```
+### Bot2Document
+
+Bot orqali yuklangan hujjatlar.
+
+| Maydon | Tur | Izoh |
+|--------|-----|------|
+| `student` | FK → Bot2Student | Hujjat egasi |
+| `survey` | FK → Bot2SurveyResponse (null) | Qaysi survey bilan bog'liq |
+| `doc_type` | choice | `cv` / `certificate` / `employment` |
+| `file` | FileField | Fayl (`bot2/docs/%Y/%m/`) |
+| `original_filename` | str | Asl fayl nomi |
+| `mime_type` | str | MIME turi |
+| `file_size` | int | Bayt hajmi |
+
+---
+
+### ProgramEnrollment
+
+Har bir program + course_year uchun jami talaba soni (analytics uchun).
+
+| Maydon | Tur | Izoh |
+|--------|-----|------|
+| `program` | FK → CatalogItem | Yo'nalish |
+| `course_year` | int (1–5) | Kurs |
+| `student_count` | int | Jami talabalar |
+| `academic_year` | str | Masalan: `"2025-2026"` |
+| `campaign` | str | Kampaniya identifikatori |
+| `is_active` | bool | Faol holat |
+
+---
+
+### BotFsmState
+
+DB-based FSM storage — bot restart'dan keyin suhbat davom etadi.
+
+| Maydon | Tur | Izoh |
+|--------|-----|------|
+| `telegram_user_id` | BigInt, unique | Telegram foydalanuvchi |
+| `state` | str (null) | Hozirgi FSM holati |
+| `data` | JSON | FSM ma'lumotlari |
+| `updated_at` | datetime | Oxirgi yangilanish |
 
 ---
 
 ## Bot Ishlash Jarayoni
 
 ### 1. Start va Til Tanlash
-
 ```
-/start → Til tanlang (O'zbek/Русский/English)
-```
-
-- State: `SurveyState.language`
-
-### 2. Student ID va Kontakt
-
-```
-Til → Kontaktingizni yuboring → Student ID kiriting
+/start → Til tanlang (O'zbek / Русский)
 ```
 
-- States: `contact`, `student_id`
-
-### 3. Program va Kurs
-
+### 2. Identifikatsiya
 ```
-Student ID → Yo'nalishingizni tanlang → Kursni tanlang (1-4)
+Til → Kontaktni yuboring → Student ID kiriting
 ```
 
-- States: `program`, `course_year`
-
-### 4. Shaxsiy Ma'lumotlar
-
+### 3. Profil Ma'lumotlari
 ```
-Kurs → Ism → Familiya → Jins → Hudud
+Student ID → Ism → Familiya → Jins → Hudud
 ```
 
-- States: `first_name`, `last_name`, `gender`, `region`
-
-### 5. Ish holati
-
+### 4. Ish Holati
 ```
 Hudud → Hozir ishlaymisiz?
-├─ Ha → Kompaniya → Lavozim
-└─ Yo'q → Ish topishga yordam kerakmi? → Ma'lumot ulashish roziligi
+├── Ha  → Kompaniya nomi → Lavozim
+└── Yo'q → Ish qidirmoqdamisiz?
 ```
 
-- States: `employment_status`, `employment_company`, `employment_role`
-
-### 6. Taklif va Kanal
-
+### 5. Taklif va Yuborish
 ```
-Taklif va fikrlar → Qaysi kanal orqali yangiliklar?
+→ Taklif va fikrlar → Ma'lumotlarni tasdiqlash → Submit
 ```
+Append-only `Bot2SurveyResponse` yaratiladi.
 
-- States: `suggestions`, `channel`
-
-### 7. Tasdiqlash va Submit
-
+### 6. Survey Tugagandan Keyin — Asosiy Menyu
 ```
-Kanal → Ma'lumotlarni ko'rish → Tasdiqlash → Submit
+So'rovnoma muvaffaqiyatli →
+  [💼 Vakansiyalar]  [📊 So'rovnomani yangilash]
 ```
 
-- State: `confirm`
-- API: POST /api/v1/bot2/surveys/submit
+### 7. Vakansiya Ko'rish
+```
+Vakansiyalar tugmasi → Paginatsiyali ro'yxat (5 ta / sahifa)
+← Oldingi | Keyingi → | 📢 Kanalga obuna
+```
+`VACANCY_REQUIRE_SURVEY=true` bo'lsa — survey to'ldirmagan foydalanuvchiga 403.
 
 ---
 
-## API Endpoints
+## API Endpointlar (Server bilan)
 
-### POST /api/v1/bot2/surveys/submit
+Bot `X-SERVICE-TOKEN` headeri bilan server bilan muloqot qiladi.
 
-**Request**:
+| Endpoint | Maqsad |
+|----------|--------|
+| `POST /bot/verify` | `student_external_id` tekshirish |
+| `POST /bot/register` | Ro'yxatdan o'tish |
+| `POST /bot/logout` | Chiqish |
+| `GET  /bot/catalog/items` | Katalog (program, region) |
+| `GET  /bot/profile` | Talaba profili |
+| `GET  /bot/fsm/<user_id>` | FSM holati |
+| `POST /bot/document` | Hujjat yuklash |
+| `POST /bot/followup-answer` | Followup javob |
+| `POST /bot2/surveys/submit` | So'rovnoma submit |
+| `GET  /vacancies/feed` | Vakansiyalar lentasi |
+
+### So'rovnoma Submit — Request
 
 ```json
 {
@@ -228,124 +219,83 @@ Kanal → Ma'lumotlarni ko'rish → Tasdiqlash → Submit
   "employment_role": "Software Engineer",
   "suggestions": "Takliflar...",
   "answers": { "channel": "instagram" },
-  "consents": { "data_usage": true }
+  "consents": { "data_usage": true },
+  "idempotency_key": "uuid-v4"
 }
 ```
 
-**Response**:
+### So'rovnoma Submit — Response
 
 ```json
 {
   "ok": true,
-  "roster": {
-    "program_id": "uuid",
-    "course_year": 4
-  },
+  "roster": { "program_id": "uuid", "course_year": 4 },
   "response_id": "uuid-of-survey-response"
 }
 ```
 
-**Ishlash logikasi**:
-
-1. `StudentRoster` topiladi yoki yaratiladi (agar `program_id` berilgan bo'lsa)
-2. `Bot2Student` `update_or_create` orqali yangilanadi
-3. Yangi `Bot2SurveyResponse` **har doim** yaratiladi
-4. Audit log yoziladi
+**Muhim:** Har safar yangi `Bot2SurveyResponse` yaratiladi (append-only). Bir xil `idempotency_key` ikkinchi marta yuborilsa, 200 qaytadi lekin ikkinchi yozuv yaratilmaydi.
 
 ---
 
-## O'rnatish va Ishga Tushirish
+## Environment Variables
 
-### Environment Variables (`.env`)
-`config.py` quyidagi kalitlarni o'qiydi:
+Barcha servislar bitta root `.env` faylidan o'qiydi:
 
 ```env
-BOT_TOKEN=123456:telegram-bot-token
-SERVER_BASE_URL=http://localhost:8000/api/v1
-SERVICE_TOKEN=raw-bot2-service-token
-DASHBOARD_EMAIL=
-DASHBOARD_PASSWORD=
+BOT_TOKEN=<Telegram bot token>
+SERVER_BASE_URL=http://server:8000/api/v1
+SERVICE_TOKEN=<raw token, sha256 = SERVICE_TOKEN_BOT2_HASH>
 DEFAULT_LANGUAGE=uz
 ```
 
-### Lokal ishga tushirish (Docker'siz, `.venv` + `pip`)
+---
+
+## Ishga Tushirish
+
+### Docker (tavsiya etiladi)
+
+```bash
+# Root papkada
+docker compose up --build
+```
+
+### Lokal (`.venv` + `pip`)
+
 ```bash
 cd bot2_service
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+# Root .env faylida kerakli o'zgaruvchilar bo'lishi shart
 python -m bot2_service.main
-```
-
-### Poetry varianti (ixtiyoriy)
-```bash
-cd bot2_service
-poetry install
-poetry run python src/bot2_service/main.py
 ```
 
 ---
 
-## Ko'p Tillik (i18n)
+## Ko'p Tillik
 
-`texts.py` faylida barcha matnlar 3 tilda:
-
-- `uz` - O'zbek
-- `ru` - Русский
-- `en` - English
+`texts.py` faylida barcha matnlar ikki tilda: `uz` (O'zbek) va `ru` (Русский).
 
 ---
 
 ## Catalog Integration
 
 Bot quyidagi catalog typelardan foydalanadi:
+- `direction` / `program` — Yo'nalish tanlash uchun
+- `region` — Hudud tanlash uchun
 
-- `direction` (Program)
-- `region` (Hudud)
-
-Keshlash: 900 soniya (15 daqiqa) TTL.
-
----
-
-## Testing
-
-1. Botni toping: `@TTPU_Alumni_bot`
-2. `/start` yuboring
-3. Barcha qadamlarni bajaring
-4. Admin panelda yozuv yangilanganini tekshiring
-
-Bir xil `student_id + survey_campaign` bilan qayta yuborilganda yozuv **yangilanadi** (duplicate emas).
-
----
-
-## Xususiyatlar
-
-✅ Ko'p tillik (3 til)
-✅ Auto-create roster
-✅ Idempotent survey update (`student + survey_campaign`)
-✅ Catalog integration
-✅ Audit logging
+Kesh: 15 daqiqa TTL (`catalog_cache.py`).
 
 ---
 
 ## Muammolarni Hal Qilish
 
-**Problem**: Ko'p marta to'ldirdim, duplicate kerak edi, lekin bitta ko'rsatilmoqda  
-**Yechim**: Hozirgi production logika idempotent (`student + survey_campaign`) yangilashni ishlatadi.
+**Problem:** Catalog bo'sh  
+**Yechim:** Admin panelda `direction` va `region` itemlar borligini tekshiring.
 
-**Problem**: Roster topilmayapti  
-**Yechim**: `program_id` to'g'ri ekanligini tekshiring, bot avtomatik roster yaratadi.
+**Problem:** Roster topilmayapti  
+**Yechim:** `program_id` to'g'ri ekanligini tekshiring; bot avtomatik roster yaratadi.
 
-**Problem**: Catalog bo'sh  
-**Yechim**: Admin panelda `direction` va `region` itemlar borligini tekshiring.
-
----
-
-## Production
-- `SERVER_BASE_URL` ni production API manziliga sozlang (`https://api.example.com/api/v1`).
-- `SERVICE_TOKEN` ni secret manager/environment orqali bering.
-- Process manager (systemd/supervisor) bilan autorestart yoqing.
-- Loglarni markaziy monitoringga yuboring.
-
-`requirements.txt` Docker'siz (`.venv` + `pip`) ishga tushirish uchun qo'shilgan.
+**Problem:** Bot restart'dan keyin suhbat yo'qoldi  
+**Yechim:** `BotFsmState` DB'da saqlanadi — `storage.py` to'g'ri ulanganligini tekshiring.

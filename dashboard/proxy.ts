@@ -28,5 +28,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
+  // Faqat /login va /dashboard/* himoyalanadi. Ommaviy sahifalar
+  // (/l/<token> — ish beruvchi havolasi) matcher'ga KIRMAYDI, shuning
+  // uchun proxy ularga umuman tegmaydi va login talab qilinmaydi.
   matcher: ["/login", "/dashboard/:path*"],
 };

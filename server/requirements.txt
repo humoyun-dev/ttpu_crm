@@ -12,3 +12,4 @@ whitenoise>=6.8.2,<7.0
 httpx>=0.27,<0.28          # ai_gateway -> ai_service client
 openpyxl>=3.1,<4.0         # analytics xlsx export
 Pillow>=10.0,<12.0         # Employer.logo ImageField
+google-genai>=1.0,<2.0     # Gemini hujjat tekshiruvi (ai_verification)

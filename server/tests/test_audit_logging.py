@@ -1,8 +1,12 @@
-"""M-20 — audit logging for Bot2Student and Bot2SurveyResponse viewsets.
+"""M-20 — audit logging for Bot2Student viewset + append-only guarantee for surveys.
 
-`Bot2StudentViewSet` and `Bot2SurveyResponseViewSet` gained perform_create/update/destroy
-hooks that call `log_audit`. These tests confirm an AuditLog row is written with the
-correct action and entity_table when those mutations happen through the API.
+`Bot2StudentViewSet` has perform_create/update/destroy hooks that call `log_audit`;
+these tests confirm an AuditLog row is written with the correct action and entity_table
+when those mutations happen through the API.
+
+`Bot2SurveyResponseViewSet` is now READ-ONLY (append-only invariant): create/update/delete
+over the dashboard API are rejected with 405, so the survey tests below assert rejection
+rather than audit — no dashboard path may rewrite an immutable survey snapshot.
 
 Roster and enrollment viewsets already audited; a couple of quick checks below confirm
 those hooks still fire too.
@@ -117,7 +121,11 @@ def test_student_create_audit_hook_fires(rf, admin_user, program_item):
 # Bot2SurveyResponse
 # --------------------------------------------------------------------------- #
 
-def test_survey_create_writes_audit(api_client, admin_user, program_item):
+# Bot2SurveyResponse — APPEND-ONLY: dashboard API orqali yaratish/tahrirlash/o'chirish
+# taqiqlangan (ReadOnlyModelViewSet). Quyidagi testlar mutatsiya rad etilishini
+# (405 Method Not Allowed) va ma'lumot o'zgarmasligini tasdiqlaydi.
+
+def test_survey_create_is_rejected_append_only(api_client, admin_user, program_item):
     api_client.force_authenticate(user=admin_user)
     roster = _make_roster(program_item)
     student = Bot2Student.objects.create(student_external_id="aud-1", roster=roster)
@@ -131,14 +139,11 @@ def test_survey_create_writes_audit(api_client, admin_user, program_item):
     }
     resp = api_client.post(reverse("bot2-survey-list"), payload, format="json")
 
-    assert resp.status_code == status.HTTP_201_CREATED
-    survey_id = resp.data["id"]
-    log = AuditLog.objects.get(action="create", entity_table=SURVEY_TABLE, entity_id=survey_id)
-    assert log.actor_user_id == admin_user.id
-    assert log.after_data["survey_campaign"] == "default"
+    assert resp.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+    assert not Bot2SurveyResponse.objects.filter(student=student).exists()
 
 
-def test_survey_update_writes_audit(api_client, admin_user, program_item):
+def test_survey_update_is_rejected_append_only(api_client, admin_user, program_item):
     api_client.force_authenticate(user=admin_user)
     roster = _make_roster(program_item)
     student = Bot2Student.objects.create(student_external_id="aud-1", roster=roster)
@@ -149,12 +154,12 @@ def test_survey_update_writes_audit(api_client, admin_user, program_item):
 
     resp = api_client.patch(_survey_url(survey), {"suggestions": "great course"}, format="json")
 
-    assert resp.status_code == status.HTTP_200_OK
-    log = AuditLog.objects.get(action="update", entity_table=SURVEY_TABLE, entity_id=survey.id)
-    assert log.actor_user_id == admin_user.id
+    assert resp.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+    survey.refresh_from_db()
+    assert survey.suggestions != "great course"
 
 
-def test_survey_delete_writes_audit(api_client, admin_user, program_item):
+def test_survey_delete_is_rejected_append_only(api_client, admin_user, program_item):
     api_client.force_authenticate(user=admin_user)
     roster = _make_roster(program_item)
     student = Bot2Student.objects.create(student_external_id="aud-1", roster=roster)
@@ -166,10 +171,8 @@ def test_survey_delete_writes_audit(api_client, admin_user, program_item):
 
     resp = api_client.delete(_survey_url(survey))
 
-    assert resp.status_code == status.HTTP_204_NO_CONTENT
-    assert not Bot2SurveyResponse.objects.filter(id=survey_id).exists()
-    log = AuditLog.objects.get(action="delete", entity_table=SURVEY_TABLE, entity_id=survey_id)
-    assert log.actor_user_id == admin_user.id
+    assert resp.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+    assert Bot2SurveyResponse.objects.filter(id=survey_id).exists()
 
 
 # --------------------------------------------------------------------------- #

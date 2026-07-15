@@ -11,6 +11,23 @@ jobs:
     name: Django tests
     runs-on: ubuntu-latest
 
+    # Run against PostgreSQL (matches prod) instead of SQLite, so DB-specific
+    # behaviour (constraints, JSON queries, cascades) is exercised in CI.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: crm_test
+          POSTGRES_USER: crm_user
+          POSTGRES_PASSWORD: crm_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         working-directory: server
@@ -30,7 +47,12 @@ jobs:
 
       - name: Run tests
         env:
-          USE_SQLITE: "1"
+          USE_SQLITE: "0"
+          POSTGRES_HOST: "localhost"
+          POSTGRES_PORT: "5432"
+          POSTGRES_DB: "crm_test"
+          POSTGRES_USER: "crm_user"
+          POSTGRES_PASSWORD: "crm_pass"
           DJANGO_SECRET_KEY: "ci-test-secret-key-that-is-long-enough-for-hmac-sha256"
           DJANGO_DEBUG: "false"
           SECURE_SSL_REDIRECT: "false"

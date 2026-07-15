@@ -1,8 +1,6 @@
 import logging
-from typing import Optional
 
 from django.conf import settings
-from rest_framework.request import Request
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken
 
@@ -12,19 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class CookieJWTAuthentication(JWTAuthentication):
-    def get_raw_token(self, header: Optional[str]) -> Optional[str]:
-        raw_token = super().get_raw_token(header) if header else None
-        if raw_token:
-            return raw_token
-        return None
-
     def _authenticate_token(self, raw_token):
         validated = self.get_validated_token(raw_token)
         return self.get_user(validated), validated
 
     def authenticate(self, request):
         header = self.get_header(request)
-        raw_token = self.get_raw_token(header)
+        raw_token = self.get_raw_token(header) if header else None
         if raw_token:
             try:
                 return self._authenticate_token(raw_token)

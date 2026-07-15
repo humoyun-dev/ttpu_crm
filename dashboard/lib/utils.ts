@@ -5,10 +5,22 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCourseYearLabel(courseYear?: number | null): string {
-  if (!courseYear) return "-";
-  if (courseYear === 5) return "Bitirgan";
-  return `${courseYear}-kurs`;
+/* Yagona manba lib/constants.ts'dagi courseYearLabel — eski import yo'li saqlanadi. */
+export { courseYearLabel as formatCourseYearLabel } from "./constants";
+
+/* Mahalliy (local) YYYY-MM-DD. toISOString() UTC'ga o'girib yuboradi —
+   Toshkentda (UTC+5) mahalliy yarim tun oldingi kunga tushib qoladi. */
+export function toLocalDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/* YYYY-MM-DD satriga (mahalliy taqvimda) kun qo'shadi. */
+export function addDaysToDateString(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return toLocalDateString(new Date(y, m - 1, d + days));
 }
 
 export function formatUzPhone(phone?: string | null): string {

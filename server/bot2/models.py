@@ -9,15 +9,21 @@ from common.models import BaseModel
 
 class StudentRoster(BaseModel):
     student_external_id = models.CharField(max_length=100, unique=True)
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
     roster_campaign = models.CharField(max_length=64, default="default")
     program = models.ForeignKey(
         CatalogItem,
         on_delete=models.PROTECT,
         related_name="roster_programs",
+        null=True,
+        blank=True,
     )
     course_year = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5)],
-        help_text="1-4 for active students, 5 for graduated"
+        null=True,
+        blank=True,
+        help_text="1-4 for active students, 5 for graduated; null if not yet known"
     )
     is_active = models.BooleanField(default=True)
     birth_date = models.DateField(null=True, blank=True)
@@ -33,11 +39,10 @@ class StudentRoster(BaseModel):
         ]
 
     def __str__(self) -> str:
-        return f"Roster {self.student_external_id}"
+        full = f"{self.first_name} {self.last_name}".strip()
+        return f"{self.student_external_id}" + (f" — {full}" if full else "")
 
     def clean(self):
-        # The bot submits DIRECTION catalog items as "programs", while admin
-        # import uses PROGRAM items — accept both so every write path agrees.
         allowed = (CatalogItem.ItemType.PROGRAM, CatalogItem.ItemType.DIRECTION)
         if self.program and self.program.type not in allowed:
             raise ValidationError(
@@ -62,7 +67,10 @@ class Bot2Student(BaseModel):
     roster = models.ForeignKey(
         StudentRoster, on_delete=models.CASCADE, related_name="students"
     )
-    telegram_user_id = models.BigIntegerField(null=True, blank=True, unique=True)
+    # Denormalized "primary / most-recently-active" Telegram link for convenience and
+    # analytics. NOT unique — a student may have several linked accounts (see
+    # Bot2StudentAccount, the source of truth). Null only when no account is active.
+    telegram_user_id = models.BigIntegerField(null=True, blank=True, db_index=True)
     username = models.CharField(max_length=150, blank=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
@@ -89,6 +97,10 @@ class Bot2Student(BaseModel):
         blank=True,
         related_name="bot2_students",
     )
+    # AI tomonidan CV'dan ajratilgan ko'nikma profili (matching/qidiruv uchun).
+    # {"skills": [...], "languages": [...], "experience_summary": "...", "level": "..."}
+    ai_skills = models.JSONField(default=dict, blank=True)
+    ai_skills_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ("student_external_id",)
@@ -108,6 +120,37 @@ class Bot2Student(BaseModel):
         return f"Bot2 Student {self.student_external_id}"
 
 
+class Bot2StudentAccount(BaseModel):
+    """One Telegram account that has logged in as a given student.
+
+    A student may log in from several Telegram accounts (different phones/devices)
+    using the same student_external_id; every one is kept and linked here instead of
+    overwriting a single field. `telegram_user_id` is globally unique — one Telegram
+    account maps to at most one student at a time (re-using it for another student_id
+    moves the link). `/logout` flips `is_active` to False but keeps the row.
+    """
+    student = models.ForeignKey(
+        Bot2Student, on_delete=models.CASCADE, related_name="accounts"
+    )
+    telegram_user_id = models.BigIntegerField(unique=True)
+    username = models.CharField(max_length=150, blank=True)
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    is_active = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-last_seen_at", "-created_at")
+        indexes = [
+            models.Index(fields=["student", "is_active"]),
+        ]
+
+    def __str__(self) -> str:
+        flag = "" if self.is_active else " (inactive)"
+        return f"Account tg={self.telegram_user_id} → {self.student.student_external_id}{flag}"
+
+
 class Bot2SurveyResponse(BaseModel):
     student = models.ForeignKey(
         Bot2Student, on_delete=models.CASCADE, related_name="survey_responses"
@@ -119,10 +162,14 @@ class Bot2SurveyResponse(BaseModel):
         CatalogItem,
         on_delete=models.PROTECT,
         related_name="bot2_program_surveys",
+        null=True,
+        blank=True,
     )
     course_year = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5)],
-        help_text="1-4 for active students, 5 for graduated"
+        null=True,
+        blank=True,
+        help_text="1-4 for active students, 5 for graduated; null if not collected"
     )
     survey_campaign = models.CharField(max_length=64, default="default")
     idempotency_key = models.CharField(
@@ -150,7 +197,7 @@ class Bot2SurveyResponse(BaseModel):
         ordering = ("-submitted_at", "-created_at")
         constraints = [
             models.CheckConstraint(
-                condition=Q(course_year__gte=1) & Q(course_year__lte=5),
+                condition=Q(course_year__isnull=True) | (Q(course_year__gte=1) & Q(course_year__lte=5)),
                 name="survey_course_year_between_1_and_5",
             ),
             # uq_survey_student_campaign removed (migration 0013) → append-only
@@ -164,9 +211,10 @@ class Bot2SurveyResponse(BaseModel):
     def clean(self):
         if self.roster and self.student and self.student.roster_id != self.roster_id:
             raise ValidationError("Survey roster must match student's roster.")
-        if self.roster and self.program_id and self.roster.program_id != self.program_id:
+        # Only validate program/course_year consistency when both sides are set
+        if self.roster and self.program_id and self.roster.program_id and self.roster.program_id != self.program_id:
             raise ValidationError("Survey program must match roster program.")
-        if self.roster and self.course_year and self.roster.course_year != self.course_year:
+        if self.roster and self.course_year and self.roster.course_year and self.roster.course_year != self.course_year:
             raise ValidationError("Survey course_year must match roster course_year.")
 
     def save(self, *args, **kwargs):
@@ -175,6 +223,40 @@ class Bot2SurveyResponse(BaseModel):
 
     def __str__(self) -> str:
         return f"Survey {self.survey_campaign} for {self.student}"
+
+
+class Bot2Document(BaseModel):
+    class DocType(models.TextChoices):
+        CV = "cv", "CV"
+        CERTIFICATE = "certificate", "Certificate"
+        EMPLOYMENT = "employment", "Ish joyi ma'lumotnomasi"
+
+    student = models.ForeignKey(
+        Bot2Student, on_delete=models.CASCADE, related_name="bot2_documents"
+    )
+    survey = models.ForeignKey(
+        Bot2SurveyResponse,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bot2_documents",
+    )
+    # Survey-session identifier the bot generates once per survey run and sends on
+    # every upload. Documents are bound to their survey by this key at submit time,
+    # so the file→survey link no longer depends on round-tripping individual doc_ids
+    # through FSM state + the answers payload (which could silently drop a document).
+    survey_session_key = models.CharField(max_length=64, blank=True, db_index=True)
+    doc_type = models.CharField(max_length=20, choices=DocType.choices)
+    file = models.FileField(upload_to="bot2/docs/%Y/%m/")
+    original_filename = models.CharField(max_length=255, blank=True)
+    mime_type = models.CharField(max_length=100, blank=True)
+    file_size = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.doc_type} — {self.student.student_external_id}"
 
 
 class ProgramEnrollment(BaseModel):
@@ -218,3 +300,18 @@ class ProgramEnrollment(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.program.name} - {self.course_year}-kurs: {self.student_count}"
+
+
+class BotFsmState(models.Model):
+    """Persistent FSM storage for aiogram — survives bot restarts."""
+
+    telegram_user_id = models.BigIntegerField(unique=True, db_index=True)
+    state = models.CharField(max_length=128, null=True, blank=True)
+    data = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("telegram_user_id",)
+
+    def __str__(self) -> str:
+        return f"FsmState(user={self.telegram_user_id}, state={self.state})"

@@ -55,27 +55,39 @@ export default function LoginPage() {
   return (
     <div className="w-full max-w-sm">
       {/* Mobile-only logo */}
-      <div className="mb-8 text-center lg:hidden">
-        <div
-          className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl text-lg font-black"
-          style={{ backgroundColor: "oklch(0.42 0.20 263)", color: "white" }}
-        >
+      <div className="mb-10 text-center lg:hidden">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-md bg-primary font-display text-lg font-semibold text-primary-foreground">
           T
         </div>
-        <h1 className="text-xl font-black text-primary">TTPU</h1>
-        <p className="text-sm text-muted-foreground">Bandlik Markazi</p>
-      </div>
-
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold tracking-tight">Tizimga kirish</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Email va parolingizni kiriting
+        <h1 className="font-display text-xl font-semibold tracking-tight text-primary">TTPU</h1>
+        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          Bandlik Markazi
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="mb-8">
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          Tizimga kirish
+        </p>
+        <h2 className="mt-1.5 font-display text-2xl font-semibold tracking-tight text-foreground">
+          Admin panel
+        </h2>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Email va parolingizni kiriting
+        </p>
+        <div className="relative mt-4 h-px w-full bg-border">
+          <span className="absolute left-0 top-0 h-px w-12 bg-accent-gold" />
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label
+            htmlFor="email"
+            className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
+          >
+            Email
+          </Label>
           <Input
             id="email"
             type="text"
@@ -88,7 +100,12 @@ export default function LoginPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password">Parol</Label>
+          <Label
+            htmlFor="password"
+            className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
+          >
+            Parol
+          </Label>
           <Input
             id="password"
             type="password"
@@ -111,6 +128,10 @@ export default function LoginPage() {
           )}
         </Button>
       </form>
+
+      <p className="mt-8 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+        Turin Politexnika Universiteti — Toshkent
+      </p>
     </div>
   );
 }
